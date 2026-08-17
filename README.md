@@ -22,6 +22,43 @@ The accelerator is designed around five principles:
 
 This repository skeleton defines the architecture, data contracts, evaluation framework, security model, implementation phases, and contribution rules. It is intentionally implementation-ready but not tied to a single model or dataset.
 
+The first vertical slice is implemented and measured (Increments A1–A6 of `docs/14_IMPLEMENTATION_PLAN.md`): CSV/pandas sources, plain-text and transcript parsers, a deterministic EMAIL/PHONE provider, entity reconciliation, redact/mask/pseudonymize reducers, local outputs with run metrics, a seeded synthetic corpus with an injection manifest, and the evaluation framework.
+
+### Quickstart
+
+```bash
+pip install -e ".[dev]"
+```
+
+That is the whole install: no NLP model, no provider extra. Then run the benchmark over the committed synthetic corpus:
+
+```bash
+pii-reduction benchmark
+```
+
+Measured baseline (`deterministic_only` chain, `redact` strategy, 102 documents, 180 injected entities): EMAIL and PHONE strict precision/recall/F1 of 1.000 in every language and tier, over-redaction 0.000, and **PERSON strict recall 0.000 over a support of 78** — deterministic recognizers cannot find names.
+
+Adding the NER provider (requires the `presidio` extra and the models documented in `docs/15_PROVIDERS.md`):
+
+```bash
+pii-reduction benchmark --chain deterministic_presidio
+```
+
+| metric | `deterministic_only` | `deterministic_presidio` |
+|---|---|---|
+| strict F1 | 0.723 | 0.886 |
+| leakage rate | 0.433 | 0.117 |
+| document clean rate | 0.161 | 0.774 |
+| over-redaction rate | 0.000 | 0.000 |
+
+PERSON recall reaches 1.000 for German and 0.889–1.000 for English on clean and transcript text, but **0.000–0.222 for Greek**: the good Greek spaCy models are non-commercial and excluded on licensing grounds (ADR-0007), so Greek routes through a multilingual model. `docs/15_PROVIDERS.md` publishes that gap per language and tier rather than reporting an average that hides it.
+
+To regenerate the corpus (same seed gives a byte-identical corpus and manifest):
+
+```bash
+python demo/build_corpus.py --out tests/fixtures/corpus --seed 42
+```
+
 The recommended first implementation is a public-data demo with three families of text:
 
 - customer-support tickets,
@@ -58,7 +95,8 @@ Initial baseline:
 - person names
 - email addresses
 - phone numbers
-- physical addresses
+- physical addresses (in taxonomy and benchmarks from the start; detection deferred
+  to a later provider — see `docs/adr/0002-address-entity-deferred.md`)
 
 Designed for future extension to:
 
@@ -246,6 +284,9 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 - **Implementation roadmap:** `docs/11_ROADMAP.md`
 - **Portfolio demo scenarios:** `docs/12_DEMO_SCENARIOS.md`
 - **How to present the project:** `docs/13_PORTFOLIO_STORY.md`
+- **Build sequence and increments:** `docs/14_IMPLEMENTATION_PLAN.md`
+- **Shipped providers, licences and measured results:** `docs/15_PROVIDERS.md`
+- **Decision records:** `docs/adr/`
 
 ## License
 

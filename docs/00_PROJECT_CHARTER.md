@@ -83,6 +83,10 @@ The first stable release should focus on four entity families:
 
 These cover both deterministic and NLP-heavy cases and are understandable to technical and non-technical reviewers.
 
+> Amended by `docs/adr/0002-address-entity-deferred.md`: `ADDRESS` remains in the
+> taxonomy, configuration, and benchmark ground truth from the start, but no
+> provider claims to detect it until one measurably can (roadmap Phase 7).
+
 Additional entity types belong in later phases unless required by a selected benchmark dataset.
 
 ## Required qualities

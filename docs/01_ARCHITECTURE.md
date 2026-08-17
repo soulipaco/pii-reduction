@@ -215,7 +215,7 @@ LanguageResult(
     language="en",
     confidence=0.98,
     detector="fasttext",
-    is_supported=True,
+    supported=True,
     reason=None,
 )
 ```
