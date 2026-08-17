@@ -1,0 +1,24 @@
+# Transcript documents of the committed synthetic corpus.
+#
+# Identical to benchmark_plain apart from the parser: timestamp and speaker prefixes
+# are structure, not content, and must come back byte-identical.
+dataset:
+  name: benchmark_corpus_transcript
+  row_id: document_id
+
+source:
+  type: csv
+  path: tests/fixtures/corpus/corpus.csv
+
+destination:
+  type: csv
+  path: data/output/
+
+columns:
+  text:
+    parser: transcript
+    entities: [PERSON, EMAIL, PHONE]
+    output_column: text_pii_redacted
+    parser_options:
+      preserve_prefix: true
+      fallback: preserve_line

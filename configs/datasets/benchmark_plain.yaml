@@ -1,0 +1,22 @@
+# Free-text documents of the committed synthetic corpus.
+#
+# PERSON is in scope even though no shipped provider detects it yet: the benchmark
+# reports PERSON recall as 0.000 with its true support rather than hiding the gap
+# (ADR-0002, plan §2). Increment B fills it in.
+dataset:
+  name: benchmark_corpus_plain
+  row_id: document_id
+
+source:
+  type: csv
+  path: tests/fixtures/corpus/corpus.csv
+
+destination:
+  type: csv
+  path: data/output/
+
+columns:
+  text:
+    parser: plain_text
+    entities: [PERSON, EMAIL, PHONE]
+    output_column: text_pii_redacted

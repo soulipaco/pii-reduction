@@ -1,0 +1,43 @@
+# Providers and chains.
+#
+# Thresholds are per provider and per entity; there is deliberately no global
+# `threshold` key, because provider scores are recognizer constants rather than
+# calibrated probabilities (ADR-0005).
+providers:
+  deterministic:
+    type: deterministic
+    entities: [EMAIL, PHONE]
+    options:
+      regions: [GR, DE, GB, US]
+      leniency: valid
+
+  # Requires the `presidio` extra and the documented spaCy models; see
+  # docs/15_PROVIDERS.md. Nothing loads a model unless a chain in use names it.
+  presidio:
+    type: presidio
+    languages: [en, de, el]
+    entities: [PERSON, EMAIL, PHONE]
+    # Per entity, never global: PhoneRecognizer emits a constant 0.40, so one
+    # threshold of 0.5 would silently drop every phone number (ADR-0005).
+    # Applied once, by the reconciler, which records what each threshold rejected.
+    thresholds:
+      PERSON: 0.5
+      EMAIL: 0.6
+      PHONE: 0.3
+    options:
+      models:
+        en: en_core_web_md
+        de: de_core_news_md
+        # el_core_news_* is CC BY-NC-SA and must never appear here (ADR-0007).
+        el: xx_ent_wiki_sm
+
+chains:
+  deterministic_only:
+    providers: [deterministic]
+    overlap_policy: priority_score_length
+
+  # Deterministic first so its exact EMAIL/PHONE spans win ties over Presidio's
+  # (the reconciler orders by entity priority, then score, then chain position).
+  deterministic_presidio:
+    providers: [deterministic, presidio]
+    overlap_policy: priority_score_length

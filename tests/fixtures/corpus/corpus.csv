@@ -1,0 +1,211 @@
+document_id,language,document_type,tier,split,text
+doc_0001,en,plain,1,test,Please email James Whitfield at maria.rossi@example.net about ticket INC00100000.
+doc_0002,en,plain,1,test,Grace Okafor asked us to call +1 202 555 0127 before the weekend.
+doc_0003,en,plain,1,test,Contact details confirmed: peter.novak@example.com and +1 202 555 0143. See KB000002700.
+doc_0004,en,plain,1,calibration,The account owner is James Whitfield; no further action needed.
+doc_0005,en,plain,2,dev,pls call James Whitfield on +1-202-555-0133 thx
+doc_0006,en,plain,2,calibration,cust Maria R. mailed james.whitfield@example.com re INC00100037 - no reply yet
+doc_0007,en,plain,2,dev,callback req +1202555 0127 (Maria Rossi) asap
+doc_0008,en,plain,2,test,"reopened INC00100074, machine DEMO-PC-6900 still on v4.0.0"
+doc_0009,en,plain,3,test,"Customer: Peter Novak
+Mobile number: +1 202 555 0142
+Email: helen.marsh@example.com
+Machine name: DEMO-PC-6907
+Department: Support"
+doc_0010,en,plain,3,calibration,"Ticket: INC00100111
+Requested by: Omar Haddad
+Contact: grace.okafor@example.com
+KB Article: KB000002713
+Order: 12000"
+doc_0011,en,transcript,4,calibration,"2026-04-03 09:15:04 - Support Agent: Hello, how can I help?
+2026-04-03 09:15:13 - Guest: Hi, I'm Aisha Bello. Please call me on +1 202 555 0142.
+2026-04-03 09:15:42 - Support Agent: Thank you, I have logged INC00100148.
+"
+doc_0012,en,transcript,4,test,"2026-04-03 14:02:10 - Support Agent: Can you confirm your email?
+2026-04-03 14:02:31 - Guest: helen.marsh@example.org
+2026-04-03 14:02:55 - Support Agent: Noted. Machine DEMO-PC-6914 is affected.
+"
+doc_0013,en,plain,1,test,Please email Grace Okafor at aisha.bello@example.com about ticket INC00100185.
+doc_0014,en,plain,1,test,Daniel Ferreira asked us to call +1 202 555 0123 before the weekend.
+doc_0015,en,plain,1,calibration,Contact details confirmed: james.whitfield@example.org and +1 202 555 0123. See KB000002726.
+doc_0016,en,plain,1,calibration,The account owner is Daniel Ferreira; no further action needed.
+doc_0017,en,plain,2,test,pls call Daniel Ferreira on +1-202-555-0128 thx
+doc_0018,en,plain,2,calibration,cust Maria Rossi mailed omar.haddad@example.net re INC00100222 - no reply yet
+doc_0019,en,plain,2,dev,callback req +1202555 0123 (Helen M.) asap
+doc_0020,en,plain,2,test,"reopened INC00100259, machine DEMO-PC-6921 still on v4.1.1"
+doc_0021,en,plain,3,dev,"Customer: Grace Okafor
+Mobile number: +1 202 555 0140
+Email: daniel.ferreira@example.net
+Machine name: DEMO-PC-6928
+Department: Support"
+doc_0022,en,plain,3,test,"Ticket: INC00100296
+Requested by: Peter Novak
+Contact: james.whitfield@example.com
+KB Article: KB000002739
+Order: 12011"
+doc_0023,en,transcript,4,test,"2026-04-03 09:15:04 - Support Agent: Hello, how can I help?
+2026-04-03 09:15:13 - Guest: Hi, I'm Peter Novak. Please call me on +1 202 555 0129.
+2026-04-03 09:15:42 - Support Agent: Thank you, I have logged INC00100333.
+"
+doc_0024,en,transcript,4,test,"2026-04-03 14:02:10 - Support Agent: Can you confirm your email?
+2026-04-03 14:02:31 - Guest: james.whitfield@example.com
+2026-04-03 14:02:55 - Support Agent: Noted. Machine DEMO-PC-6935 is affected.
+"
+doc_0025,en,plain,1,dev,Please email James Whitfield at helen.marsh@example.org about ticket INC00100370.
+doc_0026,en,plain,1,test,Omar Haddad asked us to call +1 202 555 0140 before the weekend.
+doc_0027,en,plain,1,test,Contact details confirmed: daniel.ferreira@example.com and +1 202 555 0131. See KB000002752.
+doc_0028,en,plain,1,dev,The account owner is Daniel Ferreira; no further action needed.
+doc_0029,en,plain,2,test,pls call Peter Novak on +1-202-555-0128 thx
+doc_0030,en,plain,2,calibration,cust James Whitfield mailed aisha.bello@example.net re INC00100407 - no reply yet
+doc_0031,en,plain,2,test,callback req +1202555 0143 (Peter N.) asap
+doc_0032,en,plain,2,test,"reopened INC00100444, machine DEMO-PC-6942 still on v4.2.2"
+doc_0033,en,plain,3,calibration,"Customer: Omar Haddad
+Mobile number: +1 202 555 0132
+Email: grace.okafor@example.net
+Machine name: DEMO-PC-6949
+Department: Support"
+doc_0034,en,plain,3,test,"Ticket: INC00100481
+Requested by: Peter Novak
+Contact: daniel.ferreira@example.com
+KB Article: KB000002765
+Order: 12022"
+doc_0035,de,plain,1,calibration,Bitte schreiben Sie Jürgen Müller an jan.becker@example.org zum Vorgang INC00100518.
+doc_0036,de,plain,1,test,Miriam Köhler bittet um einen Rückruf unter +49 30 23125 028.
+doc_0037,de,plain,1,test,Kontaktdaten bestätigt: lukas.schneider@example.com sowie +49 30 23125 038. Siehe KB000002778.
+doc_0038,de,plain,1,calibration,Der Kontoinhaber ist Stefan Bauer; keine weitere Aktion nötig.
+doc_0039,de,plain,2,calibration,"bitte Jürgen Müller unter +49-30-23125-035 anrufen, danke"
+doc_0040,de,plain,2,calibration,"kunde Miriam Köhler hat an tobias.lang@example.com geschrieben, INC00100555 offen"
+doc_0041,de,plain,2,test,rueckruf +493023125 028 (Anja H.) dringend
+doc_0042,de,plain,2,calibration,"INC00100592 erneut geoeffnet, rechner DEMO-PC-6956 laeuft v4.3.3"
+doc_0043,de,plain,3,test,"Kunde: Katrin Wagner
+Telefonnummer: +49 30 23125 043
+E-Mail: miriam.koehler@example.net
+Rechnername: DEMO-PC-6963
+Abteilung: Support"
+doc_0044,de,plain,3,test,"Vorgang: INC00100629
+Gemeldet von: Miriam Köhler
+Kontakt: stefan.bauer@example.com
+KB-Artikel: KB000002791
+Bestellung: 12033"
+doc_0045,de,transcript,4,test,"2026-04-03 10:02:11 - Berater: Guten Tag, wie kann ich helfen?
+2026-04-03 10:02:30 - Kunde: Mein Name ist Anja Hoffmann, meine Nummer ist +49 30 23125 036.
+2026-04-03 10:03:02 - Berater: Danke, ich habe INC00100666 angelegt.
+"
+doc_0046,de,transcript,4,test,"2026-04-03 16:20:00 - Berater: Können Sie Ihre E-Mail bestätigen?
+2026-04-03 16:20:24 - Kunde: tobias.lang@example.com
+2026-04-03 16:20:51 - Berater: Notiert. Rechner DEMO-PC-6970 ist betroffen.
+"
+doc_0047,de,plain,1,dev,Bitte schreiben Sie Jan Becker an lukas.schneider@example.com zum Vorgang INC00100703.
+doc_0048,de,plain,1,test,Anja Hoffmann bittet um einen Rückruf unter +49 30 23125 041.
+doc_0049,de,plain,1,test,Kontaktdaten bestätigt: miriam.koehler@example.net sowie +49 30 23125 022. Siehe KB000002804.
+doc_0050,de,plain,1,test,Der Kontoinhaber ist Miriam Köhler; keine weitere Aktion nötig.
+doc_0051,de,plain,2,test,"bitte Miriam Köhler unter +49-30-23125-034 anrufen, danke"
+doc_0052,de,plain,2,test,"kunde Katrin Wagner hat an jan.becker@example.net geschrieben, INC00100740 offen"
+doc_0053,de,plain,2,calibration,rueckruf +493023125 043 (Lukas Schneider) dringend
+doc_0054,de,plain,2,test,"INC00100777 erneut geoeffnet, rechner DEMO-PC-6977 laeuft v4.4.4"
+doc_0055,de,plain,3,calibration,"Kunde: Katrin Wagner
+Telefonnummer: +49 30 23125 040
+E-Mail: stefan.bauer@example.com
+Rechnername: DEMO-PC-6984
+Abteilung: Support"
+doc_0056,de,plain,3,test,"Vorgang: INC00100814
+Gemeldet von: Katrin Wagner
+Kontakt: miriam.koehler@example.com
+KB-Artikel: KB000002817
+Bestellung: 12044"
+doc_0057,de,transcript,4,calibration,"2026-04-03 10:02:11 - Berater: Guten Tag, wie kann ich helfen?
+2026-04-03 10:02:30 - Kunde: Mein Name ist Tobias Lang, meine Nummer ist +49 30 23125 020.
+2026-04-03 10:03:02 - Berater: Danke, ich habe INC00100851 angelegt.
+"
+doc_0058,de,transcript,4,dev,"2026-04-03 16:20:00 - Berater: Können Sie Ihre E-Mail bestätigen?
+2026-04-03 16:20:24 - Kunde: katrin.wagner@example.net
+2026-04-03 16:20:51 - Berater: Notiert. Rechner DEMO-PC-6991 ist betroffen.
+"
+doc_0059,de,plain,1,test,Bitte schreiben Sie Anja Hoffmann an lukas.schneider@example.net zum Vorgang INC00100888.
+doc_0060,de,plain,1,test,Katrin Wagner bittet um einen Rückruf unter +49 30 23125 040.
+doc_0061,de,plain,1,calibration,Kontaktdaten bestätigt: juergen.mueller@example.com sowie +49 30 23125 031. Siehe KB000002830.
+doc_0062,de,plain,1,calibration,Der Kontoinhaber ist Anja Hoffmann; keine weitere Aktion nötig.
+doc_0063,de,plain,2,dev,"bitte Jan Becker unter +49-30-23125-030 anrufen, danke"
+doc_0064,de,plain,2,test,"kunde Tobias L. hat an lukas.schneider@example.org geschrieben, INC00100925 offen"
+doc_0065,de,plain,2,dev,rueckruf +493023125 029 (Jürgen M.) dringend
+doc_0066,de,plain,2,test,"INC00100962 erneut geoeffnet, rechner DEMO-PC-6998 laeuft v4.5.5"
+doc_0067,de,plain,3,test,"Kunde: Jürgen Müller
+Telefonnummer: +49 30 23125 038
+E-Mail: lukas.schneider@example.com
+Rechnername: DEMO-PC-7005
+Abteilung: Support"
+doc_0068,de,plain,3,test,"Vorgang: INC00100999
+Gemeldet von: Tobias Lang
+Kontakt: lukas.schneider@example.net
+KB-Artikel: KB000002843
+Bestellung: 12055"
+doc_0069,el,plain,1,calibration,Παρακαλώ στείλτε email στον/στην Μαρία Παπαδοπούλου στο maria.papadopoulou@example.net για το INC00101036.
+doc_0070,el,plain,1,dev,Κώστας Ιωάννου ζητά να τηλεφωνήσουμε στο +30 210 000 0037.
+doc_0071,el,plain,1,dev,Επιβεβαιώθηκαν τα στοιχεία: maria.papadopoulou@example.org και +30 210 000 0036. Δείτε KB000002856.
+doc_0072,el,plain,1,test,Ο κάτοχος του λογαριασμού είναι Άννα Βασιλείου· δεν απαιτείται ενέργεια.
+doc_0073,el,plain,2,dev,καλεστε Νίκος Αντωνίου στο +30-210-000-0043 ευχαριστω
+doc_0074,el,plain,2,test,ο πελατης Νίκος Αντωνίου εστειλε στο sofia.karagianni@example.org για INC00101073
+doc_0075,el,plain,2,test,επικοινωνια +30210000 0041 (Δημήτρης) επειγον
+doc_0076,el,plain,2,test,"INC00101110 ανοιξε ξανα, μηχανημα DEMO-PC-7012 με v4.6.6"
+doc_0077,el,plain,3,test,"Πελάτης: Κώστας Ιωάννου
+Τηλέφωνο: +30 210 000 0023
+Email: nikos.antoniou@example.com
+Όνομα μηχανήματος: DEMO-PC-7019
+Τμήμα: Support"
+doc_0078,el,plain,3,test,"Αίτημα: INC00101147
+Από: Γιώργος Δημητρίου
+Επικοινωνία: dimitris.lekkas@example.com
+Άρθρο KB: KB000002869
+Παραγγελία: 12066"
+doc_0079,el,transcript,4,test,"2026-04-03 11:20:00 - Πράκτορας: Καλημέρα, πώς μπορώ να βοηθήσω;
+2026-04-03 11:20:24 - Πελάτης: Ονομάζομαι Νίκος Αντωνίου, τηλέφωνο +30 210 000 0038.
+2026-04-03 11:21:03 - Πράκτορας: Ευχαριστώ, κατέγραψα το INC00101184.
+"
+doc_0080,el,transcript,4,test,"2026-04-03 18:05:00 - Πράκτορας: Μπορείτε να επιβεβαιώσετε το email σας;
+2026-04-03 18:05:22 - Πελάτης: nikos.antoniou@example.com
+2026-04-03 18:05:47 - Πράκτορας: Καταγράφηκε. Το DEMO-PC-7026 επηρεάζεται.
+"
+doc_0081,el,plain,1,dev,Παρακαλώ στείλτε email στον/στην Γιώργος Δημητρίου στο eleni.pappa@example.com για το INC00101221.
+doc_0082,el,plain,1,test,Γιώργος Δημητρίου ζητά να τηλεφωνήσουμε στο +30 210 000 0021.
+doc_0083,el,plain,1,test,Επιβεβαιώθηκαν τα στοιχεία: dimitris.lekkas@example.com και +30 210 000 0036. Δείτε KB000002882.
+doc_0084,el,plain,1,calibration,Ο κάτοχος του λογαριασμού είναι Νίκος Αντωνίου· δεν απαιτείται ενέργεια.
+doc_0085,el,plain,2,dev,καλεστε Σοφία Καραγιάννη στο +30-210-000-0035 ευχαριστω
+doc_0086,el,plain,2,calibration,ο πελατης Νίκος Αντωνίου εστειλε στο maria.papadopoulou@example.net για INC00101258
+doc_0087,el,plain,2,test,επικοινωνια +30210000 0038 (Κώστας Ι.) επειγον
+doc_0088,el,plain,2,dev,"INC00101295 ανοιξε ξανα, μηχανημα DEMO-PC-7033 με v4.7.0"
+doc_0089,el,plain,3,calibration,"Πελάτης: Κώστας Ιωάννου
+Τηλέφωνο: +30 210 000 0033
+Email: nikos.antoniou@example.com
+Όνομα μηχανήματος: DEMO-PC-7040
+Τμήμα: Support"
+doc_0090,el,plain,3,dev,"Αίτημα: INC00101332
+Από: Γιώργος Δημητρίου
+Επικοινωνία: anna.vasileiou@example.org
+Άρθρο KB: KB000002895
+Παραγγελία: 12077"
+doc_0091,el,transcript,4,dev,"2026-04-03 11:20:00 - Πράκτορας: Καλημέρα, πώς μπορώ να βοηθήσω;
+2026-04-03 11:20:24 - Πελάτης: Ονομάζομαι Άννα Βασιλείου, τηλέφωνο +30 210 000 0033.
+2026-04-03 11:21:03 - Πράκτορας: Ευχαριστώ, κατέγραψα το INC00101369.
+"
+doc_0092,el,transcript,4,test,"2026-04-03 18:05:00 - Πράκτορας: Μπορείτε να επιβεβαιώσετε το email σας;
+2026-04-03 18:05:22 - Πελάτης: kostas.ioannou@example.net
+2026-04-03 18:05:47 - Πράκτορας: Καταγράφηκε. Το DEMO-PC-7047 επηρεάζεται.
+"
+doc_0093,el,plain,1,test,Παρακαλώ στείλτε email στον/στην Ελένη Παππά στο giorgos.dimitriou@example.com για το INC00101406.
+doc_0094,el,plain,1,test,Άννα Βασιλείου ζητά να τηλεφωνήσουμε στο +30 210 000 0043.
+doc_0095,el,plain,1,calibration,Επιβεβαιώθηκαν τα στοιχεία: dimitris.lekkas@example.com και +30 210 000 0027. Δείτε KB000002908.
+doc_0096,el,plain,1,calibration,Ο κάτοχος του λογαριασμού είναι Νίκος Αντωνίου· δεν απαιτείται ενέργεια.
+doc_0097,el,plain,2,test,καλεστε Νίκος Αντωνίου στο +30-210-000-0034 ευχαριστω
+doc_0098,el,plain,2,test,ο πελατης Μαρία εστειλε στο maria.papadopoulou@example.org για INC00101443
+doc_0099,el,plain,2,test,επικοινωνια +30210000 0034 (Νίκος Α.) επειγον
+doc_0100,el,plain,2,calibration,"INC00101480 ανοιξε ξανα, μηχανημα DEMO-PC-7054 με v4.8.1"
+doc_0101,el,plain,3,calibration,"Πελάτης: Κώστας Ιωάννου
+Τηλέφωνο: +30 210 000 0037
+Email: giorgos.dimitriou@example.com
+Όνομα μηχανήματος: DEMO-PC-7061
+Τμήμα: Support"
+doc_0102,el,plain,3,test,"Αίτημα: INC00101517
+Από: Ελένη Παππά
+Επικοινωνία: giorgos.dimitriou@example.com
+Άρθρο KB: KB000002921
+Παραγγελία: 12088"

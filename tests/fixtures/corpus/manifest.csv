@@ -1,0 +1,181 @@
+document_id,entity_id,entity_type,start,end,surface,language,difficulty_tier,document_type,injection_rule,synthetic_value_id
+doc_0001,doc_0001_e00,PERSON,13,28,James Whitfield,en,1,plain,person,en_person_01
+doc_0001,doc_0001_e01,EMAIL,32,55,maria.rossi@example.net,en,1,plain,email,en_email_00
+doc_0002,doc_0002_e00,PERSON,0,12,Grace Okafor,en,1,plain,person,en_person_04
+doc_0002,doc_0002_e01,PHONE,30,45,+1 202 555 0127,en,1,plain,phone,en_phone_07_plain
+doc_0003,doc_0003_e00,EMAIL,27,50,peter.novak@example.com,en,1,plain,email,en_email_03
+doc_0003,doc_0003_e01,PHONE,55,70,+1 202 555 0143,en,1,plain,phone,en_phone_23_plain
+doc_0004,doc_0004_e00,PERSON,21,36,James Whitfield,en,1,plain,person,en_person_01
+doc_0005,doc_0005_e00,PERSON,9,24,James Whitfield,en,2,plain,person_short,en_person_short_01
+doc_0005,doc_0005_e01,PHONE,28,43,+1-202-555-0133,en,2,plain,phone_dashed,en_phone_13_dashed
+doc_0006,doc_0006_e00,PERSON,5,13,Maria R.,en,2,plain,person_short,en_person_short_00
+doc_0006,doc_0006_e01,EMAIL,21,48,james.whitfield@example.com,en,2,plain,email,en_email_01
+doc_0007,doc_0007_e00,PHONE,13,26,+1202555 0127,en,2,plain,phone_compact,en_phone_07_compact
+doc_0007,doc_0007_e01,PERSON,28,39,Maria Rossi,en,2,plain,person_short,en_person_short_00
+doc_0009,doc_0009_e00,PERSON,10,21,Peter Novak,en,3,plain,person,en_person_03
+doc_0009,doc_0009_e01,PHONE,37,52,+1 202 555 0142,en,3,plain,phone,en_phone_22_plain
+doc_0009,doc_0009_e02,EMAIL,60,83,helen.marsh@example.com,en,3,plain,email,en_email_06
+doc_0010,doc_0010_e00,PERSON,34,45,Omar Haddad,en,3,plain,person,en_person_07
+doc_0010,doc_0010_e01,EMAIL,55,79,grace.okafor@example.com,en,3,plain,email,en_email_04
+doc_0011,doc_0011_e00,PERSON,97,108,Aisha Bello,en,4,transcript,person,en_person_02
+doc_0011,doc_0011_e01,PHONE,128,143,+1 202 555 0142,en,4,transcript,phone,en_phone_22_plain
+doc_0012,doc_0012_e00,EMAIL,94,117,helen.marsh@example.org,en,4,transcript,email,en_email_06
+doc_0013,doc_0013_e00,PERSON,13,25,Grace Okafor,en,1,plain,person,en_person_04
+doc_0013,doc_0013_e01,EMAIL,29,52,aisha.bello@example.com,en,1,plain,email,en_email_02
+doc_0014,doc_0014_e00,PERSON,0,15,Daniel Ferreira,en,1,plain,person,en_person_05
+doc_0014,doc_0014_e01,PHONE,33,48,+1 202 555 0123,en,1,plain,phone,en_phone_03_plain
+doc_0015,doc_0015_e00,EMAIL,27,54,james.whitfield@example.org,en,1,plain,email,en_email_01
+doc_0015,doc_0015_e01,PHONE,59,74,+1 202 555 0123,en,1,plain,phone,en_phone_03_plain
+doc_0016,doc_0016_e00,PERSON,21,36,Daniel Ferreira,en,1,plain,person,en_person_05
+doc_0017,doc_0017_e00,PERSON,9,24,Daniel Ferreira,en,2,plain,person_short,en_person_short_05
+doc_0017,doc_0017_e01,PHONE,28,43,+1-202-555-0128,en,2,plain,phone_dashed,en_phone_08_dashed
+doc_0018,doc_0018_e00,PERSON,5,16,Maria Rossi,en,2,plain,person_short,en_person_short_00
+doc_0018,doc_0018_e01,EMAIL,24,47,omar.haddad@example.net,en,2,plain,email,en_email_07
+doc_0019,doc_0019_e00,PHONE,13,26,+1202555 0123,en,2,plain,phone_compact,en_phone_03_compact
+doc_0019,doc_0019_e01,PERSON,28,36,Helen M.,en,2,plain,person_short,en_person_short_06
+doc_0021,doc_0021_e00,PERSON,10,22,Grace Okafor,en,3,plain,person,en_person_04
+doc_0021,doc_0021_e01,PHONE,38,53,+1 202 555 0140,en,3,plain,phone,en_phone_20_plain
+doc_0021,doc_0021_e02,EMAIL,61,88,daniel.ferreira@example.net,en,3,plain,email,en_email_05
+doc_0022,doc_0022_e00,PERSON,34,45,Peter Novak,en,3,plain,person,en_person_03
+doc_0022,doc_0022_e01,EMAIL,55,82,james.whitfield@example.com,en,3,plain,email,en_email_01
+doc_0023,doc_0023_e00,PERSON,97,108,Peter Novak,en,4,transcript,person,en_person_03
+doc_0023,doc_0023_e01,PHONE,128,143,+1 202 555 0129,en,4,transcript,phone,en_phone_09_plain
+doc_0024,doc_0024_e00,EMAIL,94,121,james.whitfield@example.com,en,4,transcript,email,en_email_01
+doc_0025,doc_0025_e00,PERSON,13,28,James Whitfield,en,1,plain,person,en_person_01
+doc_0025,doc_0025_e01,EMAIL,32,55,helen.marsh@example.org,en,1,plain,email,en_email_06
+doc_0026,doc_0026_e00,PERSON,0,11,Omar Haddad,en,1,plain,person,en_person_07
+doc_0026,doc_0026_e01,PHONE,29,44,+1 202 555 0140,en,1,plain,phone,en_phone_20_plain
+doc_0027,doc_0027_e00,EMAIL,27,54,daniel.ferreira@example.com,en,1,plain,email,en_email_05
+doc_0027,doc_0027_e01,PHONE,59,74,+1 202 555 0131,en,1,plain,phone,en_phone_11_plain
+doc_0028,doc_0028_e00,PERSON,21,36,Daniel Ferreira,en,1,plain,person,en_person_05
+doc_0029,doc_0029_e00,PERSON,9,20,Peter Novak,en,2,plain,person_short,en_person_short_03
+doc_0029,doc_0029_e01,PHONE,24,39,+1-202-555-0128,en,2,plain,phone_dashed,en_phone_08_dashed
+doc_0030,doc_0030_e00,PERSON,5,20,James Whitfield,en,2,plain,person_short,en_person_short_01
+doc_0030,doc_0030_e01,EMAIL,28,51,aisha.bello@example.net,en,2,plain,email,en_email_02
+doc_0031,doc_0031_e00,PHONE,13,26,+1202555 0143,en,2,plain,phone_compact,en_phone_23_compact
+doc_0031,doc_0031_e01,PERSON,28,36,Peter N.,en,2,plain,person_short,en_person_short_03
+doc_0033,doc_0033_e00,PERSON,10,21,Omar Haddad,en,3,plain,person,en_person_07
+doc_0033,doc_0033_e01,PHONE,37,52,+1 202 555 0132,en,3,plain,phone,en_phone_12_plain
+doc_0033,doc_0033_e02,EMAIL,60,84,grace.okafor@example.net,en,3,plain,email,en_email_04
+doc_0034,doc_0034_e00,PERSON,34,45,Peter Novak,en,3,plain,person,en_person_03
+doc_0034,doc_0034_e01,EMAIL,55,82,daniel.ferreira@example.com,en,3,plain,email,en_email_05
+doc_0035,doc_0035_e00,PERSON,20,33,Jürgen Müller,de,1,plain,person,de_person_03
+doc_0035,doc_0035_e01,EMAIL,37,59,jan.becker@example.org,de,1,plain,email,de_email_00
+doc_0036,doc_0036_e00,PERSON,0,13,Miriam Köhler,de,1,plain,person,de_person_06
+doc_0036,doc_0036_e01,PHONE,44,60,+49 30 23125 028,de,1,plain,phone,de_phone_08_plain
+doc_0037,doc_0037_e00,EMAIL,24,51,lukas.schneider@example.com,de,1,plain,email,de_email_01
+doc_0037,doc_0037_e01,PHONE,58,74,+49 30 23125 038,de,1,plain,phone,de_phone_18_plain
+doc_0038,doc_0038_e00,PERSON,21,33,Stefan Bauer,de,1,plain,person,de_person_05
+doc_0039,doc_0039_e00,PERSON,6,19,Jürgen Müller,de,2,plain,person_short,de_person_short_03
+doc_0039,doc_0039_e01,PHONE,26,42,+49-30-23125-035,de,2,plain,phone_dashed,de_phone_15_dashed
+doc_0040,doc_0040_e00,PERSON,6,19,Miriam Köhler,de,2,plain,person_short,de_person_short_06
+doc_0040,doc_0040_e01,EMAIL,27,50,tobias.lang@example.com,de,2,plain,email,de_email_07
+doc_0041,doc_0041_e00,PHONE,9,23,+493023125 028,de,2,plain,phone_compact,de_phone_08_compact
+doc_0041,doc_0041_e01,PERSON,25,32,Anja H.,de,2,plain,person_short,de_person_short_02
+doc_0043,doc_0043_e00,PERSON,7,20,Katrin Wagner,de,3,plain,person,de_person_04
+doc_0043,doc_0043_e01,PHONE,36,52,+49 30 23125 043,de,3,plain,phone,de_phone_23_plain
+doc_0043,doc_0043_e02,EMAIL,61,87,miriam.koehler@example.net,de,3,plain,email,de_email_06
+doc_0044,doc_0044_e00,PERSON,35,48,Miriam Köhler,de,3,plain,person,de_person_06
+doc_0044,doc_0044_e01,EMAIL,58,82,stefan.bauer@example.com,de,3,plain,email,de_email_05
+doc_0045,doc_0045_e00,PERSON,106,119,Anja Hoffmann,de,4,transcript,person,de_person_02
+doc_0045,doc_0045_e01,PHONE,138,154,+49 30 23125 036,de,4,transcript,phone,de_phone_16_plain
+doc_0046,doc_0046_e00,EMAIL,95,118,tobias.lang@example.com,de,4,transcript,email,de_email_07
+doc_0047,doc_0047_e00,PERSON,20,30,Jan Becker,de,1,plain,person,de_person_00
+doc_0047,doc_0047_e01,EMAIL,34,61,lukas.schneider@example.com,de,1,plain,email,de_email_01
+doc_0048,doc_0048_e00,PERSON,0,13,Anja Hoffmann,de,1,plain,person,de_person_02
+doc_0048,doc_0048_e01,PHONE,44,60,+49 30 23125 041,de,1,plain,phone,de_phone_21_plain
+doc_0049,doc_0049_e00,EMAIL,24,50,miriam.koehler@example.net,de,1,plain,email,de_email_06
+doc_0049,doc_0049_e01,PHONE,57,73,+49 30 23125 022,de,1,plain,phone,de_phone_02_plain
+doc_0050,doc_0050_e00,PERSON,21,34,Miriam Köhler,de,1,plain,person,de_person_06
+doc_0051,doc_0051_e00,PERSON,6,19,Miriam Köhler,de,2,plain,person_short,de_person_short_06
+doc_0051,doc_0051_e01,PHONE,26,42,+49-30-23125-034,de,2,plain,phone_dashed,de_phone_14_dashed
+doc_0052,doc_0052_e00,PERSON,6,19,Katrin Wagner,de,2,plain,person_short,de_person_short_04
+doc_0052,doc_0052_e01,EMAIL,27,49,jan.becker@example.net,de,2,plain,email,de_email_00
+doc_0053,doc_0053_e00,PHONE,9,23,+493023125 043,de,2,plain,phone_compact,de_phone_23_compact
+doc_0053,doc_0053_e01,PERSON,25,40,Lukas Schneider,de,2,plain,person_short,de_person_short_01
+doc_0055,doc_0055_e00,PERSON,7,20,Katrin Wagner,de,3,plain,person,de_person_04
+doc_0055,doc_0055_e01,PHONE,36,52,+49 30 23125 040,de,3,plain,phone,de_phone_20_plain
+doc_0055,doc_0055_e02,EMAIL,61,85,stefan.bauer@example.com,de,3,plain,email,de_email_05
+doc_0056,doc_0056_e00,PERSON,35,48,Katrin Wagner,de,3,plain,person,de_person_04
+doc_0056,doc_0056_e01,EMAIL,58,84,miriam.koehler@example.com,de,3,plain,email,de_email_06
+doc_0057,doc_0057_e00,PERSON,106,117,Tobias Lang,de,4,transcript,person,de_person_07
+doc_0057,doc_0057_e01,PHONE,136,152,+49 30 23125 020,de,4,transcript,phone,de_phone_00_plain
+doc_0058,doc_0058_e00,EMAIL,95,120,katrin.wagner@example.net,de,4,transcript,email,de_email_04
+doc_0059,doc_0059_e00,PERSON,20,33,Anja Hoffmann,de,1,plain,person,de_person_02
+doc_0059,doc_0059_e01,EMAIL,37,64,lukas.schneider@example.net,de,1,plain,email,de_email_01
+doc_0060,doc_0060_e00,PERSON,0,13,Katrin Wagner,de,1,plain,person,de_person_04
+doc_0060,doc_0060_e01,PHONE,44,60,+49 30 23125 040,de,1,plain,phone,de_phone_20_plain
+doc_0061,doc_0061_e00,EMAIL,24,51,juergen.mueller@example.com,de,1,plain,email,de_email_03
+doc_0061,doc_0061_e01,PHONE,58,74,+49 30 23125 031,de,1,plain,phone,de_phone_11_plain
+doc_0062,doc_0062_e00,PERSON,21,34,Anja Hoffmann,de,1,plain,person,de_person_02
+doc_0063,doc_0063_e00,PERSON,6,16,Jan Becker,de,2,plain,person_short,de_person_short_00
+doc_0063,doc_0063_e01,PHONE,23,39,+49-30-23125-030,de,2,plain,phone_dashed,de_phone_10_dashed
+doc_0064,doc_0064_e00,PERSON,6,15,Tobias L.,de,2,plain,person_short,de_person_short_07
+doc_0064,doc_0064_e01,EMAIL,23,50,lukas.schneider@example.org,de,2,plain,email,de_email_01
+doc_0065,doc_0065_e00,PHONE,9,23,+493023125 029,de,2,plain,phone_compact,de_phone_09_compact
+doc_0065,doc_0065_e01,PERSON,25,34,Jürgen M.,de,2,plain,person_short,de_person_short_03
+doc_0067,doc_0067_e00,PERSON,7,20,Jürgen Müller,de,3,plain,person,de_person_03
+doc_0067,doc_0067_e01,PHONE,36,52,+49 30 23125 038,de,3,plain,phone,de_phone_18_plain
+doc_0067,doc_0067_e02,EMAIL,61,88,lukas.schneider@example.com,de,3,plain,email,de_email_01
+doc_0068,doc_0068_e00,PERSON,35,46,Tobias Lang,de,3,plain,person,de_person_07
+doc_0068,doc_0068_e01,EMAIL,56,83,lukas.schneider@example.net,de,3,plain,email,de_email_01
+doc_0069,doc_0069_e00,PERSON,33,51,Μαρία Παπαδοπούλου,el,1,plain,person,el_person_02
+doc_0069,doc_0069_e01,EMAIL,56,86,maria.papadopoulou@example.net,el,1,plain,email,el_email_02
+doc_0070,doc_0070_e00,PERSON,0,14,Κώστας Ιωάννου,el,1,plain,person,el_person_07
+doc_0070,doc_0070_e01,PHONE,41,57,+30 210 000 0037,el,1,plain,phone,el_phone_17_plain
+doc_0071,doc_0071_e00,EMAIL,28,58,maria.papadopoulou@example.org,el,1,plain,email,el_email_02
+doc_0071,doc_0071_e01,PHONE,63,79,+30 210 000 0036,el,1,plain,phone,el_phone_16_plain
+doc_0072,doc_0072_e00,PERSON,32,46,Άννα Βασιλείου,el,1,plain,person,el_person_06
+doc_0073,doc_0073_e00,PERSON,8,22,Νίκος Αντωνίου,el,2,plain,person_short,el_person_short_03
+doc_0073,doc_0073_e01,PHONE,27,43,+30-210-000-0043,el,2,plain,phone_dashed,el_phone_23_dashed
+doc_0074,doc_0074_e00,PERSON,10,24,Νίκος Αντωνίου,el,2,plain,person_short,el_person_short_03
+doc_0074,doc_0074_e01,EMAIL,37,65,sofia.karagianni@example.org,el,2,plain,email,el_email_04
+doc_0075,doc_0075_e00,PHONE,12,26,+30210000 0041,el,2,plain,phone_compact,el_phone_21_compact
+doc_0075,doc_0075_e01,PERSON,28,36,Δημήτρης,el,2,plain,person_short,el_person_short_05
+doc_0077,doc_0077_e00,PERSON,9,23,Κώστας Ιωάννου,el,3,plain,person,el_person_07
+doc_0077,doc_0077_e01,PHONE,34,50,+30 210 000 0023,el,3,plain,phone,el_phone_03_plain
+doc_0077,doc_0077_e02,EMAIL,58,84,nikos.antoniou@example.com,el,3,plain,email,el_email_03
+doc_0078,doc_0078_e00,PERSON,25,42,Γιώργος Δημητρίου,el,3,plain,person,el_person_01
+doc_0078,doc_0078_e01,EMAIL,56,83,dimitris.lekkas@example.com,el,3,plain,email,el_email_05
+doc_0079,doc_0079_e00,PERSON,107,121,Νίκος Αντωνίου,el,4,transcript,person,el_person_03
+doc_0079,doc_0079_e01,PHONE,132,148,+30 210 000 0038,el,4,transcript,phone,el_phone_18_plain
+doc_0080,doc_0080_e00,EMAIL,104,130,nikos.antoniou@example.com,el,4,transcript,email,el_email_03
+doc_0081,doc_0081_e00,PERSON,33,50,Γιώργος Δημητρίου,el,1,plain,person,el_person_01
+doc_0081,doc_0081_e01,EMAIL,55,78,eleni.pappa@example.com,el,1,plain,email,el_email_00
+doc_0082,doc_0082_e00,PERSON,0,17,Γιώργος Δημητρίου,el,1,plain,person,el_person_01
+doc_0082,doc_0082_e01,PHONE,44,60,+30 210 000 0021,el,1,plain,phone,el_phone_01_plain
+doc_0083,doc_0083_e00,EMAIL,28,55,dimitris.lekkas@example.com,el,1,plain,email,el_email_05
+doc_0083,doc_0083_e01,PHONE,60,76,+30 210 000 0036,el,1,plain,phone,el_phone_16_plain
+doc_0084,doc_0084_e00,PERSON,32,46,Νίκος Αντωνίου,el,1,plain,person,el_person_03
+doc_0085,doc_0085_e00,PERSON,8,24,Σοφία Καραγιάννη,el,2,plain,person_short,el_person_short_04
+doc_0085,doc_0085_e01,PHONE,29,45,+30-210-000-0035,el,2,plain,phone_dashed,el_phone_15_dashed
+doc_0086,doc_0086_e00,PERSON,10,24,Νίκος Αντωνίου,el,2,plain,person_short,el_person_short_03
+doc_0086,doc_0086_e01,EMAIL,37,67,maria.papadopoulou@example.net,el,2,plain,email,el_email_02
+doc_0087,doc_0087_e00,PHONE,12,26,+30210000 0038,el,2,plain,phone_compact,el_phone_18_compact
+doc_0087,doc_0087_e01,PERSON,28,37,Κώστας Ι.,el,2,plain,person_short,el_person_short_07
+doc_0089,doc_0089_e00,PERSON,9,23,Κώστας Ιωάννου,el,3,plain,person,el_person_07
+doc_0089,doc_0089_e01,PHONE,34,50,+30 210 000 0033,el,3,plain,phone,el_phone_13_plain
+doc_0089,doc_0089_e02,EMAIL,58,84,nikos.antoniou@example.com,el,3,plain,email,el_email_03
+doc_0090,doc_0090_e00,PERSON,25,42,Γιώργος Δημητρίου,el,3,plain,person,el_person_01
+doc_0090,doc_0090_e01,EMAIL,56,82,anna.vasileiou@example.org,el,3,plain,email,el_email_06
+doc_0091,doc_0091_e00,PERSON,107,121,Άννα Βασιλείου,el,4,transcript,person,el_person_06
+doc_0091,doc_0091_e01,PHONE,132,148,+30 210 000 0033,el,4,transcript,phone,el_phone_13_plain
+doc_0092,doc_0092_e00,EMAIL,104,130,kostas.ioannou@example.net,el,4,transcript,email,el_email_07
+doc_0093,doc_0093_e00,PERSON,33,44,Ελένη Παππά,el,1,plain,person,el_person_00
+doc_0093,doc_0093_e01,EMAIL,49,78,giorgos.dimitriou@example.com,el,1,plain,email,el_email_01
+doc_0094,doc_0094_e00,PERSON,0,14,Άννα Βασιλείου,el,1,plain,person,el_person_06
+doc_0094,doc_0094_e01,PHONE,41,57,+30 210 000 0043,el,1,plain,phone,el_phone_23_plain
+doc_0095,doc_0095_e00,EMAIL,28,55,dimitris.lekkas@example.com,el,1,plain,email,el_email_05
+doc_0095,doc_0095_e01,PHONE,60,76,+30 210 000 0027,el,1,plain,phone,el_phone_07_plain
+doc_0096,doc_0096_e00,PERSON,32,46,Νίκος Αντωνίου,el,1,plain,person,el_person_03
+doc_0097,doc_0097_e00,PERSON,8,22,Νίκος Αντωνίου,el,2,plain,person_short,el_person_short_03
+doc_0097,doc_0097_e01,PHONE,27,43,+30-210-000-0034,el,2,plain,phone_dashed,el_phone_14_dashed
+doc_0098,doc_0098_e00,PERSON,10,15,Μαρία,el,2,plain,person_short,el_person_short_02
+doc_0098,doc_0098_e01,EMAIL,28,58,maria.papadopoulou@example.org,el,2,plain,email,el_email_02
+doc_0099,doc_0099_e00,PHONE,12,26,+30210000 0034,el,2,plain,phone_compact,el_phone_14_compact
+doc_0099,doc_0099_e01,PERSON,28,36,Νίκος Α.,el,2,plain,person_short,el_person_short_03
+doc_0101,doc_0101_e00,PERSON,9,23,Κώστας Ιωάννου,el,3,plain,person,el_person_07
+doc_0101,doc_0101_e01,PHONE,34,50,+30 210 000 0037,el,3,plain,phone,el_phone_17_plain
+doc_0101,doc_0101_e02,EMAIL,58,87,giorgos.dimitriou@example.com,el,3,plain,email,el_email_01
+doc_0102,doc_0102_e00,PERSON,25,36,Ελένη Παππά,el,3,plain,person,el_person_00
+doc_0102,doc_0102_e01,EMAIL,50,79,giorgos.dimitriou@example.com,el,3,plain,email,el_email_01
