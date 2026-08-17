@@ -1,0 +1,209 @@
+# Provider Registry
+
+One record per shipped provider, covering what `AGENTS.md` requires before a provider
+is merged: supported languages, entity mapping, confidence semantics, dependencies,
+known limitations, expected runtime mode, and measured benchmark results.
+
+Numbers here come from the committed corpus (`tests/fixtures/corpus/`, 102 documents,
+180 injected entities, en/de/el, tiers 1–4) via `pii-reduction benchmark`. They are
+reproducible with the commands shown.
+
+---
+
+## `deterministic` — pattern and library recognizers
+
+| | |
+|---|---|
+| **Type** | `deterministic` |
+| **Entities** | EMAIL, PHONE |
+| **Languages** | any (language-independent) |
+| **Dependencies** | `phonenumbers` (core install; no model, no extra) |
+| **Runtime** | pure CPU, microseconds per document |
+| **Increment** | A3 |
+
+### Entity mapping
+
+No mapping table: the recognizers emit normalized labels by construction.
+
+### Confidence semantics
+
+Fixed by construction, not learned (ADR-0005):
+
+- EMAIL → `1.0`. An anchored structural match either holds or it does not.
+- PHONE → `1.0` when `phonenumbers` validates the number for a configured region,
+  `0.85` when the text is only a *possible* number for that region.
+
+### Configuration
+
+```yaml
+providers:
+  deterministic:
+    type: deterministic
+    entities: [EMAIL, PHONE]
+    options:
+      regions: [GR, DE, GB, US]   # one matcher pass per region, plus a region-less pass
+      leniency: valid             # 'possible' also reports unvalidated numbers at 0.85
+```
+
+### Known limitations
+
+- `leniency: possible` measurably matches ordinary identifiers — the probe reported
+  `6915` from `DEMO-PC-6915`, `12345` from `Order 12345`, and fragments of
+  `2026-04-03 09:15:04`. `valid` is the default for that reason; opt in per dataset
+  only when recall matters more than precision.
+- The email pattern accepts any dot-TLD of two or more ASCII letters, including
+  `.test` and `.invalid` — deliberately broader than Presidio (ADR-0003). It does not
+  handle internationalized (non-ASCII) addresses.
+- National-format phone numbers are only found for configured regions.
+
+### Measured results
+
+`pii-reduction benchmark`
+
+| entity | strict precision | strict recall | strict F1 | support |
+|---|---|---|---|---|
+| EMAIL | 1.000 | 1.000 | 1.000 | 51 |
+| PHONE | 1.000 | 1.000 | 1.000 | 51 |
+| PERSON | 0.000 | 0.000 | 0.000 | 78 |
+
+Overall strict F1 0.723, leakage 0.433, document clean rate 0.161, over-redaction
+0.000. Every leaked entity is a PERSON.
+
+---
+
+## `presidio` — Microsoft Presidio over spaCy
+
+| | |
+|---|---|
+| **Type** | `presidio` |
+| **Entities** | PERSON, EMAIL, PHONE |
+| **Languages** | en, de, el |
+| **Dependencies** | `presidio-analyzer`, `spacy` (extra), plus models installed by command |
+| **Runtime** | engine cached per process/worker; ~8 s to build, 7–30 ms per short text |
+| **Increment** | B |
+
+### Installation
+
+```bash
+pip install -e ".[presidio]"
+python -m spacy download en_core_web_md
+python -m spacy download de_core_news_md
+python -m spacy download xx_ent_wiki_sm
+```
+
+`md` models are the CI tier; `lg` (`en_core_web_lg`, `de_core_news_lg`) are used for
+benchmark runs and expose identical label sets (ADR-0009). Nothing downloads a model
+automatically; a missing model raises `ProviderNotAvailableError` with the commands
+above.
+
+### Models and licensing
+
+| Language | Model | Licence |
+|---|---|---|
+| en | `en_core_web_md` / `en_core_web_lg` | MIT |
+| de | `de_core_news_md` / `de_core_news_lg` | MIT |
+| el | `xx_ent_wiki_sm` | MIT |
+
+`el_core_news_md`/`lg` are **CC BY-NC-SA 3.0 (non-commercial)** and are incompatible
+with this project's MIT licence (ADR-0007). The provider refuses to be configured
+with them, with a message saying why. Greek therefore runs through the multilingual
+model, at the quality cost measured below.
+
+### Entity mapping (ADR-0004)
+
+| Presidio label | Normalized |
+|---|---|
+| `PERSON` | PERSON |
+| `EMAIL_ADDRESS` | EMAIL |
+| `PHONE_NUMBER` | PHONE |
+| `URL`, `LOCATION`, `NRP`, `DATE_TIME`, `IP_ADDRESS` | dropped, and counted |
+
+The adapter requests only the three native labels it maps, so `URL` — which produced
+partial-match noise such as `maria.ro` from an email address — never arrives. The drop
+table is a safety net for future Presidio versions, and every drop is counted through
+a shared drop counter rather than silently discarded.
+
+### Confidence semantics
+
+Presidio scores are **recognizer constants, not calibrated probabilities**
+(ADR-0005), confirmed again by the Increment B tests:
+
+| Recognizer | Score |
+|---|---|
+| spaCy-backed NER (PERSON) | exactly `0.85`, correct or not |
+| `EmailRecognizer` | `1.0` |
+| `PhoneRecognizer` | `0.40` |
+
+A single global threshold of 0.5 would therefore drop every phone number. Thresholds
+are per provider and per entity, and are applied **once, by the reconciler**, which
+records what each threshold rejected. The adapter itself does no filtering.
+
+```yaml
+providers:
+  presidio:
+    type: presidio
+    languages: [en, de, el]
+    entities: [PERSON, EMAIL, PHONE]
+    thresholds:      # uncalibrated until Increment E
+      PERSON: 0.5
+      EMAIL: 0.6
+      PHONE: 0.3
+    options:
+      models:
+        en: en_core_web_md
+        de: de_core_news_md
+        el: xx_ent_wiki_sm
+```
+
+### Known limitations
+
+- **Greek PERSON detection is weak** — see the numbers below. The multilingual model
+  finds few Greek names and its boundaries wander; a probe saw the preceding verb
+  (`Ονομάζομαι`) absorbed into the span.
+- The flat 0.85 NER score means false positives cannot be filtered by confidence. The
+  probe found the word "Email" tagged PERSON at 0.85 in one sentence.
+- The default email recognizer rejects `.test` and `.invalid` domains, which is why
+  the deterministic provider stays first in the chain (ADR-0003).
+- An unsupported language returns nothing rather than raising; the chain's other
+  providers still run and the run metrics record the language distribution.
+
+### Measured results
+
+`pii-reduction benchmark --chain deterministic_presidio`
+
+| entity | strict precision | strict recall | strict F1 | support |
+|---|---|---|---|---|
+| EMAIL | 1.000 | 1.000 | 1.000 | 51 |
+| PHONE | 1.000 | 1.000 | 1.000 | 51 |
+| PERSON | 0.820 | 0.641 | 0.719 | 78 |
+
+PERSON strict recall by language and tier:
+
+| language | tier 1 (clean) | tier 2 (noisy) | tier 3 (structured) | tier 4 (transcript) |
+|---|---|---|---|---|
+| en | 1.000 | 0.889 | 0.333 | 1.000 |
+| de | 1.000 | 1.000 | 1.000 | 1.000 |
+| **el** | **0.222** | **0.111** | **0.000** | **0.000** |
+
+Chain comparison, whole corpus:
+
+| metric | `deterministic_only` | `deterministic_presidio` |
+|---|---|---|
+| strict F1 | 0.723 | **0.886** |
+| relaxed F1 | 0.723 | **0.921** |
+| leakage rate | 0.433 | **0.117** |
+| document clean rate | 0.161 | **0.774** |
+| over-redaction rate | 0.000 | **0.000** |
+
+Three things this table says plainly:
+
+1. Adding an NER provider is what moved leakage from 43.3% to 11.7%; deterministic
+   recognizers alone cannot cover names.
+2. **The strict–relaxed gap opened** (0.886 vs 0.921) the moment a model joined. That
+   gap is boundary quality: spans that cover the right name with the wrong edges. It
+   was zero while only deterministic spans existed (ADR-0011).
+3. **Greek is the outstanding gap**, and it is a licensing consequence rather than a
+   modelling oversight. Until a permissively-licensed multilingual model arrives
+   (roadmap Phase 7), Greek PERSON coverage should be described as weak and the Greek
+   demo positioned as deterministic-entities-only. English tier 3 (key/value blocks,
+   0.333) is the second weakest slice and is worth a look before Phase 7.
