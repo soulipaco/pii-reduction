@@ -373,7 +373,7 @@ that file must agree.
 Not a menu. Each has an exit criterion; do not start the next before the current one
 meets it.
 
-#### Q1. CI workflows (ADR-0009) — **done, with one part unverifiable locally**
+#### Q1. CI workflows (ADR-0009) — **complete**
 
 - `.github/workflows/ci.yml` — every push and PR, `ubuntu-latest` **and**
   `windows-latest`, Python 3.11, core + `dev` only: `ruff format --check`,
@@ -394,12 +394,26 @@ meets it.
   row, matches several rows, or whose slice support shrank is a **failure**, not a
   pass — a gate that measures nothing is the failure mode this design exists to stop.
 
-**Exit criterion, honestly reported:** the gate file's values match this section
-(checked by a test, not by eye); a deliberately broken gate fails and exits non-zero
-(two tests, plus the shipped file verified against real runs of both chains).
-**Not yet met: "both workflows green on a real push."** No git remote is configured,
-so nothing has run on GitHub. Every step was executed locally against the same
-commands, but that is not the same claim.
+**Exit: met.** Remote `soulipaco/pii-reduction` (private), both workflows run:
+
+- `CI` green on `ubuntu-latest` and `windows-latest` (run 32080834089).
+- `Integration` green via `workflow_dispatch` (run 32081004870), 1m6s including the
+  model download: 72 integration tests, then 9/9 deterministic and 12/12 hybrid gates.
+- The gate file's values match this section, checked by a test rather than by eye; a
+  deliberately broken gate fails and exits non-zero, and a malformed gate file exits 2.
+
+**The first push failed, which is the point.** `mypy src tests` failed on both
+platforms: strict mode cannot resolve `lingua` or `presidio_analyzer` in the push
+tier, which installs core + `dev` only. Every local run had passed because the dev
+machine has the extras installed. Fixed by declaring both as optional in the mypy
+overrides — the type checker now models what the packaging already said (ADR-0008) —
+and verified in a throwaway core-only venv. **A green local run does not prove the
+push tier is green**; check a clean core-only environment when touching anything the
+extras reach.
+
+Every hybrid gate value reproduced **exactly** on GitHub's runner (strict F1 0.886,
+PERSON 0.820/0.641, en tier 3 0.333, el tier 1 0.222). The published baseline is
+therefore machine-independent, not an artifact of one laptop.
 
 #### Q2. English tier-3 PERSON recall (currently 0.333)
 

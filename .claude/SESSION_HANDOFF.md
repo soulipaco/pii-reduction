@@ -281,22 +281,29 @@ something, not as a prerequisite. To pick up work:
 
 1. Read `docs/14_IMPLEMENTATION_PLAN.md` **§8**. It holds the status table, the
    measured baseline, and the queue with exit criteria.
-2. **Q1 (CI) is done except for one thing you can finish in a minute: nothing has
-   ever run on GitHub, because no remote is configured.** Both workflows were
-   executed step-by-step locally, but "green on a real push" is still unverified.
-   Creating the remote is the repository owner's call, not a session's — ask.
-3. Then work the rest of the queue **in order**: English tier-3 PERSON recall (Q2) →
+2. **Q1 is complete.** Remote is `soulipaco/pii-reduction` (private); both workflows
+   are green on GitHub. Start at **Q2**: English tier-3 PERSON recall (0.333), then
    Increment D (public datasets). Both are required; neither is optional.
+3. **Work Q2 against `--split dev` / `--split calibration`, not the whole corpus.**
+   The gates are whole-corpus numbers that CI re-reads on every push, so iterating
+   against them is tuning on a set that is 60% test split (ADR-0011). Read the
+   whole-corpus number once when done, then raise the floor. `--gates` refuses
+   `--split` so the two cannot be mixed by accident.
 4. Before each commit: `/qa`, then `/gate`. Report which test tier you ran — the
    default `pytest` excludes `integration`, `slow` and `databricks` (ADR-0009).
 5. When you finish an increment, update §8 of the plan and append a session section
    here. Numbers in documentation must come from a run you actually did.
 
-State at the end of session 4: eleven commits on `main`, working tree clean, nothing
-pushed (no remote configured). `ruff`, `mypy src tests` clean. **511 default-tier
-tests and 72 integration tests pass.** `.venv` has core + `dev` + `presidio` +
-`language` installed, with `en_core_web_md`, `de_core_news_md` and `xx_ent_wiki_sm`
-(all 3.8.0).
+State at the end of session 4: thirteen commits on `main`, working tree clean, pushed
+to `soulipaco/pii-reduction` (private), both workflows green. `ruff`, `mypy src tests`
+clean. **525 default-tier tests and 72 integration tests pass.** `.venv` has core +
+`dev` + `presidio` + `language` installed, with `en_core_web_md`, `de_core_news_md`
+and `xx_ent_wiki_sm` (all 3.8.0).
+
+**A green local run does not prove CI is green.** The first push failed `mypy` because
+strict mode cannot resolve `lingua` or `presidio_analyzer` in a core-only install, and
+this machine has both. When touching anything the extras reach, verify in a clean
+`uv venv` with `.[dev]` only — that is what the push tier installs.
 
 A third constraint joins the two below: **benchmark numbers are now enforced, not
 just published.** `configs/benchmark_gates.yaml` holds them as gates. If you improve
@@ -970,21 +977,43 @@ Gate failure is tested two ways rather than assumed: a gate tightened past the
 measured value fails with the reason, and the CLI exits 1 — the contract CI actually
 reads is the exit code, so that is what the test asserts.
 
-### The one thing that is not verified, and cannot be from here
+### The push, and what it caught
 
-`.github/workflows/*.yml` **has never run on GitHub.** No remote is configured, so
-"both workflows green on a real push" — half of Q1's exit criterion — is open. Both
-files parse as YAML and every step was executed locally by hand, but a workflow that
-has not run is a workflow that has not run. The pinned model wheel URLs were verified
-to resolve (HTTP 200 for all three), which removes the most likely first failure.
+The owner approved a private remote at the end of the session. `soulipaco/pii-reduction`
+was created and `main` pushed.
 
-Creating a GitHub remote is the repository owner's decision, so no remote was added.
+**The first CI run failed, on both platforms, and the failure was invisible locally.**
+`mypy src tests` cannot resolve `lingua` or `presidio_analyzer` in the push tier,
+which installs core + `dev` only; every local run passed because this machine has the
+extras. Fixed by declaring both optional in the mypy overrides — modelling what
+ADR-0008 already said about the packaging — and verified in a throwaway core-only
+`uv venv`: mypy clean, 525 passed / 3 skipped (the two extras-gated modules skip, as
+designed), 9/9 gates.
+
+This is the single most useful thing the push produced, and it is worth remembering
+as a rule rather than an incident: **an environment with the extras installed cannot
+tell you whether a core install works.**
+
+Second run green on both platforms (32080834089). `Integration` dispatched manually
+and green in 1m6s including the model download (32081004870): 72 tests, then 9/9
+deterministic and 12/12 hybrid gates.
+
+Every hybrid gate value reproduced **exactly** on GitHub's runner — strict F1 0.886,
+relaxed 0.921, precision 0.933, PERSON 0.820/0.641, leakage 0.117, clean rate 0.774,
+en tier 3 0.333, el tier 1 0.222. The baseline is machine-independent, which is a
+stronger claim than anything a local run could support.
+
+Unactioned by choice: `actions/*` are pinned to `@v4` rather than commit SHAs. Real
+supply-chain improvement, but it needs Dependabot to stay maintainable — an owner
+decision, not a session's. GitHub also warns that Node 20 actions now run on Node 24;
+harmless today, and it resolves itself when those actions publish a v5/v6.
 
 ### Known gaps carried forward
 
 Everything in session 3's "Known gaps" still holds except the last two, which change:
 
-- ~~No CI workflow exists~~ — both exist; what remains is running them (above).
+- ~~No CI workflow exists~~ — both exist and both are green on GitHub.
+- ~~Nothing is pushed; no remote is configured~~ — `soulipaco/pii-reduction`, private.
 - ~~The privacy-auditor and architecture-guardian have not been run against any of
   these increments~~ — both ran against Q1. **A1–A6, B and C remain unaudited**; the
   audits above cover this change only.
