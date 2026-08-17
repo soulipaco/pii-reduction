@@ -1,0 +1,138 @@
+# Tier 2 of ADR-0009: the model tier. Nightly, on demand, or on a labelled PR.
+#
+# Deliberately not on every push. It installs three spaCy models and loads them, so
+# making it a required check would put a slow, network-dependent job in front of every
+# change to a docstring — and the model-free tier already covers contracts, parsers,
+# reducers, evaluation math and the privacy tests.
+#
+# Tier 3 of ADR-0009 is the absence of a job: `databricks`-marked tests need workspace
+# credentials and never run in CI. The pytest marker expression below excludes them.
+
+name: Integration
+
+on:
+  schedule:
+    # 03:17 UTC — off the hour, because everyone's nightly runs at 03:00.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  PYTHONHASHSEED: "0"
+  PYTHONIOENCODING: "utf-8"
+  # The md tier is the CI tier: it loads in ~1 s against lg's ~3 s and exposes an
+  # identical label set (ADR-0009). Benchmarks published in the documentation may use
+  # lg; the gate values in configs/benchmark_gates.yaml record which was measured.
+  # el_core_news_* must never appear here — CC BY-NC-SA, incompatible with MIT
+  # (ADR-0007). Greek runs through the multilingual model.
+  SPACY_MODELS: "en_core_web_md de_core_news_md xx_ent_wiki_sm"
+  # Pinned, and pinned on purpose. `python -m spacy download` resolves whatever is
+  # compatible today, which would let a model bump move the benchmark numbers on a
+  # night nobody changed anything — and a regression gate that moves on its own gets
+  # ignored. This version must match `measured.versions` in configs/benchmark_gates.yaml.
+  # (ADR-0008 forbids pinned wheel URLs in *package metadata*; a CI workflow is not
+  # metadata, and docs/15_PROVIDERS.md keeps `spacy download` as the human install.)
+  SPACY_MODEL_VERSION: "3.8.0"
+
+jobs:
+  integration:
+    name: models + benchmark gates
+    # A labelled PR opts in; every other trigger always runs.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'integration')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install (presidio + language + dev)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,presidio,language]"
+
+      - name: Cache spaCy model wheels
+        uses: actions/cache@v4
+        with:
+          # The wheels are ~40 MB each and never change for a given version, so the
+          # cache key is the version itself.
+          path: ~/spacy-wheels
+          key: spacy-models-${{ runner.os }}-${{ env.SPACY_MODEL_VERSION }}
+
+      - name: Install spaCy models
+        # Fetch, then verify against .github/spacy-models.sha256, then install. The
+        # verification covers the cached copy too, not only a fresh download: an
+        # actions/cache entry is mutable state, and a version pin without a digest
+        # does not deliver the reproducibility this job's gates depend on.
+        run: |
+          set -euo pipefail
+          mkdir -p ~/spacy-wheels
+          base="https://github.com/explosion/spacy-models/releases/download"
+          for model in ${SPACY_MODELS}; do
+            wheel="${model}-${SPACY_MODEL_VERSION}-py3-none-any.whl"
+            if [ ! -f ~/spacy-wheels/"${wheel}" ]; then
+              curl -sSfL --retry 3 -o ~/spacy-wheels/"${wheel}" \
+                "${base}/${model}-${SPACY_MODEL_VERSION}/${wheel}"
+            fi
+          done
+          ( cd ~/spacy-wheels && sha256sum -c "${GITHUB_WORKSPACE}/.github/spacy-models.sha256" )
+          for model in ${SPACY_MODELS}; do
+            pip install ~/spacy-wheels/"${model}-${SPACY_MODEL_VERSION}-py3-none-any.whl"
+          done
+          python -m spacy validate
+
+      - name: Record the versions the gates will be judged against
+        # If a gate fails after a model bump, this output is where the reason is.
+        run: |
+          python - <<'PY'
+          import importlib.metadata as meta
+          for name in ("presidio-analyzer", "spacy", "lingua-language-detector",
+                       "en-core-web-md", "de-core-news-md", "xx-ent-wiki-sm"):
+              try:
+                  print(f"{name}=={meta.version(name)}")
+              except meta.PackageNotFoundError:
+                  print(f"{name}: NOT INSTALLED")
+          PY
+
+      - name: pytest (integration + slow; databricks excluded per ADR-0009)
+        # `not databricks` is explicit rather than implied. A test marked both
+        # `databricks` and `integration` — the natural way to mark a workspace parity
+        # test at Increment F — would otherwise be selected by `integration or slow`
+        # and fail in CI for want of credentials.
+        run: pytest -q -m "(integration or slow) and not databricks"
+
+      - name: Benchmark regression gates (deterministic chain)
+        run: pii-reduction benchmark --gates configs/benchmark_gates.yaml
+
+      - name: Benchmark regression gates (hybrid chain)
+        run: |
+          pii-reduction benchmark \
+            --chain deterministic_presidio \
+            --gates configs/benchmark_gates.yaml
+
+      - name: Publish the benchmark table to the run summary
+        # Synthetic corpus only: every value in this table is generated data, so the
+        # table is safe to publish (AGENTS.md rule 8).
+        if: always()
+        run: |
+          {
+            echo '### Benchmark — deterministic_presidio'
+            echo
+            pii-reduction benchmark --chain deterministic_presidio --markdown
+          } >> "${GITHUB_STEP_SUMMARY}"

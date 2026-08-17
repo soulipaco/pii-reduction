@@ -4,6 +4,14 @@ Imported by benchmark entry points only. ``processing/`` must never import this 
 production transformation and its evaluation stay separate (``AGENTS.md``).
 """
 
+from pii_reduction.evaluation.gates import (
+    Gate,
+    GateConfigurationError,
+    GateReport,
+    GateResult,
+    evaluate_gates,
+    load_gate_file,
+)
 from pii_reduction.evaluation.matching import (
     RELAXED,
     STRICT,
@@ -29,6 +37,10 @@ __all__ = [
     "RELAXED",
     "STRICT",
     "DetectionMetric",
+    "Gate",
+    "GateConfigurationError",
+    "GateReport",
+    "GateResult",
     "LeakageMetric",
     "MatchResult",
     "MetricRow",
@@ -37,8 +49,10 @@ __all__ = [
     "TruthSpan",
     "detection_metrics",
     "detection_metrics_by",
+    "evaluate_gates",
     "iou",
     "leakage_metrics",
+    "load_gate_file",
     "match_spans",
     "over_redaction_metrics",
     "precision_recall_f1",

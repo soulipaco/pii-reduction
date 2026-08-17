@@ -1,0 +1,15 @@
+# SHA-256 digests of the spaCy model wheels the integration workflow installs.
+#
+# A version pin says "3.8.0"; a digest says "this exact artifact". The gates in
+# configs/benchmark_gates.yaml are measured against these models, and the wheels are
+# fetched over the network into a mutable actions/cache entry — so the workflow
+# verifies them before installing, on the cached copy as well as a fresh download.
+#
+# These must stay in step with SPACY_MODEL_VERSION in .github/workflows/integration.yml
+# and measured.versions in configs/benchmark_gates.yaml. Recompute on a version bump:
+#   sha256sum *.whl
+#
+# el_core_news_* must never appear here — CC BY-NC-SA, incompatible with MIT (ADR-0007).
+5e6329fe3fecedb1d1a02c3ea2172ee0fede6cea6e4aefb6a02d832dba78a310  en_core_web_md-3.8.0-py3-none-any.whl
+b903f59220f1e76dd672acdaa7fa454d6703fe056c5ccd6457820e70874116d0  de_core_news_md-3.8.0-py3-none-any.whl
+6f3c4b853852ea9e9d2dc76cc950dddb10a7e4c42d813308caefe6c5e8be2f0a  xx_ent_wiki_sm-3.8.0-py3-none-any.whl

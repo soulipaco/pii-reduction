@@ -324,7 +324,7 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: end of session 3 (2026-08-18), commit `6278f91`.
+Last updated: session 4 (2026-08-18), after queue item Q1.
 
 ### Complete
 
@@ -338,6 +338,7 @@ Last updated: end of session 3 (2026-08-18), commit `6278f91`.
 | A6 | `synthetic/`, `evaluation/`, `benchmark.py`, `cli.py`, `configs/`, committed corpus | 447 tests |
 | B | `providers/presidio_provider.py`, `docs/15_PROVIDERS.md`, chain comparison | +45 integration |
 | C | `language/` — lingua detector, ADR-0012 gate, per-language provider routing | 480 default / 71 integration |
+| Q1 | `.github/workflows/{ci,integration}.yml`, `evaluation/gates.py`, `configs/benchmark_gates.yaml` | 511 default / 72 integration |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -363,29 +364,42 @@ PERSON strict recall by language and tier, hybrid chain:
 Language detection against the corpus's known language: 99/102 agreement, **zero**
 confident misclassifications, 3 abstentions to `und`.
 
-### Queue — all three are required, in this order
+Every number above was re-measured in session 4 and reproduced exactly. They are now
+also enforced: `configs/benchmark_gates.yaml` holds them as gates, so this table and
+that file must agree.
+
+### Queue
 
 Not a menu. Each has an exit criterion; do not start the next before the current one
 meets it.
 
-#### Q1. CI workflows (ADR-0009)
+#### Q1. CI workflows (ADR-0009) — **done, with one part unverifiable locally**
 
-The largest gap in the engineering story: both test tiers work locally and nothing
-runs them on push.
+- `.github/workflows/ci.yml` — every push and PR, `ubuntu-latest` **and**
+  `windows-latest`, Python 3.11, core + `dev` only: `ruff format --check`,
+  `ruff check`, `mypy src tests`, `pytest -q`, the deterministic benchmark gates, a
+  corpus-reproducibility check (`build-corpus` must reproduce the committed corpus
+  byte for byte), and an assertion that no provider extra is importable.
+- `.github/workflows/integration.yml` — nightly (03:17 UTC), `workflow_dispatch`, or
+  a PR labelled `integration`: `presidio` + `language` extras with **pinned** md
+  models (3.8.0, wheel-cached), `pytest -m "integration or slow"`, then the benchmark
+  gates for both chains. Models are pinned rather than resolved by `spacy download`
+  so a model bump cannot move a gate on a night nobody changed anything.
+- `databricks`-marked tests never run in CI — no job installs the extra, and the
+  marker expressions exclude them.
+- Gates live in `configs/benchmark_gates.yaml`, checked by
+  `pii_reduction.evaluation.gates` via `pii-reduction benchmark --gates <file>`
+  (exit 1 on failure). The gate set is selected by the chain that ran, so a hybrid
+  result can never be scored against deterministic floors. A gate that matches no
+  row, matches several rows, or whose slice support shrank is a **failure**, not a
+  pass — a gate that measures nothing is the failure mode this design exists to stop.
 
-- `.github/workflows/ci.yml` — every push and PR: `ruff format --check`, `ruff check`,
-  `mypy src tests`, `pytest -q` (default tier). Matrix `ubuntu-latest` **and**
-  `windows-latest`, Python 3.11, core + `dev` install only, no models.
-- Nightly / label-triggered integration workflow: install `presidio` + `language`
-  extras and the **md** models plus `xx_ent_wiki_sm` (cached by hash), run
-  `pytest -m "integration or slow"`, then the committed-corpus benchmark.
-- Benchmark regression gates in one versioned config file, with values taken from the
-  measured baseline above — never invented. `CONTRIBUTING.md` already forbids
-  silently weakening them.
-- `databricks`-marked tests never run in CI.
-
-**Exit:** both workflows green on a real push; a deliberately broken assertion fails
-the right job; the gate file's values match this section.
+**Exit criterion, honestly reported:** the gate file's values match this section
+(checked by a test, not by eye); a deliberately broken gate fails and exits non-zero
+(two tests, plus the shipped file verified against real runs of both chains).
+**Not yet met: "both workflows green on a real push."** No git remote is configured,
+so nothing has run on GitHub. Every step was executed locally against the same
+commands, but that is not the same claim.
 
 #### Q2. English tier-3 PERSON recall (currently 0.333)
 
@@ -400,9 +414,21 @@ increasing cost: a key/value parser that marks labels non-processable and passes
 value with context, per-tier provider options, or a custom recognizer. Any change is
 judged by the benchmark, not by inspection.
 
+**How to work it without tuning on the test split.** The gate value for this slice is
+a whole-corpus number and CI re-reads it on every run, so iterating "change it, read
+the gate, change again" is tuning against a set that is 60% test split — precisely what
+ADR-0011 and `AGENTS.md` forbid. Develop the remedy against `--split dev` and
+`--split calibration`, read the whole-corpus number **once** when you are done, and
+raise the floor then. `--gates` refuses to run with `--split` so the two cannot be
+mixed up by accident.
+
 **Exit:** English tier-3 PERSON strict recall measurably improved with no regression
 in over-redaction (must stay 0.000) and no drop in any other slice; the new numbers
-replace those in this section and in `docs/15_PROVIDERS.md`.
+replace those in this section and in `docs/15_PROVIDERS.md`, and the
+`en_tier3_person_strict_recall` floor in `configs/benchmark_gates.yaml` is raised to
+the new measured value. The other gates are what enforce "no drop in any other
+slice" — if a remedy trades Greek or precision for English, the hybrid gate set fails
+and says which gate.
 
 #### Q3. Increment D — public datasets (§5 above)
 
@@ -418,7 +444,9 @@ lifted from the source data.
 **Exit:** each demo pack reproducible from documented commands; provenance registry
 complete per `docs/02_PUBLIC_DATA_STRATEGY.md`; injected ground truth validates
 against its documents; benchmark rerun and the numbers published beside the synthetic
-ones rather than replacing them.
+ones rather than replacing them. The synthetic gates in `configs/benchmark_gates.yaml`
+stay as they are — a public-dataset pack is a **new** gate set measured on its own
+corpus, not a reason to loosen the ones that guard the committed regression set.
 
 ### After the queue
 

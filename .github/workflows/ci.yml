@@ -1,0 +1,104 @@
+# Tier 1 of ADR-0009: the fast, model-free gate that runs on every push and PR.
+#
+# Core + dev install only. No provider extra, no spaCy model, no network beyond PyPI.
+# If this job needs a model to pass, something has leaked out of an optional extra
+# and into the core library — which is the leak this job exists to catch.
+#
+# Windows is not a courtesy: it is the primary development machine, and the parser
+# round-trip invariant is byte-exact, so CRLF and path bugs must surface here.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Matches .claude/settings.json: multilingual fixtures and deterministic hashing.
+  PYTHONUTF8: "1"
+  PYTHONHASHSEED: "0"
+  PYTHONIOENCODING: "utf-8"
+
+jobs:
+  quality:
+    name: ${{ matrix.os }} · py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11"]
+
+    defaults:
+      run:
+        # Explicit, because GitHub defaults to PowerShell on Windows runners and the
+        # point of the matrix is to run the *same* commands on both platforms. A job
+        # that quietly runs different shells is not testing cross-platform behaviour.
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install (core + dev only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Confirm no provider extra leaked into the core install
+        # The A1 exit criterion, asserted rather than assumed. Until now it was only
+        # ever true by accident: nothing stopped a core module importing spaCy.
+        run: |
+          python - <<'PY'
+          import importlib.util as util
+          import sys
+
+          import pii_reduction
+          import pii_reduction.language
+          import pii_reduction.providers
+
+          leaked = [m for m in ("presidio_analyzer", "spacy", "lingua") if util.find_spec(m)]
+          if leaked:
+              sys.exit(f"provider extras present in the core install: {', '.join(leaked)}")
+          print(f"pii-reduction {pii_reduction.__version__}: core install clean")
+          PY
+
+      - name: ruff format --check
+        run: ruff format --check .
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: mypy
+        run: mypy src tests
+
+      - name: pytest (default tier — excludes integration, slow, databricks)
+        run: pytest -q
+
+      - name: Benchmark regression gates (deterministic chain)
+        # Runs here rather than nightly because the deterministic chain needs no
+        # model and its numbers are exactly reproducible. Values come from a measured
+        # baseline and live in one reviewed file (ADR-0009).
+        run: pii-reduction benchmark --gates configs/benchmark_gates.yaml
+
+      - name: Corpus is reproducible from its seed
+        # The committed corpus is the ground truth every metric above is scored
+        # against. If regenerating it from the same seed does not reproduce it byte
+        # for byte, the gates are measuring a different corpus than the repository's.
+        run: |
+          pii-reduction build-corpus --out "${RUNNER_TEMP}/corpus"
+          diff -r tests/fixtures/corpus "${RUNNER_TEMP}/corpus"

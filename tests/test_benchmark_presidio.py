@@ -14,7 +14,8 @@ import pytest
 from pii_reduction.benchmark import BenchmarkOutcome, run_benchmark
 from pii_reduction.entities.taxonomy import EMAIL, PERSON, PHONE
 from pii_reduction.evaluation import detection_metrics_by
-from tests.test_benchmark import CONFIGS_DIR, CORPUS_DIR, _truths
+from pii_reduction.evaluation.gates import evaluate_gates, load_gate_file
+from tests.test_benchmark import CONFIGS_DIR, CORPUS_DIR, GATE_FILE, _truths
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
@@ -117,3 +118,20 @@ class TestChainComparison:
         # With deterministic spans only, strict == relaxed. Once an NER model joins,
         # the gap is boundary quality (ADR-0011).
         assert hybrid.relaxed.f1 > hybrid.strict.f1
+
+
+class TestRegressionGates:
+    """The shipped gate file, checked against the chain it was measured on.
+
+    This is what the nightly integration workflow asserts. Running it here as well
+    means a contributor with the models installed finds a regression before pushing,
+    rather than reading about it the next morning.
+    """
+
+    def test_the_hybrid_gate_set_passes(self, hybrid: BenchmarkOutcome) -> None:
+        report = evaluate_gates(
+            hybrid.rows,
+            load_gate_file(GATE_FILE, "deterministic_presidio"),
+            gate_set="deterministic_presidio",
+        )
+        assert report.passed, report.render()

@@ -16,10 +16,15 @@ from pathlib import Path
 
 import pytest
 
+from pii_reduction.benchmark import BenchmarkOutcome, run_benchmark, summarise
+from pii_reduction.evaluation.gates import Gate, evaluate_gates, load_gate_file
+from pii_reduction.evaluation.report import render_markdown
 from pii_reduction.observability.logging import LOGGER_NAME, safe_fields
 from pii_reduction.processing import build_pipeline
 from pii_reduction.sources import PandasSource
+from pii_reduction.synthetic import load_corpus
 from tests.pipeline_fixtures import KNOWN_EMAILS, KNOWN_PHONES, build_frame
+from tests.test_benchmark import CONFIGS_DIR, CORPUS_DIR, GATE_FILE
 from tests.test_pipeline import make_config
 
 pytestmark = pytest.mark.unit
@@ -77,6 +82,69 @@ class TestPersistedArtifacts:
         # Reduced text is present by design; the originals must not be.
         assert_clean(rendered, what="row results")
         assert "<EMAIL>" in rendered
+
+
+class TestPublishedBenchmarkOutput:
+    """The benchmark table is published, so it must be text-free by test, not by luck.
+
+    The integration workflow writes the rendered table into the GitHub step summary,
+    which is world-readable on a public repository. Nothing structurally prevents a
+    future slice dimension from carrying an entity surface into a row: adding a
+    ``surface`` field to ``TruthSpan`` and listing it in ``benchmark.SLICE_DIMENSIONS``
+    would do it silently. These tests fail in exactly that case.
+
+    Asserted against the committed *synthetic* corpus, whose values are generated and
+    public-safe by construction (ADR-0014).
+    """
+
+    @staticmethod
+    def _outcome() -> BenchmarkOutcome:
+        return run_benchmark(
+            corpus_dir=CORPUS_DIR,
+            configs_dir=CONFIGS_DIR,
+            provider_chain="deterministic_only",
+            benchmark_run_id="benchmark_privacy",
+        )
+
+    @staticmethod
+    def _surfaces() -> list[str]:
+        # Every injected value in the corpus: names, emails and phone numbers.
+        surfaces = {entity.surface for entity in load_corpus(CORPUS_DIR).entities}
+        assert surfaces, "the corpus must carry surfaces for this test to mean anything"
+        return sorted(surfaces)
+
+    def _assert_no_surface(self, rendered: str, *, what: str) -> None:
+        for surface in self._surfaces():
+            assert surface not in rendered, f"{what} contains an injected entity value"
+
+    def test_the_rendered_table_carries_no_entity_values(self) -> None:
+        self._assert_no_surface(self._outcome().table(), what="benchmark table")
+
+    def test_the_markdown_table_carries_no_entity_values(self) -> None:
+        # This is the exact renderer the integration workflow publishes.
+        outcome = self._outcome()
+        rendered = render_markdown(outcome.rows, title="PII reduction benchmark")
+        self._assert_no_surface(rendered, what="published markdown table")
+
+    def test_the_gate_report_carries_no_entity_values(self) -> None:
+        outcome = self._outcome()
+        report = evaluate_gates(
+            outcome.rows,
+            load_gate_file(GATE_FILE, "deterministic_only"),
+            gate_set="deterministic_only",
+        )
+        self._assert_no_surface(report.render(), what="gate report")
+
+    def test_a_failing_gate_reports_numbers_rather_than_text(self) -> None:
+        # The failure path is the one that gets pasted into issues and CI logs.
+        outcome = self._outcome()
+        impossible = Gate(name="impossible", metric="strict_f1", minimum=0.99)
+        report = evaluate_gates(outcome.rows, [impossible], gate_set="deterministic_only")
+        assert not report.passed
+        self._assert_no_surface(report.render(), what="failing gate report")
+
+    def test_the_benchmark_summary_carries_no_entity_values(self) -> None:
+        self._assert_no_surface(summarise(self._outcome()), what="benchmark summary")
 
 
 class TestSafeFields:

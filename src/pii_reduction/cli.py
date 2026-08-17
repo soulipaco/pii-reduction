@@ -13,7 +13,14 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from pii_reduction import __version__
-from pii_reduction.benchmark import run_benchmark, summarise
+from pii_reduction.benchmark import BenchmarkOutcome, run_benchmark, summarise
+from pii_reduction.contracts.errors import PiiReductionError
+from pii_reduction.evaluation.gates import (
+    GateConfigurationError,
+    GateReport,
+    evaluate_gates,
+    load_gate_file,
+)
 from pii_reduction.evaluation.report import render_markdown
 from pii_reduction.synthetic.corpus import build_corpus, write_corpus
 
@@ -21,6 +28,11 @@ __all__ = ["main"]
 
 DEFAULT_CORPUS_DIR = Path("tests/fixtures/corpus")
 DEFAULT_CONFIGS_DIR = Path("configs")
+#: These two define the committed corpus. `configs/benchmark_gates.yaml` records them
+#: as the provenance of every gate value, and a test asserts the two agree — regenerate
+#: with different values and you are measuring a different corpus.
+DEFAULT_SEED = 42
+DEFAULT_DOCUMENTS_PER_LANGUAGE = 34
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -32,8 +44,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "build-corpus", help="generate the deterministic synthetic corpus and its manifest"
     )
     corpus.add_argument("--out", type=Path, default=DEFAULT_CORPUS_DIR)
-    corpus.add_argument("--seed", type=int, default=42)
-    corpus.add_argument("--documents-per-language", type=int, default=34)
+    corpus.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    corpus.add_argument(
+        "--documents-per-language", type=int, default=DEFAULT_DOCUMENTS_PER_LANGUAGE
+    )
 
     benchmark = subparsers.add_parser(
         "benchmark", help="run the pipeline over a corpus and print the metrics table"
@@ -52,10 +66,35 @@ def _build_parser() -> argparse.ArgumentParser:
         help="override the configured provider chain (e.g. deterministic_presidio)",
     )
     benchmark.add_argument("--markdown", action="store_true", help="render as a markdown table")
+    benchmark.add_argument(
+        "--gates",
+        type=Path,
+        help=(
+            "check the result against the regression gates in this file "
+            "(e.g. configs/benchmark_gates.yaml); exits non-zero if any gate fails"
+        ),
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Exit codes: 0 success, 1 a gate failed, 2 the command could not run.
+
+    A failing gate and a malformed gate file are different events and must not look
+    the same to whoever reads the CI log — one is a regression to investigate, the
+    other is a typo to fix. The package's own exceptions are written to be
+    privacy-safe and actionable, so they are printed as a line rather than raised as
+    a traceback; anything else keeps its traceback, because an unexpected error
+    should look unexpected.
+    """
+    try:
+        return _run(argv)
+    except PiiReductionError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+
+def _run(argv: Sequence[str] | None) -> int:
     args = _build_parser().parse_args(argv)
 
     if args.command == "build-corpus":
@@ -81,7 +120,43 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(render(outcome.rows, title="PII reduction benchmark"))
     print()
     print(summarise(outcome))
-    return 0
+
+    if args.gates is None:
+        return 0
+    report = _check_gates(outcome, args.gates, splits=args.splits)
+    print()
+    print(report.render())
+    return 0 if report.passed else 1
+
+
+def _check_gates(
+    outcome: BenchmarkOutcome, path: Path, *, splits: Sequence[str] | None
+) -> GateReport:
+    """Check the run against the gate set named after the chain that produced it.
+
+    Selecting the set by chain rather than by flag is what stops a hybrid-chain result
+    being scored against the deterministic floors, which would pass trivially. The same
+    argument applies to splits: the shipped gates are measured over the whole corpus
+    (``measured.splits`` in the gate file), so scoring one split against them compares
+    numbers that were never comparable. Refused rather than warned about — a benchmark
+    that quietly answers a different question than the one asked is the failure this
+    module exists to prevent.
+    """
+    if splits:
+        raise GateConfigurationError(
+            f"--gates cannot be combined with --split ({', '.join(splits)}): the shipped "
+            "gates are measured over the whole corpus, so a single split would be judged "
+            "against floors it was never measured against. Run the gates on the full "
+            "corpus, or add a gate set measured on that split"
+        )
+    chain = outcome.provider_chain
+    if "," in chain:
+        raise GateConfigurationError(
+            f"the run mixed provider chains ({chain}); gates are defined per chain, so "
+            "run one chain at a time when checking them"
+        )
+    gates = load_gate_file(path, chain)
+    return evaluate_gates(outcome.rows, gates, gate_set=chain)
 
 
 if __name__ == "__main__":  # pragma: no cover - module entry point

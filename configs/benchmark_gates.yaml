@@ -1,0 +1,188 @@
+# Benchmark regression gates — quality floors on the committed synthetic corpus.
+#
+# Every value here was MEASURED, not chosen. Each was read off a benchmark run
+# recorded below, at the three decimals the benchmark table prints, so this file can
+# be checked against the published numbers in docs/14_IMPLEMENTATION_PLAN.md §8 and
+# docs/15_PROVIDERS.md by eye.
+#
+# ADR-0009: gates are quality floors only. No wall-clock or latency assertion belongs
+# here — runtime varies with the runner, and a flaky gate gets weakened rather than
+# investigated.
+#
+# CONTRIBUTING.md: do not weaken a gate to make a change pass. Lowering a floor is a
+# claim that the metric or the gate was wrong, and it needs that reason in the commit
+# message. Raising one after a real improvement is the normal path, and the new value
+# must come from a run you actually did.
+#
+# `support` is the ground-truth count the value was measured over. It is checked as a
+# minimum: a floor is trivially satisfiable on a smaller slice, so a corpus that
+# shrank fails the gate instead of quietly passing it.
+#
+# Run:
+#   pii-reduction benchmark --gates configs/benchmark_gates.yaml
+#   pii-reduction benchmark --chain deterministic_presidio --gates configs/benchmark_gates.yaml
+# The gate set is selected by the chain that ran, so a hybrid result can never be
+# checked against deterministic floors.
+
+version: 1
+
+measured:
+  corpus: tests/fixtures/corpus (102 documents, 180 entities, en/de/el, tiers 1-4)
+  # The seed and per-language count are what actually *define* that corpus — the path
+  # only says where a copy of it lives. `pii-reduction build-corpus` with these values
+  # must reproduce it byte for byte, and CI checks exactly that on every push.
+  seed: 42
+  documents_per_language: 34
+  # AGENTS.md requires the splits to be recorded so a result can be reproduced.
+  # These floors are whole-corpus regression gates, not a split-discipline claim:
+  # `pii-reduction benchmark` without `--split` scores every document. Checking a
+  # single split against them would compare numbers that were never comparable, so
+  # `--gates` with `--split` is refused rather than silently allowed.
+  #
+  # This is a regression mechanism, not an evaluation protocol. ADR-0011's discipline
+  # — calibrate on the calibration split, read test once — is Increment E's job and is
+  # unaffected by these gates.
+  splits: all (dev + calibration + test)
+  strategy: redact
+  date: 2026-08-18
+  commit: 4fc9cfd
+  # The Presidio numbers move with the model version, by design (ADR-0009 pins the md
+  # tier for CI). If a model bump moves them, the nightly job fails loudly and the fix
+  # is to re-measure and re-commit this file with the new versions recorded here —
+  # not to widen the bounds.
+  #
+  # Three files record this version and a test asserts they agree: here,
+  # SPACY_MODEL_VERSION in .github/workflows/integration.yml, and the pinned digests
+  # in .github/spacy-models.sha256.
+  versions:
+    presidio-analyzer: 2.2.364
+    spacy: 3.8.15
+    en_core_web_md: 3.8.0
+    de_core_news_md: 3.8.0
+    xx_ent_wiki_sm: 3.8.0
+
+gate_sets:
+
+  deterministic_only:
+    description: >
+      The model-free chain. These gates run on every push, because the deterministic
+      providers need no NLP model and their numbers are reproducible exactly.
+      PERSON is deliberately ungated here: nothing in this chain detects names, and
+      its recall of 0.000 is the honest v0.1 picture rather than a regression.
+    gates:
+      - name: email_strict_recall
+        metric: strict_recall
+        entity_type: EMAIL
+        min: 1.000
+        support: 51
+      - name: email_strict_precision
+        metric: strict_precision
+        entity_type: EMAIL
+        min: 1.000
+        support: 51
+      - name: phone_strict_recall
+        metric: strict_recall
+        entity_type: PHONE
+        min: 1.000
+        support: 51
+      - name: phone_strict_precision
+        metric: strict_precision
+        entity_type: PHONE
+        min: 1.000
+        support: 51
+      # Entity-level recall of 1.000 implies every language and tier slice is 1.000,
+      # so per-slice gates would add rows without adding a claim.
+      - name: overall_strict_precision
+        metric: strict_precision
+        min: 1.000
+        support: 180
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.723
+        support: 180
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.433
+        support: 180
+      - name: document_clean_rate
+        metric: document_clean_rate
+        min: 0.161
+        support: 93
+      # The preservation gate. A reducer that starts eating ticket ids, KB numbers or
+      # version strings fails here before anyone reads a table.
+      - name: over_redaction_rate
+        metric: over_redaction_rate
+        max: 0.000
+        support: 102
+
+  deterministic_presidio:
+    description: >
+      The hybrid chain. Needs the presidio + language extras and the md spaCy models,
+      so these gates run in the integration workflow, not on every push.
+    gates:
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.886
+        support: 180
+      - name: overall_relaxed_f1
+        metric: relaxed_f1
+        min: 0.921
+        support: 180
+      - name: overall_strict_precision
+        metric: strict_precision
+        min: 0.933
+        support: 180
+      # EMAIL and PHONE must stay exactly where the deterministic chain had them:
+      # adding a provider is not allowed to disturb what already worked.
+      - name: email_strict_recall
+        metric: strict_recall
+        entity_type: EMAIL
+        min: 1.000
+        support: 51
+      - name: phone_strict_recall
+        metric: strict_recall
+        entity_type: PHONE
+        min: 1.000
+        support: 51
+      - name: person_strict_precision
+        metric: strict_precision
+        entity_type: PERSON
+        min: 0.820
+        support: 78
+      - name: person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        min: 0.641
+        support: 78
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.117
+        support: 180
+      - name: document_clean_rate
+        metric: document_clean_rate
+        min: 0.774
+        support: 93
+      - name: over_redaction_rate
+        metric: over_redaction_rate
+        max: 0.000
+        support: 102
+      # The two weakest PERSON slices are gated individually so that an overall
+      # improvement cannot hide a regression in them. English tier 3 is the target of
+      # queue item Q2; when it improves, this floor moves up with it.
+      - name: en_tier3_person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        language: en
+        difficulty_tier: 3
+        min: 0.333
+        support: 6
+      # Greek PERSON is licence-bound to xx_ent_wiki_sm until roadmap Phase 7
+      # (ADR-0007). The floor records where it actually is, so the honest number is
+      # protected from silently getting worse.
+      - name: el_tier1_person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        language: el
+        difficulty_tier: 1
+        min: 0.222
+        support: 9

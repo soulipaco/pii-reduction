@@ -24,6 +24,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORPUS_DIR = REPO_ROOT / "tests" / "fixtures" / "corpus"
 CONFIGS_DIR = REPO_ROOT / "configs"
+GATE_FILE = CONFIGS_DIR / "benchmark_gates.yaml"
 
 #: The A6 gate. Locked here rather than invented in CI config (ADR-0009).
 MIN_STRICT_RECALL = 0.95

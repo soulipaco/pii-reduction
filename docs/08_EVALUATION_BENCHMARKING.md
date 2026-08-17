@@ -290,6 +290,50 @@ parser failure rate <= 0.01
 
 These values are examples only. Real gates must come from observed baselines.
 
+### As implemented
+
+Gates live in `configs/benchmark_gates.yaml` and are checked by
+`pii_reduction.evaluation.gates`:
+
+```bash
+pii-reduction benchmark --gates configs/benchmark_gates.yaml
+```
+
+The command exits 0 when every gate passes, 1 when one fails, and 2 when the gate
+file itself cannot be read — a regression and a typo are different events and must not
+look the same in a CI log.
+
+Design points that are not obvious from the file:
+
+- **One gate names exactly one row.** Selectors (`entity_type`, `language`,
+  `document_type`, `difficulty_tier`) default to `"*"`, which selects the *aggregate*
+  row the report emits for that dimension — not a wildcard.
+- **Three things fail rather than pass:** a gate whose selector matches no row (the
+  metric was renamed, the slice vanished, the chain never ran), a gate that matches
+  several rows (ambiguous about which number it checked), and a slice whose support
+  fell below what the gate was measured over. A gate that measures nothing is worse
+  than no gate.
+- **The gate set is selected by the provider chain that ran**, so a hybrid-chain
+  result can never be scored against deterministic-only floors.
+- **Values are stored at three decimals** — the precision the benchmark table and this
+  documentation print — and compared with a tolerance of half that last digit, which
+  is far below one missed entity in the smallest gated slice.
+- **`measured:` records the provenance** of every value: corpus, seed,
+  documents-per-language, splits, strategy, date, commit, and model versions.
+
+These are **whole-corpus regression floors**, not an evaluation protocol. They exist so
+a change that quietly makes detection worse fails a build. The split discipline of
+ADR-0011 — calibrate on the calibration split, report test once — is a separate
+concern owned by Increment E, and `--gates` refuses to run with `--split` so the two
+cannot be confused. A remedy developed by repeatedly reading a gate value is tuning
+against whatever split that gate covers; develop against dev/calibration and read the
+test number once.
+
+One example gate above has no implementation yet: `transcript prefix preservation`
+has no metric in the report grain. The invariant is covered by parser and pipeline
+round-trip tests, and `over_redaction_rate` (pinned at `max: 0.000`) is the closest
+metric-level guard. It is the obvious next gate once a metric backs it.
+
 ## Benchmark artifact outputs
 
 Generate machine-readable:

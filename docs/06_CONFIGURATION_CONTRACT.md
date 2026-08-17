@@ -28,11 +28,19 @@ configs/
 ├── entities.yaml
 ├── languages.yaml
 ├── providers.yaml
+├── benchmark_gates.yaml   ← not part of this contract; see below
 └── datasets/
     ├── demo_support_tickets.yaml
     ├── demo_transcripts.yaml
     └── demo_incident_notes.yaml
 ```
+
+`benchmark_gates.yaml` is the exception in that directory. It holds benchmark
+regression floors, lives in `configs/` because ADR-0009 requires the gate values to
+sit in one versioned file, and is **not** read by `config/loader.py` — the loader
+merges `project.yaml` plus the three side files above and ignores everything else.
+Its schema and semantics belong to `docs/08_EVALUATION_BENCHMARKING.md`, not to this
+contract.
 
 ## `project.yaml`
 

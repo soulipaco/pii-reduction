@@ -274,24 +274,34 @@ providers fresh against the contracts. No probe output was committed.
 
 ## Session 3 — 2026-08-17/18 — Increments A1–A6, B and C
 
-### Start here (session 4)
+### Start here (session 5)
 
 Everything below this block is evidence — read it when you need the reasoning behind
 something, not as a prerequisite. To pick up work:
 
 1. Read `docs/14_IMPLEMENTATION_PLAN.md` **§8**. It holds the status table, the
-   measured baseline, and the three-item queue with exit criteria.
-2. Work the queue **in order**: CI workflows → English tier-3 PERSON recall →
-   Increment D (public datasets). All three are required; none is optional.
-3. Before each commit: `/qa`, then `/gate`. Report which test tier you ran — the
+   measured baseline, and the queue with exit criteria.
+2. **Q1 (CI) is done except for one thing you can finish in a minute: nothing has
+   ever run on GitHub, because no remote is configured.** Both workflows were
+   executed step-by-step locally, but "green on a real push" is still unverified.
+   Creating the remote is the repository owner's call, not a session's — ask.
+3. Then work the rest of the queue **in order**: English tier-3 PERSON recall (Q2) →
+   Increment D (public datasets). Both are required; neither is optional.
+4. Before each commit: `/qa`, then `/gate`. Report which test tier you ran — the
    default `pytest` excludes `integration`, `slow` and `databricks` (ADR-0009).
-4. When you finish an increment, update §8 of the plan and append a session section
+5. When you finish an increment, update §8 of the plan and append a session section
    here. Numbers in documentation must come from a run you actually did.
 
-State at the end of session 3: ten commits on `main`, working tree clean, nothing
-pushed (no remote configured). `ruff`, `mypy src tests` clean. 480 default-tier tests
-and 71 integration tests pass. `.venv` has core + `dev` + `presidio` + `language`
-installed, with `en_core_web_md`, `de_core_news_md` and `xx_ent_wiki_sm`.
+State at the end of session 4: eleven commits on `main`, working tree clean, nothing
+pushed (no remote configured). `ruff`, `mypy src tests` clean. **511 default-tier
+tests and 72 integration tests pass.** `.venv` has core + `dev` + `presidio` +
+`language` installed, with `en_core_web_md`, `de_core_news_md` and `xx_ent_wiki_sm`
+(all 3.8.0).
+
+A third constraint joins the two below: **benchmark numbers are now enforced, not
+just published.** `configs/benchmark_gates.yaml` holds them as gates. If you improve
+a metric, raise its floor in that file from your own run; if you must lower one, say
+in the commit message why the metric or the gate was wrong (`CONTRIBUTING.md`).
 
 Two constraints that are easy to violate without noticing:
 
@@ -790,5 +800,202 @@ Two integration ideas were reviewed and deliberately parked (session 3):
 - **GLiNER** (Apache-2.0, so licence-compatible unlike the Greek spaCy models) as a
   Phase 7 candidate for the Greek gap — but subject to ADR-0015: it must be CPU-viable
   to qualify.
+
+---
+
+## Session 4 — 2026-08-18 — Queue item Q1: CI and benchmark regression gates
+
+**Scope:** queue item Q1 of `docs/14_IMPLEMENTATION_PLAN.md` §8 only. No change to
+any provider, parser, reducer or metric definition — the pipeline behaves exactly as
+it did at commit `4fc9cfd`, and the benchmark numbers below are that commit's numbers
+re-measured, not new ones.
+
+### The baseline was re-measured before anything was locked
+
+Gate values must come from a run someone actually did (ADR-0009), so both chains were
+re-run before the gate file was written. Every published number reproduced **exactly**:
+deterministic strict F1 0.723 / leakage 0.433 / clean rate 0.161; hybrid strict F1
+0.886 / relaxed 0.921 / leakage 0.117 / clean rate 0.774 / PERSON 0.820 precision,
+0.641 recall; over-redaction 0.000 in both. The PERSON-by-language-and-tier table
+reproduced cell for cell, including en tier 3 at 0.333 and the Greek row.
+
+Environment for those runs, recorded in the gate file because the Presidio numbers
+depend on it: presidio-analyzer 2.2.364, spaCy 3.8.15, `en_core_web_md`,
+`de_core_news_md`, `xx_ent_wiki_sm` all 3.8.0.
+
+### What landed
+
+`src/pii_reduction/evaluation/gates.py`, `configs/benchmark_gates.yaml`,
+`--gates` on `pii-reduction benchmark`, `tests/test_benchmark_gates.py` (40 tests),
+five benchmark-output privacy tests in `tests/test_privacy_logging.py`, one gate test
+in `tests/test_benchmark_presidio.py`, `.github/workflows/{ci,integration}.yml`, and
+`.github/spacy-models.sha256`.
+
+### Decisions
+
+1. **A gate that measures nothing fails.** This is the whole design, and it is worth
+   stating as a rule rather than as a feature: a gate whose selector matches no row
+   (metric renamed, slice gone, chain never ran) or matches several rows (ambiguous
+   about which number it checked) is a **failure**. The obvious implementation —
+   "look the metric up, compare it if you find it" — turns green the moment the
+   thing it guards disappears, which is precisely when you need it.
+2. **Support is part of the claim.** Each gate records the ground-truth count it was
+   measured over and fails if the slice shrank below it. A floor of 1.000 is trivially
+   satisfiable on three entities; it means something on 51.
+3. **Selectors are literal, not wildcards.** `entity_type: "*"` selects the aggregate
+   row the benchmark emits, not "any entity". A wildcard would let one gate silently
+   cover a changing number of rows, which is decision 1 again by another route.
+4. **The gate set is chosen by the chain that ran**, never by a flag. Scoring a hybrid
+   run against deterministic floors would pass trivially and prove nothing.
+5. **Values are stored at three decimals, compared with a tolerance of 5e-4.** That is
+   half the last published digit, so the file can be checked against the documentation
+   by eye — and the tolerance is two orders of magnitude below one missed entity in
+   the smallest gated slice (6 entities → 0.167), so it cannot absorb a real
+   regression. A test asserts that relationship rather than trusting the comment.
+6. **PERSON is deliberately ungated on the deterministic chain.** Its recall there is
+   0.000 by design, and gating it would encode "names are never detected" as a
+   requirement.
+7. **The two weakest PERSON slices are gated individually** (en tier 3 at 0.333, el
+   tier 1 at 0.222) so that an overall improvement cannot hide a regression in them.
+   Q2's exit criterion is now partly mechanical: improve the slice, raise the floor.
+8. **spaCy models are pinned to 3.8.0 in the integration workflow**, not resolved by
+   `spacy download`. An unpinned model bump would move the hybrid gates on a night
+   nobody changed anything, and a gate that moves on its own gets ignored. The pin is
+   in the workflow, not in package metadata — ADR-0008 forbids the latter, and
+   `docs/15_PROVIDERS.md` keeps `spacy download` as the human install path.
+9. **The deterministic gates run on every push, not nightly.** That chain needs no
+   model and its numbers are exactly reproducible, so there is no reason to defer the
+   protection to a nightly job.
+10. **Two checks were added to `ci.yml` that the plan did not ask for**, both cheap
+    and both guarding an existing claim rather than adding a new one: the committed
+    corpus must still regenerate byte-for-byte from its seed (it is the ground truth
+    every metric is scored against — verified locally, `diff -r` clean), and no
+    provider extra may be importable in the push tier (the A1 exit criterion, which
+    until now was only ever true by accident).
+11. **`--gates` refuses `--split`.** The shipped floors are whole-corpus numbers;
+    scoring one split against them compares numbers that were never comparable. Found
+    by the architecture audit, and it is the reason `measured.splits` exists.
+
+Two bugs were found in my own workflows while testing them, both worth recording
+because they are the kind that pass review and fail in production:
+
+- `-m "integration or slow"` would have *selected* a future test marked both
+  `databricks` and `integration` — the natural way to mark a workspace parity test at
+  Increment F — and failed it in CI for want of credentials. Now
+  `(integration or slow) and not databricks`.
+- `ci.yml` had no explicit `shell:`, so the Windows leg would have run PowerShell
+  while Linux ran bash. A matrix whose legs run different shells is not testing
+  cross-platform behaviour. Now `defaults.run.shell: bash` on the job.
+
+### Both auditors ran, and both changed the result
+
+This is the first increment either auditor has reviewed. Neither found a blocking
+issue, and between them they produced eight changes worth keeping.
+
+**privacy-auditor** — no high-severity findings. It confirmed mechanically that gate
+output can only emit metric names, selectors, floats and ints; that the step-summary
+path is structurally text-free (`MetricRow` has no text field, `TruthSpan` carries no
+surface); and that neither workflow touches secrets or a workspace value. Acted on:
+
+1. **The text-free property had no test.** It held by convention only — adding a
+   `surface` field to `TruthSpan` for error analysis and listing it in
+   `SLICE_DIMENSIONS` would have published entity values to a world-readable step
+   summary with nothing failing. `tests/test_privacy_logging.py` now asserts the
+   corpus's own injected values appear in neither renderer, the gate report, nor the
+   gate *failure* path.
+2. **Model wheels had no integrity check.** A version pin says "3.8.0"; a digest says
+   "this exact artifact", and `actions/cache` is mutable state. `.github/spacy-models.sha256`
+   now pins all three, verified before install and on the cached copy too.
+3. **Gate provenance omitted the seed**, so `measured.corpus` said where a copy lives
+   without saying what defines it. Added `seed` and `documents_per_language`, both
+   asserted equal to the CLI defaults.
+4. **A malformed gate file and a failed gate both exited 1.** Now 2 versus 1, with a
+   message rather than a traceback.
+
+Left undone deliberately: pinning `actions/*` to commit SHAs (real posture
+improvement, but needs Dependabot to stay maintainable — an owner decision).
+
+**architecture-guardian** — the invariant holds. It verified the import graph by AST
+rather than by folder names: `evaluation`'s only outward edge is `contracts`, no
+cycles, and `processing` imports `evaluation` neither directly nor transitively.
+It also settled the placement question I had flagged as genuinely open:
+
+- **`config/` was not merely a worse home for `gates.py` — it was forbidden.** A gate
+  is defined over `MetricRow`, which lives in `evaluation/`, so the loader in `config/`
+  would create `config -> evaluation`; since `processing -> config`, that would put
+  `evaluation` inside `processing`'s import closure and break plan §3 outright.
+- `benchmark.py` was wrong for a different reason: anything there is untestable
+  without the pipeline. The current split buys 40 tests that need no corpus and no
+  model.
+- Plan §3 had already assigned I/O to `evaluation/` ("manifest-driven ground truth
+  loading"), so the "evaluation was pure" concern was mine, not the plan's.
+
+Acted on: the split provenance (below), the two documentation gaps, top-level and
+gate-set key validation to match the per-gate check, `version: 1` now actually
+validated rather than decorative, `GATE_FILE` moved to `tests/test_benchmark.py`
+beside the other path constants, and `DEFAULT_SEED` / `DEFAULT_DOCUMENTS_PER_LANGUAGE`
+made public so a test stops importing a private CLI symbol.
+
+The finding worth carrying forward is **O4, and it changed Q2's instructions**: gates
+are whole-corpus numbers and CI re-reads them, so "change it, read the gate, change
+again" is iterating against a set that is 60% test split. Plan §8's Q2 now says to
+develop against dev/calibration and read the whole-corpus number once, and `--gates`
+**refuses** to run with `--split` so the two cannot be mixed by accident. The gate
+file records `splits: all (dev + calibration + test)`, which `AGENTS.md` requires and
+the first draft omitted.
+
+Two observations left as noted rather than fixed, both with reasons in the code:
+`load_gate_file` deliberately duplicates `config.loader.load_yaml_mapping` (reusing it
+would cost `evaluation` its single edge), and the gate-set name is passed to both
+`load_gate_file` and `evaluate_gates` (fixing it costs a fourth dataclass for a
+low-likelihood mislabel).
+
+### Verified
+
+Locally, running the same commands the workflows run:
+
+| | |
+|---|---|
+| `ruff format --check .` | clean, 110 files |
+| `ruff check .` | clean |
+| `mypy src tests` | clean, 104 files (strict + pydantic plugin) |
+| `pytest -q` (default tier) | **525 passed**, 72 deselected, 8.2 s |
+| `pytest -q -m "(integration or slow) and not databricks"` | **72 passed**, 525 deselected, 11.1 s |
+| `pii-reduction benchmark --gates …` | 9/9 gates passed, exit 0 |
+| `… --chain deterministic_presidio --gates …` | 12/12 gates passed, exit 0 |
+| corpus reproducibility | `build-corpus` output `diff -r`-identical to the committed corpus |
+| wheel digests | `sha256sum -c` OK for all three models |
+
+Gate failure is tested two ways rather than assumed: a gate tightened past the
+measured value fails with the reason, and the CLI exits 1 — the contract CI actually
+reads is the exit code, so that is what the test asserts.
+
+### The one thing that is not verified, and cannot be from here
+
+`.github/workflows/*.yml` **has never run on GitHub.** No remote is configured, so
+"both workflows green on a real push" — half of Q1's exit criterion — is open. Both
+files parse as YAML and every step was executed locally by hand, but a workflow that
+has not run is a workflow that has not run. The pinned model wheel URLs were verified
+to resolve (HTTP 200 for all three), which removes the most likely first failure.
+
+Creating a GitHub remote is the repository owner's decision, so no remote was added.
+
+### Known gaps carried forward
+
+Everything in session 3's "Known gaps" still holds except the last two, which change:
+
+- ~~No CI workflow exists~~ — both exist; what remains is running them (above).
+- ~~The privacy-auditor and architecture-guardian have not been run against any of
+  these increments~~ — both ran against Q1. **A1–A6, B and C remain unaudited**; the
+  audits above cover this change only.
+
+New, from this session:
+
+- The gate file protects the *committed synthetic* corpus. It says nothing about
+  behaviour on real text; Increment D is where that gets measured, and it needs its
+  own gate set rather than a relaxation of these.
+- `docs/08` lists `transcript prefix preservation == 1.00` as an example gate and no
+  such metric exists in the report grain. The invariant is covered by round-trip
+  tests; it is the obvious next gate once a metric backs it.
 
 ---

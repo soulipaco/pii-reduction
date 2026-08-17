@@ -24,6 +24,8 @@ This repository skeleton defines the architecture, data contracts, evaluation fr
 
 The first vertical slice is implemented and measured (Increments A1–A6, B and C of `docs/14_IMPLEMENTATION_PLAN.md`): CSV/pandas sources, plain-text and transcript parsers, deterministic EMAIL/PHONE and Presidio NER providers, language detection with per-language provider routing, entity reconciliation, redact/mask/pseudonymize reducers, local outputs with run metrics, a seeded synthetic corpus with an injection manifest, and the evaluation framework.
 
+Every number published below is enforced rather than only reported: they are locked as regression gates in `configs/benchmark_gates.yaml` and checked by CI on the committed corpus.
+
 `docs/14_IMPLEMENTATION_PLAN.md` §8 carries the live status, the measured baseline, and what is queued next.
 
 ### Quickstart
@@ -44,6 +46,12 @@ Adding the NER provider (requires the `presidio` extra and the models documented
 
 ```bash
 pii-reduction benchmark --chain deterministic_presidio
+```
+
+Either chain can be checked against its locked floors, which is what CI does — it exits non-zero if a gate fails:
+
+```bash
+pii-reduction benchmark --gates configs/benchmark_gates.yaml
 ```
 
 | metric | `deterministic_only` | `deterministic_presidio` |

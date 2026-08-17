@@ -37,17 +37,50 @@ If behavior varies by dataset, language, or entity scope, first consider whether
 
 ## Development setup
 
-The final implementation should document exact commands once `pyproject.toml` exists. The intended development workflow is:
-
-```text
-create virtual environment
-install package + development dependencies
-run unit tests
-run lint/type checks
-run small synthetic benchmark
+```bash
+python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
 ```
 
+That is the whole install for the default tier: no NLP model, no provider extra.
+
+```bash
+ruff format --check . && ruff check .
+mypy src tests
+pytest -q                                       # default tier: fast, model-free
+pii-reduction benchmark --gates configs/benchmark_gates.yaml
+```
+
+The provider tier needs more, and is opt-in (`docs/15_PROVIDERS.md`):
+
+```bash
+pip install -e ".[dev,presidio,language]"
+python -m spacy download en_core_web_md
+python -m spacy download de_core_news_md
+python -m spacy download xx_ent_wiki_sm
+pytest -q -m integration
+pii-reduction benchmark --chain deterministic_presidio --gates configs/benchmark_gates.yaml
+```
+
+Say which tier you ran when reporting results: the default `pytest` deliberately
+excludes `integration`, `slow` and `databricks` (ADR-0009).
+
 Databricks access should not be necessary for most development.
+
+## What CI runs
+
+Two workflows, matching the three tiers of ADR-0009:
+
+| Workflow | Trigger | What it runs |
+|---|---|---|
+| `.github/workflows/ci.yml` | every push and PR, Linux **and** Windows | ruff, mypy, the default test tier, the deterministic benchmark gates, and a check that the committed corpus still regenerates byte-for-byte from its seed |
+| `.github/workflows/integration.yml` | nightly, `workflow_dispatch`, or a PR labelled `integration` | the `presidio` + `language` extras with pinned md spaCy models, `pytest -m "integration or slow"`, and the benchmark gates for both chains |
+
+`databricks`-marked tests never run in CI — they need workspace credentials
+(ADR-0006). Run them manually.
+
+The push tier installs core + `dev` only and asserts that no provider extra is
+importable, so anything that quietly makes spaCy a core requirement fails there.
 
 ## Branch/change scope
 
@@ -78,6 +111,12 @@ At minimum consider:
 - Spark parity where relevant.
 
 Do not weaken existing benchmark gates merely to make a provider pass without explaining why the metric definition or gate was wrong.
+
+Those gates are in one file, `configs/benchmark_gates.yaml`, so changing one is a
+visible act in a diff. Every value there was measured on a run someone actually did,
+and the file records the corpus, strategy, commit and model versions it was measured
+against. Raising a floor after a real improvement is the normal path — with the new
+number taken from your own run, not estimated.
 
 ## New provider checklist
 
