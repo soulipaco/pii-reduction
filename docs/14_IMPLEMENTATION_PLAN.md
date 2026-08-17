@@ -4,9 +4,14 @@ Produced by session 2 (2026-08-17) after repository assessment and empirical pro
 Decisions referenced as `ADR-NNNN` are recorded under `docs/adr/`. Probe evidence is
 summarized in `.claude/SESSION_HANDOFF.md` (session 2 section).
 
-This plan is the executable input for the first implementation sessions. It respects
+This plan is the executable input for the implementation sessions. It respects
 `AGENTS.md` (canonical agent policy), `docs/01_ARCHITECTURE.md` (layer boundaries),
 and `docs/11_ROADMAP.md` (phasing), and records every deviation from them explicitly.
+
+> **Start here: [§8 Status and work queue](#8-status-and-work-queue).** Sections 1–7
+> are the original plan as written in session 2. §8 is the live state — what is built,
+> what it measures, and what to do next. Sections 1–7 are amended in place where
+> reality diverged; §8 is authoritative when they disagree.
 
 ---
 
@@ -310,3 +315,124 @@ hold.
 - Greek NER quality via `xx_ent_wiki_sm` may be too weak to present honestly; the
   benchmark will show it, and the honest fallback is reporting Greek as
   deterministic-entities-only until Phase 7 adds a multilingual transformer.
+
+---
+
+## 8. Status and work queue
+
+**This section is the live one.** Sections 1–7 are the session-2 plan as written;
+where reality diverged, the divergence is recorded here and in the ADR it produced.
+Update this section at the end of every session.
+
+Last updated: end of session 3 (2026-08-18), commit `6278f91`.
+
+### Complete
+
+| Increment | What landed | Evidence |
+|---|---|---|
+| A1 | `pyproject.toml`, MIT `LICENSE`, `contracts/`, `config/`, `entities/` | 90 tests |
+| A2 | `parsers/` — plain text + transcript, byte-exact round trip | 183 tests |
+| A3 | `providers/` — deterministic EMAIL/PHONE, shared provider contract suite | 244 tests |
+| A4 | `entities/reconcile.py`, `reducers/` — redact **+ mask + pseudonymize** (ADR-0013) | 316 tests |
+| A5 | `sources/`, `outputs/`, `observability/`, `processing/` — `build_pipeline` runs | 378 tests |
+| A6 | `synthetic/`, `evaluation/`, `benchmark.py`, `cli.py`, `configs/`, committed corpus | 447 tests |
+| B | `providers/presidio_provider.py`, `docs/15_PROVIDERS.md`, chain comparison | +45 integration |
+| C | `language/` — lingua detector, ADR-0012 gate, per-language provider routing | 480 default / 71 integration |
+
+### Measured baseline (regenerate with `pii-reduction benchmark`)
+
+102 documents, 180 injected entities, en/de/el, tiers 1–4, `redact`:
+
+| metric | `deterministic_only` | `deterministic_presidio` |
+|---|---|---|
+| strict F1 | 0.723 | 0.886 |
+| relaxed F1 | 0.723 | 0.921 |
+| leakage rate | 0.433 | 0.117 |
+| document clean rate | 0.161 | 0.774 |
+| over-redaction rate | 0.000 | 0.000 |
+| PERSON precision / recall | 0.000 / 0.000 | 0.820 / 0.641 |
+
+PERSON strict recall by language and tier, hybrid chain:
+
+| language | tier 1 clean | tier 2 noisy | tier 3 structured | tier 4 transcript |
+|---|---|---|---|---|
+| en | 1.000 | 0.889 | **0.333** | 1.000 |
+| de | 1.000 | 1.000 | 1.000 | 1.000 |
+| **el** | **0.222** | **0.111** | **0.000** | **0.000** |
+
+Language detection against the corpus's known language: 99/102 agreement, **zero**
+confident misclassifications, 3 abstentions to `und`.
+
+### Queue — all three are required, in this order
+
+Not a menu. Each has an exit criterion; do not start the next before the current one
+meets it.
+
+#### Q1. CI workflows (ADR-0009)
+
+The largest gap in the engineering story: both test tiers work locally and nothing
+runs them on push.
+
+- `.github/workflows/ci.yml` — every push and PR: `ruff format --check`, `ruff check`,
+  `mypy src tests`, `pytest -q` (default tier). Matrix `ubuntu-latest` **and**
+  `windows-latest`, Python 3.11, core + `dev` install only, no models.
+- Nightly / label-triggered integration workflow: install `presidio` + `language`
+  extras and the **md** models plus `xx_ent_wiki_sm` (cached by hash), run
+  `pytest -m "integration or slow"`, then the committed-corpus benchmark.
+- Benchmark regression gates in one versioned config file, with values taken from the
+  measured baseline above — never invented. `CONTRIBUTING.md` already forbids
+  silently weakening them.
+- `databricks`-marked tests never run in CI.
+
+**Exit:** both workflows green on a real push; a deliberately broken assertion fails
+the right job; the gate file's values match this section.
+
+#### Q2. English tier-3 PERSON recall (currently 0.333)
+
+The weakest slice that is **not** licence-bound, so the cheapest real quality win.
+Structured key/value text (`Customer: Maria Rossi` on its own line) gives the NER
+model no sentence context.
+
+Investigate before changing anything: confirm on the failing tier-3 documents whether
+the misses are context-window effects, the transcript/plain parser splitting the
+label from the value, or Presidio's recognizer configuration. Candidate remedies in
+increasing cost: a key/value parser that marks labels non-processable and passes the
+value with context, per-tier provider options, or a custom recognizer. Any change is
+judged by the benchmark, not by inspection.
+
+**Exit:** English tier-3 PERSON strict recall measurably improved with no regression
+in over-redaction (must stay 0.000) and no drop in any other slice; the new numbers
+replace those in this section and in `docs/15_PROVIDERS.md`.
+
+#### Q3. Increment D — public datasets (§5 above)
+
+Bitext (CDLA-Sharing-1.0), MultiWOZ 2.2 (MIT), MASSIVE de/el (CC BY 4.0) with the
+provenance registry, download scripts committing no raw data, and injection at scale
+reusing `pii_reduction.synthetic`. This is the first honest test of the transcript
+parser's speaker heuristic on text nobody wrote for it, and of the phone/email
+recognizers outside a corpus built to suit them.
+
+Injected values must come from the ADR-0014 pools — never invented ad hoc, never
+lifted from the source data.
+
+**Exit:** each demo pack reproducible from documented commands; provenance registry
+complete per `docs/02_PUBLIC_DATA_STRATEGY.md`; injected ground truth validates
+against its documents; benchmark rerun and the numbers published beside the synthetic
+ones rather than replacing them.
+
+### After the queue
+
+`docs/11_ROADMAP.md` order still holds: Increment E (benchmark hardening, split
+discipline, mask-vs-redact leakage variants per ADR-0013 §5), then F (Databricks
+Connect). Two parked ideas with their rationale are in the session-3 handoff:
+MLflow trace redaction, and GLiNER for the Greek gap — the latter subject to
+**ADR-0015 (CPU-only)**.
+
+### Known deferrals carried forward
+
+- Greek PERSON is licence-bound to `xx_ent_wiki_sm` until Phase 7 (ADR-0007).
+- ADDRESS stays in the taxonomy, undetected, until a capable provider exists (ADR-0002).
+- Pseudonymization collision detection is per process, not global (ADR-0013 §4).
+- Language detection is per field, not per segment; code-switching would need the
+  per-segment form.
+- The pipeline is row-at-a-time; `detect_batch` exists but nothing calls it until F.

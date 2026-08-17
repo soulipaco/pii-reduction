@@ -4,15 +4,44 @@ This repository is designed to be developed with Claude Code as well as human co
 
 ## Required context
 
-Before implementing or refactoring significant functionality, read:
+**Start every session with these two**, in this order — they say what is already built
+and what to do next, so you do not re-derive either:
 
-1. `AGENTS.md` — repository-wide engineering rules.
-2. `README.md` — product definition and documentation map.
-3. `docs/00_PROJECT_CHARTER.md` — scope and non-goals.
-4. `docs/01_ARCHITECTURE.md` — component boundaries and dependency direction.
-5. The specific design document related to the task.
+1. `docs/14_IMPLEMENTATION_PLAN.md` — the build sequence. **§8 is the live status and
+   work queue**: what is complete, what is in progress, what to pick up next, and the
+   exit criterion for each.
+2. `.claude/SESSION_HANDOFF.md` — what each session established, measured, and left
+   open. Read the **most recent session's "Start here" block first**; the rest is
+   evidence you can consult rather than repeat.
+
+Then, before implementing or refactoring significant functionality:
+
+3. `AGENTS.md` — repository-wide engineering rules.
+4. `README.md` — product definition and documentation map.
+5. `docs/00_PROJECT_CHARTER.md` — scope and non-goals.
+6. `docs/01_ARCHITECTURE.md` — component boundaries and dependency direction.
+7. `docs/adr/README.md` — the decision index. Every non-obvious choice in this
+   codebase has an ADR; check it before proposing a different one, and write a new
+   ADR rather than quietly diverging.
+8. The specific design document related to the task, and `docs/15_PROVIDERS.md` when
+   the task touches a provider.
 
 `AGENTS.md` is the canonical agent policy. This file intentionally does not duplicate it.
+
+## Working environment
+
+`.venv` exists and is current. Use `.venv/Scripts/python.exe` on Windows.
+
+```text
+pytest -q                      default tier: fast, no models, no provider extras
+pytest -q -m integration       needs the presidio + language extras and spaCy models
+pii-reduction benchmark        the measured baseline, deterministic chain
+pii-reduction benchmark --chain deterministic_presidio
+```
+
+Run `/qa` before claiming an increment complete, and `/gate` before committing. The
+default `pytest` run deliberately excludes `integration`, `slow` and `databricks`
+(ADR-0009), so say which tier you ran when reporting results.
 
 ## Development approach
 

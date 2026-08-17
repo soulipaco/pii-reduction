@@ -22,7 +22,9 @@ The accelerator is designed around five principles:
 
 This repository skeleton defines the architecture, data contracts, evaluation framework, security model, implementation phases, and contribution rules. It is intentionally implementation-ready but not tied to a single model or dataset.
 
-The first vertical slice is implemented and measured (Increments A1–A6 of `docs/14_IMPLEMENTATION_PLAN.md`): CSV/pandas sources, plain-text and transcript parsers, a deterministic EMAIL/PHONE provider, entity reconciliation, redact/mask/pseudonymize reducers, local outputs with run metrics, a seeded synthetic corpus with an injection manifest, and the evaluation framework.
+The first vertical slice is implemented and measured (Increments A1–A6, B and C of `docs/14_IMPLEMENTATION_PLAN.md`): CSV/pandas sources, plain-text and transcript parsers, deterministic EMAIL/PHONE and Presidio NER providers, language detection with per-language provider routing, entity reconciliation, redact/mask/pseudonymize reducers, local outputs with run metrics, a seeded synthetic corpus with an injection manifest, and the evaluation framework.
+
+`docs/14_IMPLEMENTATION_PLAN.md` §8 carries the live status, the measured baseline, and what is queued next.
 
 ### Quickstart
 

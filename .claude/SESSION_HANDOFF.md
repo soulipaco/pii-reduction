@@ -272,7 +272,37 @@ providers fresh against the contracts. No probe output was committed.
 
 ---
 
-## Session 3 — 2026-08-17/18 — Increments A1–A6 plus B: slice measured, NER added
+## Session 3 — 2026-08-17/18 — Increments A1–A6, B and C
+
+### Start here (session 4)
+
+Everything below this block is evidence — read it when you need the reasoning behind
+something, not as a prerequisite. To pick up work:
+
+1. Read `docs/14_IMPLEMENTATION_PLAN.md` **§8**. It holds the status table, the
+   measured baseline, and the three-item queue with exit criteria.
+2. Work the queue **in order**: CI workflows → English tier-3 PERSON recall →
+   Increment D (public datasets). All three are required; none is optional.
+3. Before each commit: `/qa`, then `/gate`. Report which test tier you ran — the
+   default `pytest` excludes `integration`, `slow` and `databricks` (ADR-0009).
+4. When you finish an increment, update §8 of the plan and append a session section
+   here. Numbers in documentation must come from a run you actually did.
+
+State at the end of session 3: ten commits on `main`, working tree clean, nothing
+pushed (no remote configured). `ruff`, `mypy src tests` clean. 480 default-tier tests
+and 71 integration tests pass. `.venv` has core + `dev` + `presidio` + `language`
+installed, with `en_core_web_md`, `de_core_news_md` and `xx_ent_wiki_sm`.
+
+Two constraints that are easy to violate without noticing:
+
+- **CPU-only (ADR-0015).** This repository is real parallel work, not only a
+  portfolio piece, and the deployment target has no GPU. No component may *require*
+  one; published baselines are CPU numbers.
+- **Synthetic data comes from published unassigned ranges (ADR-0014).** A phone
+  number in a fixture must be both valid to `phonenumbers` and impossible to reach.
+  Session 3 shipped 17 real Berlin numbers before the privacy audit caught it.
+
+---
 
 **Scope:** Increments A1–A6 of `docs/14_IMPLEMENTATION_PLAN.md` §5 — the whole first
 slice. First code in the repository. A1: `pyproject.toml`, `LICENSE` (MIT, ADR-0007),
