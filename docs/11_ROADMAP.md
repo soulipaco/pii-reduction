@@ -105,6 +105,12 @@ Add a widely recognized PII framework and establish the first NLP baseline.
 - provider limitations documented,
 - deterministic + Presidio hybrid chain available.
 
+> Amended by `docs/adr/0002-address-entity-deferred.md`: `ADDRESS` detection is not
+> a Phase 2 deliverable (no capable permissively-licensed model exists; deferred to
+> Phase 7). Minimal evaluation arrives with the first slice per
+> `docs/14_IMPLEMENTATION_PLAN.md` §6, which this phase's metrics requirement
+> presupposes.
+
 ---
 
 # Phase 3 — Multilingual routing
@@ -234,6 +240,11 @@ No provider should be added only for a longer README list.
 ---
 
 # Phase 8 — Pseudonymization
+
+> Amended by ADR-0013: masking and deterministic pseudonymization were built in
+> Increment A4 instead, together with the reducer boundary that makes them
+> interchangeable. What remains open here is synthetic replacement and the optional
+> reversible mapping vault (still out of scope per `docs/00_PROJECT_CHARTER.md`).
 
 ## Goal
 
