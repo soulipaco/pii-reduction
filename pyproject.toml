@@ -102,3 +102,12 @@ show_error_codes = true
 [[tool.mypy.overrides]]
 module = ["yaml", "yaml.*"]
 ignore_missing_imports = true
+
+# Optional extras. The type checker has to model what the packaging already says
+# (ADR-0008): these are absent in a core install, and the adapters that import them
+# do so lazily for exactly that reason. Without this, `mypy src tests` passes on a
+# developer machine with the extras installed and fails in the push tier that
+# deliberately installs neither — which is how CI found it on the first real run.
+[[tool.mypy.overrides]]
+module = ["presidio_analyzer", "presidio_analyzer.*", "lingua", "lingua.*"]
+ignore_missing_imports = true

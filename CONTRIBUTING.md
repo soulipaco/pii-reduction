@@ -65,6 +65,12 @@ pii-reduction benchmark --chain deterministic_presidio --gates configs/benchmark
 Say which tier you ran when reporting results: the default `pytest` deliberately
 excludes `integration`, `slow` and `databricks` (ADR-0009).
 
+A green run in an environment that has the extras installed does **not** prove the
+push tier is green: `mypy` resolves optional imports differently depending on what is
+present, and a machine with the extras will not notice a core install breaking. If you
+change anything the extras touch, check it in a clean core-only environment — that is
+what CI runs.
+
 Databricks access should not be necessary for most development.
 
 ## What CI runs
