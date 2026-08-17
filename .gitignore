@@ -1,0 +1,69 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Environments ---
+.venv/
+venv/
+env/
+.python-version
+
+# --- Secrets & credentials (see SECURITY.md / AGENTS.md rule 1) ---
+.env
+.env.*
+!.env.example
+.databrickscfg
+*.pem
+*.key
+*.p12
+secrets/
+.databricks/
+
+# --- Data: nothing containing real or downloaded data is committed ---
+# (see AGENTS.md rule 2 and docs/02_PUBLIC_DATA_STRATEGY.md)
+data/raw/
+data/interim/
+data/external/
+data/downloads/
+*.parquet
+*.xlsx
+!tests/fixtures/**/*.xlsx
+*.db
+*.sqlite3
+
+# --- Models / caches ---
+models/
+.cache/
+.hf_cache/
+.spacy/
+*.bin
+*.onnx
+
+# --- Outputs & runs ---
+outputs/
+runs/
+benchmark_results/
+mlruns/
+*.log
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Claude Code (project config IS committed; local overrides are not) ---
+.claude/settings.local.json
+.claude/local/

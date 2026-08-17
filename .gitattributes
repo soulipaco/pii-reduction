@@ -1,0 +1,13 @@
+# Normalize line endings so parser round-trip fixtures behave identically
+# on Windows, macOS and Linux. Parser tests assert byte-exact reconstruction,
+# so CRLF/LF drift would produce false failures across contributors.
+* text=auto eol=lf
+
+# Fixtures are byte-sensitive: never let git rewrite them.
+tests/fixtures/** -text
+demo/** -text
+
+*.png binary
+*.jpg binary
+*.parquet binary
+*.xlsx binary

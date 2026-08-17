@@ -1,0 +1,252 @@
+# Databricks PII Reduction Accelerator
+
+> An open-source, multilingual, provider-agnostic accelerator for discovering, detecting, redacting, pseudonymizing, and benchmarking personally identifiable information (PII) on Databricks.
+
+## Why this project exists
+
+Organizations increasingly store operational text alongside structured business data: support tickets, chat transcripts, call summaries, case notes, incident descriptions, resolution notes, emails, CRM comments, survey responses, and knowledge-work artifacts. These fields often contain PII even when the surrounding table is otherwise well governed.
+
+PII reduction in those environments is not just a named-entity-recognition problem. A production-grade solution must also understand document structure, preserve non-sensitive metadata, support multiple languages, work at data-platform scale, expose measurable quality, and integrate cleanly with governance and downstream analytics.
+
+This repository is intended to demonstrate that full problem, end to end.
+
+The accelerator is designed around five principles:
+
+1. **Source-agnostic:** the PII engine should not care whether input comes from Excel, CSV, Parquet, Delta, or an existing Databricks table.
+2. **Structure-aware:** transcript speaker labels, timestamps, ticket headers, and other operational metadata should be preserved when only the conversational or note body is in scope.
+3. **Multilingual:** language detection and language-aware recognizers are first-class parts of the pipeline rather than afterthoughts.
+4. **Provider-agnostic:** Presidio, transformer-based NER, deterministic recognizers, and Databricks-native or model-serving approaches should be interchangeable behind a common interface.
+5. **Measurable:** every provider and pipeline version should be evaluated against reproducible ground truth using entity-level and document-level metrics.
+
+## Repository status
+
+This repository skeleton defines the architecture, data contracts, evaluation framework, security model, implementation phases, and contribution rules. It is intentionally implementation-ready but not tied to a single model or dataset.
+
+The recommended first implementation is a public-data demo with three families of text:
+
+- customer-support tickets,
+- multi-turn customer/agent conversations,
+- ServiceNow-style incident notes generated from public or synthetic content.
+
+Synthetic PII is injected into public-safe text so the project can measure precision, recall, F1, and leakage without publishing real personal information.
+
+## What the final accelerator should support
+
+### Sources
+
+- Excel workbooks with multiple sheets
+- CSV files and folders of CSV files
+- Parquet
+- local pandas DataFrames for development
+- Spark DataFrames
+- Delta tables
+- fully-qualified Unity Catalog tables
+
+### Text structures
+
+- plain free text
+- transcript / diarized conversation text
+- ServiceNow-style work-note histories
+- key/value case summaries
+- email-like text
+- configurable custom parsers
+
+### PII entity families
+
+Initial baseline:
+
+- person names
+- email addresses
+- phone numbers
+- physical addresses
+
+Designed for future extension to:
+
+- dates of birth
+- government identifiers
+- account numbers
+- financial identifiers
+- IP addresses
+- device identifiers
+- user IDs
+- health identifiers
+- geolocation
+- custom organization-specific entity types
+
+### Reduction strategies
+
+- redaction: `<PERSON>`, `<EMAIL>`, `<PHONE>`, `<ADDRESS>`
+- masking: `jo***@example.com`
+- deterministic pseudonymization
+- reversible pseudonymization when explicitly configured and appropriately secured
+- drop / suppress for selected entity types
+
+### Providers
+
+The pipeline should support a common `PIIProvider` abstraction, allowing implementations such as:
+
+- Microsoft Presidio
+- spaCy-backed Presidio engines
+- transformer / Hugging Face NER
+- GLiNER-style zero-shot entity detection
+- deterministic recognizers for high-precision patterns
+- Databricks-native AI or model-serving implementations where appropriate
+- hybrid ensembles
+
+No single provider is assumed to be best for every language or entity type.
+
+## Conceptual pipeline
+
+```text
+Data Source
+   |
+   v
+Source Adapter
+   |
+   v
+Dataset Contract + Column Policy
+   |
+   v
+Text Parser / Segmenter
+   |
+   +---- plain text
+   +---- transcript turns
+   +---- note blocks
+   +---- key/value sections
+   |
+   v
+Language Detection
+   |
+   v
+PII Provider(s)
+   |
+   v
+Entity Reconciliation
+   |
+   v
+Reduction Strategy
+   |
+   v
+Reconstruction
+   |
+   +---- preserve timestamps
+   +---- preserve speaker labels
+   +---- preserve note headers
+   +---- preserve row grain
+   |
+   v
+Validation + Metrics + Audit Events
+   |
+   v
+Output Adapter
+   |
+   +---- local file
+   +---- pandas
+   +---- Spark
+   +---- Delta / Unity Catalog
+```
+
+## Recommended repository layout
+
+```text
+.
+├── README.md
+├── AGENTS.md
+├── docs/
+│   ├── 00_PROJECT_CHARTER.md
+│   ├── 01_ARCHITECTURE.md
+│   ├── 02_PUBLIC_DATA_STRATEGY.md
+│   ├── 03_DATA_CONTRACTS.md
+│   ├── 04_PII_ENGINE.md
+│   ├── 05_MULTILINGUAL_STRATEGY.md
+│   ├── 06_CONFIGURATION_CONTRACT.md
+│   ├── 07_DATABRICKS_RUNTIME.md
+│   ├── 08_EVALUATION_BENCHMARKING.md
+│   ├── 09_SECURITY_PRIVACY_GOVERNANCE.md
+│   ├── 10_TESTING_QA.md
+│   ├── 11_ROADMAP.md
+│   ├── 12_DEMO_SCENARIOS.md
+│   └── 13_PORTFOLIO_STORY.md
+├── configs/                  # to be implemented
+│   ├── project.yaml
+│   ├── entities.yaml
+│   ├── providers.yaml
+│   ├── languages.yaml
+│   └── datasets/
+├── src/                      # to be implemented
+│   └── pii_reduction/
+├── tests/                    # to be implemented
+├── notebooks/                # thin Databricks entry points only
+├── resources/                # job / bundle / app resources
+└── demo/                     # public-data preparation + synthetic PII injection
+```
+
+## Implementation philosophy
+
+The repository should avoid becoming a notebook collection. Business logic belongs in importable Python modules. Notebooks should only orchestrate or demonstrate those modules.
+
+The local development path should be able to run without Databricks. The Databricks path should reuse the same pipeline components rather than maintaining a separate implementation.
+
+The core library should be testable with synthetic data in seconds. Larger public datasets are demo and benchmark assets, not a dependency for running the unit-test suite.
+
+## Public-data policy
+
+The repository must not contain:
+
+- proprietary corporate exports,
+- copied production transcripts,
+- real customer names or contact information,
+- secrets or tokens,
+- raw datasets whose redistribution license does not permit inclusion.
+
+Preferred approach:
+
+1. download or reference a public-safe dataset,
+2. normalize it into the accelerator's canonical text contracts,
+3. inject synthetic PII with deterministic seeds,
+4. store ground-truth entity spans separately,
+5. run detection and reduction,
+6. evaluate the output against the injected ground truth.
+
+See `docs/02_PUBLIC_DATA_STRATEGY.md`.
+
+## Success criteria
+
+A mature version of this repository should make it possible to answer all of the following with evidence:
+
+- How accurately does each PII provider detect each entity type?
+- How does performance differ by language?
+- How does performance differ by document structure?
+- What percentage of fields still contain known PII after reduction?
+- How often does the system over-redact non-PII operational identifiers?
+- Does transcript reconstruction preserve speaker metadata exactly?
+- Does the same configuration behave consistently locally and on Databricks?
+- How does throughput scale as text volume increases?
+- What are the quality/cost tradeoffs of deterministic, NER, and AI-based approaches?
+
+## Non-goals
+
+This project is not intended to claim that automated PII reduction guarantees regulatory compliance. It is an engineering and evaluation accelerator. Production adoption requires organization-specific legal, security, privacy, retention, and model-risk review.
+
+The project should also avoid pretending that every identifier is PII. Entity scope must be explicit and configurable.
+
+## Documentation map
+
+- **Project purpose and boundaries:** `docs/00_PROJECT_CHARTER.md`
+- **Technical design:** `docs/01_ARCHITECTURE.md`
+- **Public datasets and synthetic PII:** `docs/02_PUBLIC_DATA_STRATEGY.md`
+- **Canonical schemas and contracts:** `docs/03_DATA_CONTRACTS.md`
+- **PII provider and reduction engine:** `docs/04_PII_ENGINE.md`
+- **Language-aware processing:** `docs/05_MULTILINGUAL_STRATEGY.md`
+- **Configuration model:** `docs/06_CONFIGURATION_CONTRACT.md`
+- **Databricks execution model:** `docs/07_DATABRICKS_RUNTIME.md`
+- **Metrics and benchmarking:** `docs/08_EVALUATION_BENCHMARKING.md`
+- **Security and privacy:** `docs/09_SECURITY_PRIVACY_GOVERNANCE.md`
+- **Test strategy:** `docs/10_TESTING_QA.md`
+- **Implementation roadmap:** `docs/11_ROADMAP.md`
+- **Portfolio demo scenarios:** `docs/12_DEMO_SCENARIOS.md`
+- **How to present the project:** `docs/13_PORTFOLIO_STORY.md`
+
+## License
+
+Choose a permissive open-source license only after confirming that all bundled source code, model dependencies, and redistributed demo assets are compatible with it. Dataset licenses must be tracked separately from the repository code license.
