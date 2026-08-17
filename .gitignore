@@ -36,9 +36,12 @@ data/raw/
 data/interim/
 data/external/
 data/downloads/
+data/output/
 *.parquet
 *.xlsx
+*.csv
 !tests/fixtures/**/*.xlsx
+!tests/fixtures/**/*.csv
 *.db
 *.sqlite3
 
@@ -51,7 +54,9 @@ models/
 *.onnx
 
 # --- Outputs & runs ---
-outputs/
+# Anchored: an unanchored `outputs/` also matches src/pii_reduction/outputs/,
+# which would silently drop that package from every commit and from the wheel.
+/outputs/
 runs/
 benchmark_results/
 mlruns/

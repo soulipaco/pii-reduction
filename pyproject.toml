@@ -1,0 +1,104 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pii-reduction"
+version = "0.1.0"
+description = "Databricks PII reduction accelerator: structure-aware, multilingual, provider-agnostic PII detection and reduction."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+keywords = ["pii", "privacy", "redaction", "nlp", "databricks"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Text Processing :: Linguistic",
+]
+
+# Core dependencies only (ADR-0008). The whole unit-test suite, the deterministic
+# provider, parsers, reducers and evaluation must work with these alone — no NLP
+# model downloads, no provider extras.
+dependencies = [
+  "pydantic>=2.6",
+  "PyYAML>=6.0",
+  "pandas>=1.5,<3",   # upper bound is a Spark-parity decision (ADR-0006)
+  "phonenumbers>=8.13",
+]
+
+[project.scripts]
+pii-reduction = "pii_reduction.cli:main"
+
+[project.optional-dependencies]
+# spaCy models are installed by documented command, never declared here: they are
+# not on PyPI and pinning wheel URLs in metadata breaks resolvers (ADR-0008).
+# el_core_news_* must never appear here — CC BY-NC-SA, incompatible with MIT (ADR-0007).
+presidio = [
+  "presidio-analyzer>=2.2",
+  "spacy>=3.7,<4",
+]
+language = [
+  "lingua-language-detector>=2.0",
+]
+# Parquet sources and destinations. Kept optional so the core install stays small;
+# CSV works without it (amends ADR-0008's extras list, session 3).
+parquet = [
+  "pyarrow>=14",
+]
+# Version selected against the workspace runtime at Increment F (ADR-0006).
+databricks = [
+  "databricks-connect",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.10",
+  "Faker>=25",
+  "pyarrow>=14",       # so the parquet adapters are covered by the default test run
+  "pandas-stubs",      # typing only
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pii_reduction"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The default run is the fast, model-free tier (ADR-0009). Opt in explicitly:
+#   pytest -m integration
+addopts = "-ra -m 'not integration and not slow and not databricks'"
+markers = [
+  "unit: fast, model-free tests (the default tier)",
+  "integration: requires real providers or NLP models",
+  "slow: long-running tests",
+  "databricks: requires a Databricks workspace; never runs in CI (ADR-0009)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+# Documentation is the source of truth and its code samples are illustrative;
+# the Claude Code harness under .claude/ is tooling, not project source.
+extend-exclude = ["docs", ".claude"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF"]
+# This project processes Greek and German text on purpose, so "ambiguous Unicode
+# character" warnings fire on legitimate multilingual fixtures and prose.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["yaml", "yaml.*"]
+ignore_missing_imports = true
