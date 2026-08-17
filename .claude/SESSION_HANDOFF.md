@@ -574,18 +574,77 @@ Three findings to carry forward:
    exactly zero while only deterministic spans existed. That gap is boundary quality,
    and it is why ADR-0011 insists on reporting both.
 
+### Increment C — language detection and routing
+
+`language/gate.py` (the short-text policy, dependency-free), `language/lingua_detector.py`,
+`language/registry.py`, per-language provider routing in the field processor, and
+`configs/` switched to detection as the product default.
+
+Decisions:
+
+1. **The gate is separated from the detector and has no optional dependency.** It is
+   the part with the interesting edge cases and must be testable in the default
+   model-free tier. Detection-accuracy tests are integration-marked; the policy tests
+   are not.
+2. **The gate is structural, not probabilistic** (ADR-0012, re-confirmed by probe):
+   `Thanks` scores `en` 0.89, `Resolved` 0.96, and a bare `maria@example.com` scores
+   `en` 0.95. No confidence threshold separates those from genuine short German or
+   Greek, so the gate strips emails, URLs and digits — using the same `patterns.py`
+   the EMAIL recognizer uses, so the two cannot disagree about where an address ends
+   — counts what is left, and refuses when there is too little.
+3. **Language is resolved from eligible text only**, not the raw field. Transcript
+   timestamps and speaker names are structure, and feeding them to a detector biases
+   it toward whatever the metadata looks like. Closes an architecture-audit
+   observation.
+4. **Provider routing is real.** `languages:` maps a language to a chain; an unknown
+   or unsupported language takes `language.fallback_chain` (deterministic-only by
+   default) rather than a guess, because running an English NER model over text of
+   unknown language is how false positives are manufactured. Providers are built once
+   and shared across chains, so two chains naming the same provider do not each load
+   its models.
+5. **Provider-scoped `entities` and `languages` now bind.** They were inert
+   configuration — the architecture audit flagged it, and the first routing test
+   failed because of it, which is the best possible way to find out. A provider
+   declared `entities: [EMAIL]` that returns PHONE is the scope drift `AGENTS.md`
+   rule 7 forbids; the chain now enforces both scopes.
+6. **`configs/project.yaml` defaults to `mode: detect`** — real datasets do not arrive
+   with a language column. The two benchmark dataset configs override back to
+   `mode: column` deliberately: a detected language there would fold detection error
+   into the PII numbers, and the two failure modes must stay separately attributable.
+
+### Increment C results — detection measured against the corpus
+
+The corpus carries its true language, so agreement is measured rather than assumed.
+Over all 102 documents:
+
+| | |
+|---|---|
+| agreement with the known language | **99/102 = 0.971** |
+| confident misclassifications | **0** |
+| abstentions (`und`) | 3 |
+
+The shape matters more than the rate. Every disagreement is an *abstention*, not a
+wrong answer: three tier-2 (noisy) English documents fell below the confidence floor,
+routed to `und`, and from there to the deterministic-only fallback chain. Tiers 1, 3
+and 4 agree on every document in all three languages. A wrong language claim would
+route text to the wrong provider chain; the gate turns uncertainty into a safe
+fallback instead, which is exactly what it exists for.
+
 ### Verified
 
-At the end of B: `ruff format --check .` clean (97 files), `ruff check .` clean,
-`mypy src` clean (74 files, strict + pydantic plugin).
+At the end of C: `ruff format --check .` clean (108 files), `ruff check .` clean,
+`mypy src tests` clean (102 files, strict + pydantic plugin).
 
-- Default tier: `pytest -q` → **447 passed / 0 failed / 0 skipped / 45 deselected**,
-  8.9 s. The 45 deselected are the `integration`-marked Presidio tests.
-- Integration tier: `pytest -q -m integration` → **45 passed / 0 failed**, 11.0 s,
-  with the three spaCy models installed.
+- Default tier: `pytest -q` → **480 passed / 0 failed / 0 skipped / 71 deselected**,
+  7.5 s.
+- Integration tier: `pytest -q -m integration` → **71 passed / 0 failed**, 11.2 s,
+  with the three spaCy models and lingua installed.
+
+The published benchmark is unchanged by C (strict F1 0.723 deterministic-only, 0.886
+hybrid), because the benchmark configs deliberately keep the corpus's known language.
 
 (Test counts by increment: A1 90; A2 183; A3 244; A4 316; A5 378; A6 447; B adds 45
-integration tests.)
+integration; C 480 default and 71 integration.)
 
 **A6's exit criterion holds, and the first measured baseline exists.**
 `pii-reduction benchmark` runs the slice end to end over the committed 102-document
@@ -654,10 +713,10 @@ it.
 - The benchmark reports every split together. Increment E owes the discipline of
   calibrating on the calibration split and reporting test once (ADR-0011); the
   `--split` plumbing exists and is tested, but nothing enforces the protocol yet.
-- Language resolution covers `static` and `column` only. `mode: detect` passes config
-  validation (the detector name is registered) but `build_pipeline` refuses it with a
-  message naming Increment C. That is deliberate — the alternative was letting a
-  configured detector silently do nothing.
+- Language detection is per field, not per segment. `docs/14` §5 Increment C mentions
+  "confidence recorded per segment"; the aggregate-per-field form is what shipped,
+  which is the right default for a transcript where every turn is the same language.
+  A code-switching document would need the per-segment form.
 - The pipeline is row-at-a-time. `detect_batch` exists on the provider contract but
   nothing calls it yet; batching matters at Increment F, not before.
 - The corpus is 102 documents from 12 templates per language. It is a regression set,
@@ -665,25 +724,41 @@ it.
   Increment D's public datasets are where breadth comes from.
 - The privacy-auditor and architecture-guardian have **not** been run against any of
   these increments.
-- Nothing has been committed; the working tree carries all of A1–A6 and B.
-- No CI workflow exists yet. ADR-0009 designs three tiers and the markers now exist to
-  support them, but `.github/workflows/` is empty.
+- A1–A6, B and C are committed (ten commits). Nothing is pushed; no remote is
+  configured.
+- No CI workflow exists yet. ADR-0009 designs three tiers and the markers now work
+  locally, but `.github/workflows/` is empty. This is the largest remaining gap in the
+  engineering story.
+- **CPU-only is now a hard constraint (ADR-0015)** — the repository is real parallel
+  work, not only a portfolio piece, and the deployment target has no GPU. Every Phase 7
+  provider evaluation gates on CPU latency and throughput alongside quality.
 
 ### Next
 
-**Increment C** — language detection and routing (roadmap Phase 3): the `lingua`
-adapter behind the existing `LanguageResolver` protocol, the ADR-0012 short-text gate
-(min 20 chars **and** min 12 alphabetic characters after stripping emails, URLs and
-digits — `pii_reduction/patterns.py` already holds the patterns the gate must agree
-with), `und` routing to a safe fallback chain, and language distribution plus fallback
-counts in run metrics. `mode: detect` currently fails fast with a message naming
-Increment C; that message is the marker for where to start.
+Increment D (public datasets) is the plan's next step, but three things now compete
+with it and the ordering is a judgement call:
 
-Also worth doing soon, in rough priority order:
+1. **CI workflows** (ADR-0009). Both tiers work locally; nothing runs them on push.
+   The cheapest durable protection for everything built so far.
+2. **English tier-3 PERSON recall (0.333)** — the weakest slice that is *not* licence
+   bound. Names in key/value blocks (`Customer: Maria Rossi`) give the model no
+   sentence context. Likely a recognizer-configuration or context-window fix rather
+   than a model limit, and directly improves the published number.
+3. **Increment D** — Bitext, MultiWOZ 2.2, MASSIVE with the licence registry and
+   injection at scale. Real breadth, and the first honest test of the transcript
+   parser's speaker heuristic on text nobody wrote for it.
 
-1. **CI workflows** (ADR-0009). The markers and both tiers now work locally; nothing
-   runs them on push.
-2. **Run the two auditors** over the whole tree before the first commit.
-3. **English tier-3 PERSON recall (0.333)** — a cheap, licence-free quality win.
+Two integration ideas were reviewed and deliberately parked (session 3):
+
+- **MLflow trace redaction** (`mlflow.tracing.configure(span_processors=[...])`).
+  Databricks ships no detector there — the docs tell you to bring a regex or
+  instantiate Presidio yourself — so a thin `pii_reduction.integrations.mlflow` span
+  processor is a natural fit over the existing field-level path, behind an `mlflow`
+  extra. The owner's call was "optional, later". Note the caveat: it redacts only what
+  is *recorded in the trace*, not what the model receives, so it is an observability
+  control rather than data minimization.
+- **GLiNER** (Apache-2.0, so licence-compatible unlike the Greek spaCy models) as a
+  Phase 7 candidate for the Greek gap — but subject to ADR-0015: it must be CPU-viable
+  to qualify.
 
 ---

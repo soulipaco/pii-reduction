@@ -22,7 +22,7 @@ import pandas as pd
 
 from pii_reduction import __version__
 from pii_reduction.config.fingerprint import config_fingerprint
-from pii_reduction.config.models import FailureMode, LanguageMode
+from pii_reduction.config.models import FailureMode
 from pii_reduction.config.resolved import ResolvedColumnPolicy, ResolvedDataset
 from pii_reduction.contracts.errors import PiiReductionError
 from pii_reduction.contracts.results import (
@@ -32,19 +32,17 @@ from pii_reduction.contracts.results import (
     RunMetadata,
 )
 from pii_reduction.entities.reconcile import ReconciliationPolicy
-from pii_reduction.language.base import (
-    ColumnLanguageResolver,
-    LanguageResolver,
-    StaticLanguageResolver,
-)
-from pii_reduction.language.errors import LanguageError
+from pii_reduction.language.base import LanguageResolver
+from pii_reduction.language.gate import ShortTextGate
+from pii_reduction.language.registry import build_resolver
 from pii_reduction.observability.logging import get_logger, safe_fields
 from pii_reduction.observability.metrics import RunMetricsAccumulator
 from pii_reduction.outputs.local import write_json
 from pii_reduction.outputs.registry import build_output
 from pii_reduction.parsers.registry import build_parser
 from pii_reduction.processing.errors import ProcessingError
-from pii_reduction.processing.field_processor import FieldProcessor
+from pii_reduction.processing.field_processor import FieldProcessor, ProviderChain
+from pii_reduction.providers.base import BaseProvider
 from pii_reduction.providers.registry import build_provider
 from pii_reduction.reducers.registry import build_reducer
 from pii_reduction.sources.base import SourceDataset
@@ -88,23 +86,63 @@ class Pipeline:
         self.run_id = run_id or uuid.uuid4().hex
         self.pipeline_version = pipeline_version
         self.config_hash = config_fingerprint(config)
+        # Providers and chains are shared across columns and language routes: two
+        # chains naming the same provider must not each load its models.
+        self._providers: dict[str, BaseProvider] = {}
+        self._chains: dict[str, ProviderChain] = {}
         self._processors = tuple(self._build_processor(policy) for policy in config.columns)
         self._failure_modes = {policy.column: policy.failure_mode for policy in config.columns}
 
     # -- construction ------------------------------------------------------------
 
-    def _build_processor(self, policy: ResolvedColumnPolicy) -> FieldProcessor:
-        providers = tuple(
-            build_provider(
-                self.config.providers[name].type,
-                dict(self.config.providers[name].options),
-                name=name,
-            )
-            for name in policy.providers
+    def _provider(self, name: str) -> BaseProvider:
+        """Build a provider instance once and share it across every chain using it.
+
+        Two chains naming the same provider must not each load its models.
+        """
+        provider = self._providers.get(name)
+        if provider is None:
+            settings = self.config.providers[name]
+            provider = build_provider(settings.type, dict(settings.options), name=name)
+            self._providers[name] = provider
+        return provider
+
+    def _chain(self, chain_name: str, policy: ResolvedColumnPolicy) -> ProviderChain:
+        chain = self._chains.get(chain_name)
+        if chain is not None:
+            return chain
+        settings = self.config.chains[chain_name]
+        providers = tuple(self._provider(name) for name in settings.providers)
+        chain = ProviderChain(
+            name=chain_name,
+            providers=providers,
+            policy=ReconciliationPolicy(
+                priorities={
+                    label: entity.priority for label, entity in self.config.entities.items()
+                },
+                provider_order=settings.providers,
+                thresholds={
+                    name: dict(self.config.providers[name].thresholds)
+                    for name in settings.providers
+                },
+                entities=frozenset(policy.entities),
+                name=settings.overlap_policy,
+            ),
+            entity_scopes={
+                name: frozenset(self.config.providers[name].entities)
+                for name in settings.providers
+                if self.config.providers[name].entities
+            },
+            language_scopes={
+                name: frozenset(languages)
+                for name in settings.providers
+                if (languages := self.config.providers[name].languages)
+            },
         )
-        thresholds = {
-            name: dict(self.config.providers[name].thresholds) for name in policy.providers
-        }
+        self._chains[chain_name] = chain
+        return chain
+
+    def _build_processor(self, policy: ResolvedColumnPolicy) -> FieldProcessor:
         reducer_settings = self.config.reducers.get(policy.reducer)
         reducer = build_reducer(
             policy.reducer,
@@ -114,23 +152,24 @@ class Pipeline:
             },
             scope_value=self.config.dataset.name,
         )
+        # Per-language routes from the `languages:` block; unrouted languages take the
+        # column's own chain, and unknown/unsupported ones the safe fallback.
+        routing = {
+            code: self._chain(route.chain, policy) for code, route in self.config.languages.items()
+        }
+        fallback_name = policy.language.fallback_chain
+        fallback = self._chain(fallback_name, policy) if fallback_name else None
+
         return FieldProcessor(
             column=policy.column,
             output_column=policy.output_column,
             parser=build_parser(policy.parser, dict(policy.parser_options)),
             resolver=_build_language_resolver(policy),
-            providers=providers,
             reducer=reducer,
             entities=frozenset(policy.entities),
-            policy=ReconciliationPolicy(
-                priorities={
-                    label: entity.priority for label, entity in self.config.entities.items()
-                },
-                provider_order=policy.providers,
-                thresholds=thresholds,
-                entities=frozenset(policy.entities),
-                name=policy.overlap_policy,
-            ),
+            default_chain=self._chain(policy.provider_chain, policy),
+            routing=routing,
+            fallback_chain=fallback,
         )
 
     # -- execution ---------------------------------------------------------------
@@ -424,22 +463,18 @@ class Pipeline:
 
 def _build_language_resolver(policy: ResolvedColumnPolicy) -> LanguageResolver:
     settings = policy.language
-    if settings.mode is LanguageMode.STATIC:
-        return StaticLanguageResolver(
-            settings.static_language or "",
-            supported=settings.supported,
-            unknown_language=settings.unknown_language,
-        )
-    if settings.mode is LanguageMode.COLUMN:
-        return ColumnLanguageResolver(
-            settings.language_column or "",
-            supported=settings.supported,
-            unknown_language=settings.unknown_language,
-        )
-    raise LanguageError(
-        f"column {policy.column!r}: language mode 'detect' needs a detector; the lingua "
-        "adapter arrives in Increment C of docs/14_IMPLEMENTATION_PLAN.md. Use mode "
-        "'static' or 'column' until then"
+    return build_resolver(
+        settings.mode.value,
+        supported=settings.supported,
+        detector=settings.detector,
+        static_language=settings.static_language,
+        language_column=settings.language_column,
+        unknown_language=settings.unknown_language,
+        gate=ShortTextGate(
+            min_chars=settings.min_chars,
+            min_alpha_chars=settings.min_alpha_chars,
+            min_confidence=settings.min_confidence,
+        ),
     )
 
 

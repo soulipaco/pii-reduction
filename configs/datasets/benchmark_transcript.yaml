@@ -22,3 +22,10 @@ columns:
     parser_options:
       preserve_prefix: true
       fallback: preserve_line
+    # The benchmark uses the corpus's known language rather than detection. Using a
+    # detected language here would fold detection error into the PII numbers, and the
+    # two failure modes need to be attributable separately. Detection quality gets its
+    # own measurement at Increment E.
+    language:
+      mode: column
+      language_column: language

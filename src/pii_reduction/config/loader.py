@@ -442,6 +442,7 @@ def resolve_dataset(dataset: DatasetConfig, project: ProjectConfig) -> ResolvedD
         providers=dict(project.providers),
         chains=dict(project.chains),
         reducers=dict(project.reducers),
+        languages=dict(project.languages),
         observability=project.observability,
         validation=project.validation,
     )

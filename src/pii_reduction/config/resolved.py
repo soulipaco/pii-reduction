@@ -16,6 +16,7 @@ from pii_reduction.config.models import (
     DatasetIdentity,
     DestinationConfig,
     FailureMode,
+    LanguageRoute,
     LanguageSettings,
     ObservabilitySettings,
     ProjectIdentity,
@@ -65,6 +66,9 @@ class ResolvedDataset(ConfigModel):
     providers: dict[str, ProviderSettings]
     chains: dict[str, ChainSettings]
     reducers: dict[str, ReducerSettings]
+    #: Language code to provider chain (``languages.yaml``). A resolved language with
+    #: no entry here takes the column's own chain.
+    languages: dict[str, LanguageRoute] = Field(default_factory=dict)
     observability: ObservabilitySettings
     validation: ValidationSettings
 

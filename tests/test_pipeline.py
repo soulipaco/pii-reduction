@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from pii_reduction.config import load_resolved_dataset
+from pii_reduction.config import ConfigurationError, load_resolved_dataset
 from pii_reduction.config.resolved import ResolvedDataset
 from pii_reduction.contracts.results import ProcessingStatus
 from pii_reduction.processing import (
@@ -391,12 +391,12 @@ class TestRunFromConfiguration:
         assert loaded.row_count == 20
         assert build_pipeline(config).process(loaded).run.rows_read == 20
 
-    def test_detect_language_mode_names_the_increment_that_implements_it(
+    def test_an_unimplemented_detector_is_refused_with_what_is_available(
         self, tmp_path: Path
     ) -> None:
         project = PROJECT_YAML.replace("mode: column", "mode: detect").replace(
-            "detector: none", "detector: lingua"
+            "detector: none", "detector: fasttext"
         )
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(ConfigurationError) as exc_info:
             build_pipeline(make_config(tmp_path, project_yaml=project))
-        assert "Increment C" in str(exc_info.value)
+        assert "fasttext" in str(exc_info.value)

@@ -14,12 +14,21 @@ processing:
   failure_mode: preserve_original_and_record_error
 
 language:
-  # Detection with lingua arrives in Increment C; the corpus carries its language.
-  mode: column
-  detector: none
-  language_column: language
+  # Detection is the product default: real datasets do not come with a language
+  # column. Requires the `language` extra (pip install 'pii-reduction[language]').
+  mode: detect
+  detector: lingua
   supported: [en, de, el]
   unknown_language: und
+  # The short-text gate of ADR-0012. Confidence alone cannot gate short text: a bare
+  # email address scores 'en' at 0.95, so the gate is structural. Alphabetic
+  # characters are counted after stripping emails, URLs and digits.
+  min_chars: 20
+  min_alpha_chars: 12
+  min_confidence: 0.70
+  # Unknown or unsupported language runs the deterministic chain only. Running an
+  # English NER model over text of unknown language manufactures false positives.
+  fallback_chain: deterministic_only
 
 observability:
   log_level: INFO

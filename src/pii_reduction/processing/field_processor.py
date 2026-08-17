@@ -1,6 +1,7 @@
 """One configured column of one row, end to end.
 
-parse → resolve language → detect → reconcile → reduce → reconstruct.
+parse → resolve language → route to a provider chain → detect → reconcile → reduce →
+reconstruct.
 
 Each stage is an injected collaborator, so this module contains sequencing and
 failure handling and no domain logic of its own. That is deliberate: it is the place
@@ -23,7 +24,35 @@ from pii_reduction.parsers.base import BaseParser
 from pii_reduction.providers.base import BaseProvider
 from pii_reduction.reducers.base import BaseReducer
 
-__all__ = ["FieldOutcome", "FieldProcessor"]
+__all__ = ["FieldOutcome", "FieldProcessor", "ProviderChain"]
+
+
+@dataclass(frozen=True)
+class ProviderChain:
+    """A named set of providers plus the policy for reconciling their output.
+
+    ``entity_scopes`` and ``language_scopes`` carry the per-provider narrowing from
+    configuration (``docs/06_CONFIGURATION_CONTRACT.md``, provider configuration).
+    They are enforced here rather than trusted to each adapter: a provider declared as
+    ``entities: [PERSON]`` that still returns EMAIL is exactly the silent scope drift
+    ``AGENTS.md`` rule 7 forbids, in the direction of doing more than configured.
+    """
+
+    name: str
+    providers: tuple[BaseProvider, ...]
+    policy: ReconciliationPolicy
+    #: Provider name to its configured entity scope. Absent means "no narrowing".
+    entity_scopes: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    #: Provider name to its configured languages. Absent means "any language".
+    language_scopes: Mapping[str, frozenset[str]] = field(default_factory=dict)
+
+    def entities_for(self, provider_name: str, requested: frozenset[str]) -> frozenset[str]:
+        configured = self.entity_scopes.get(provider_name)
+        return requested if configured is None else requested & configured
+
+    def serves_language(self, provider_name: str, language: str) -> bool:
+        configured = self.language_scopes.get(provider_name)
+        return configured is None or language in configured
 
 
 @dataclass(frozen=True)
@@ -45,10 +74,38 @@ class FieldProcessor:
     output_column: str
     parser: BaseParser
     resolver: LanguageResolver
-    providers: Sequence[BaseProvider]
     reducer: BaseReducer
     entities: frozenset[str]
-    policy: ReconciliationPolicy
+    #: Used when the resolved language has no explicit route.
+    default_chain: ProviderChain
+    #: Language code to chain, from the ``languages:`` configuration block.
+    routing: Mapping[str, ProviderChain] = field(default_factory=dict)
+    #: Used when the language is unknown or unsupported. Defaults to the default
+    #: chain when configuration names no safe fallback.
+    fallback_chain: ProviderChain | None = None
+
+    @property
+    def providers(self) -> tuple[BaseProvider, ...]:
+        """Every provider this column can use, for metrics collection."""
+        chains = [self.default_chain, *self.routing.values()]
+        if self.fallback_chain is not None:
+            chains.append(self.fallback_chain)
+        seen: dict[int, BaseProvider] = {}
+        for chain in chains:
+            for provider in chain.providers:
+                seen.setdefault(id(provider), provider)
+        return tuple(seen.values())
+
+    def chain_for(self, language: LanguageResult) -> ProviderChain:
+        """Route to a provider chain (``docs/04_PII_ENGINE.md``, provider routing).
+
+        An unknown or unsupported language takes the safe fallback chain rather than
+        a guess: running an English NER model over text of unknown language is how
+        false positives are manufactured.
+        """
+        if not language.supported:
+            return self.fallback_chain or self.default_chain
+        return self.routing.get(language.language, self.default_chain)
 
     def process(
         self,
@@ -64,7 +121,14 @@ class FieldProcessor:
         text = str(value)
 
         parsed = self.parser.parse(text)
-        language = self.resolver.resolve(text, row=row)
+
+        # Language is resolved from eligible text only: transcript timestamps and
+        # speaker names are structure, and feeding them to a detector biases it
+        # toward whatever language the metadata happens to look like
+        # (``AGENTS.md``, language detector).
+        eligible = "\n".join(segment.text for segment in parsed.processable_segments)
+        language = self.resolver.resolve(eligible or text, row=row)
+        chain = self.chain_for(language)
 
         transformed: dict[str, str] = {}
         audit: list[dict[str, Any]] = []
@@ -77,17 +141,16 @@ class FieldProcessor:
             if not segment.text:
                 continue
             matches = []
-            for provider in self.providers:
+            for provider in chain.providers:
+                scope = chain.entities_for(provider.name, self.entities)
+                if not scope or not chain.serves_language(provider.name, language.language):
+                    continue
                 matches.extend(
-                    provider.detect(
-                        segment.text,
-                        language=language.language,
-                        entities=self.entities,
-                    )
+                    provider.detect(segment.text, language=language.language, entities=scope)
                 )
             detected += len(matches)
 
-            resolution = reconcile(matches, policy=self.policy)
+            resolution = reconcile(matches, policy=chain.policy)
             for reason, count in resolution.rejection_counts().items():
                 rejections[reason] = rejections.get(reason, 0) + count
             if not resolution.entities:
@@ -120,7 +183,7 @@ class FieldProcessor:
             output_column=self.output_column,
             output_text=output_text,
             parser=self.parser.name,
-            provider_chain=tuple(provider.name for provider in self.providers),
+            provider_chain=(chain.name, *(provider.name for provider in chain.providers)),
             language_summary={language.language: 1},
             entity_counts=entity_counts,
             entities_detected=detected,
@@ -141,7 +204,7 @@ class FieldProcessor:
             output_column=self.output_column,
             output_text=output_text,
             parser=self.parser.name,
-            provider_chain=tuple(provider.name for provider in self.providers),
+            provider_chain=(self.default_chain.name,),
             status=ProcessingStatus.SKIPPED,
         )
 
@@ -152,7 +215,7 @@ class FieldProcessor:
             output_column=self.output_column,
             output_text=None,
             parser=self.parser.name,
-            provider_chain=tuple(provider.name for provider in self.providers),
+            provider_chain=(self.default_chain.name,),
             status=ProcessingStatus.FAILED,
             error_category=error_category,
             error=error,
