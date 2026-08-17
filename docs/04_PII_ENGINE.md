@@ -213,6 +213,12 @@ but this should be configurable and validated.
 
 ### Deterministic resolution algorithm
 
+> Amended by ADR-0005: step 4 orders by priority, **provider priority, confidence**,
+> span length. Provider order comes before confidence because provider scores are
+> recognizer constants rather than calibrated probabilities, so comparing them across
+> providers is false precision. Confidence still decides between candidates from the
+> same provider. See `src/pii_reduction/entities/reconcile.py::_sort_key`.
+
 1. filter invalid spans,
 2. normalize entity labels,
 3. apply entity-specific minimum confidence,

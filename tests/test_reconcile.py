@@ -76,6 +76,44 @@ class TestOverlapResolution:
         )
         assert result.entities[0].selected_provider == "first"
 
+    def test_chain_order_outranks_a_higher_score_from_a_later_provider(self) -> None:
+        # ADR-0005: provider scores are recognizer constants, not calibrated
+        # probabilities, so 0.95 from one model is not evidence against 0.85 from
+        # another. Chain order is the operator's statement of which to trust, and it
+        # must not stop mattering the day a provider with higher constants is added.
+        policy = ReconciliationPolicy(provider_order=("trusted", "other"))
+        result = reconcile(
+            [
+                match(PERSON, 0, 11, provider="other", score=0.95),
+                match(PERSON, 0, 5, provider="trusted", score=0.85),
+            ],
+            policy=policy,
+        )
+        assert result.entities[0].selected_provider == "trusted"
+        assert (result.entities[0].start, result.entities[0].end) == (0, 5)
+
+    def test_score_still_decides_within_one_provider(self) -> None:
+        policy = ReconciliationPolicy(provider_order=("only", "other"))
+        result = reconcile(
+            [
+                match(PERSON, 0, 10, provider="only", score=0.6),
+                match(PERSON, 2, 12, provider="only", score=0.95),
+            ],
+            policy=policy,
+        )
+        assert (result.entities[0].start, result.entities[0].end) == (2, 12)
+
+    def test_an_unlisted_provider_ranks_after_every_configured_one(self) -> None:
+        policy = ReconciliationPolicy(provider_order=("configured",))
+        result = reconcile(
+            [
+                match(PERSON, 0, 8, provider="unlisted", score=1.0),
+                match(PERSON, 0, 5, provider="configured", score=0.3),
+            ],
+            policy=policy,
+        )
+        assert result.entities[0].selected_provider == "configured"
+
     def test_adjacent_spans_both_survive(self) -> None:
         result = reconcile([match(PERSON, 0, 5), match(PHONE, 5, 12)])
         assert [(e.start, e.end) for e in result.entities] == [(0, 5), (5, 12)]

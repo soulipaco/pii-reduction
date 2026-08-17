@@ -6,10 +6,15 @@ text from unresolved candidates would corrupt it, so every candidate passes thro
 here first.
 
 The algorithm is the documented seven steps: drop invalid spans, apply per-provider
-per-entity minimum scores, order by entity priority then score then span length then
-provider order, accept greedily while non-overlapping, and record what was rejected
-and why. Scores are never compared *across* providers (ADR-0005) — entity priority
-and provider order decide those cases, and score only breaks ties within one provider.
+per-entity minimum scores, order the survivors, accept greedily while non-overlapping,
+and record what was rejected and why.
+
+The ordering is entity priority, then **chain order**, then score, then span length.
+Scores are never compared across providers (ADR-0005): they are recognizer constants
+rather than calibrated probabilities, so score only breaks ties within one provider.
+This is the single place where `docs/04_PII_ENGINE.md` step 4's literal wording
+("priority, confidence, span length, provider priority") is not followed; see
+:func:`_sort_key` for why, and the amendment note in that document.
 """
 
 from __future__ import annotations
@@ -144,13 +149,26 @@ def reconcile(
     return ReconciliationResult(entities=resolved, rejected=tuple(rejected))
 
 
-def _sort_key(match: EntityMatch, policy: ReconciliationPolicy) -> tuple[int, float, int, int, int]:
-    """Highest entity priority first, then score, then longer span, then chain order."""
+def _sort_key(match: EntityMatch, policy: ReconciliationPolicy) -> tuple[int, int, float, int, int]:
+    """Entity priority, then chain order, then score, then longer span, then position.
+
+    Chain order sits ahead of score deliberately, and this is the one place the
+    ordering of `docs/04_PII_ENGINE.md` step 4 is not followed literally (see the note
+    there and ADR-0005). Provider scores are recognizer constants, not calibrated
+    probabilities: every spaCy-backed Presidio hit is exactly 0.85 whether it is right
+    or wrong. Ranking a provider's 0.90 above another's 0.85 would therefore be false
+    precision dressed as evidence, and it would silently make chain order stop
+    mattering the moment a provider with higher constants is added.
+
+    Chain order is the operator's explicit statement of which provider to trust.
+    Score still decides between candidates from the *same* provider, where the numbers
+    are comparable because they come from the same recognizers.
+    """
     return (
         -policy.priority_of(match.entity_type),
+        policy.provider_rank(match.provider),
         -(match.score if match.score is not None else -1.0),
         -(match.end - match.start),
-        policy.provider_rank(match.provider),
         match.start,
     )
 

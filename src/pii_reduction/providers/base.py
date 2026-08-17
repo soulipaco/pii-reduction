@@ -14,6 +14,7 @@ from typing import Protocol, runtime_checkable
 
 from pii_reduction.contracts.entities import EntityMatch
 from pii_reduction.entities.errors import UnknownEntityLabelError
+from pii_reduction.entities.mapping import DropCounter
 from pii_reduction.entities.taxonomy import require_known
 from pii_reduction.providers.errors import ProviderError
 
@@ -53,6 +54,24 @@ class BaseProvider(ABC):
 
     #: Instance name used in ``EntityMatch.provider`` and in run metrics.
     name: str = ""
+
+    @property
+    def drop_counter(self) -> DropCounter:
+        """Native labels this provider discarded, by reason.
+
+        Lives on the base class so the pipeline can collect drops from every provider
+        without knowing which ones map labels at all — a provider with no mapping
+        table simply reports an empty counter. ADR-0004 requires these counts to reach
+        observability output; a silent drop is how a provider upgrade loses coverage
+        without anyone noticing.
+
+        Created lazily so subclasses are not obliged to call ``super().__init__()``.
+        """
+        counter: DropCounter | None = getattr(self, "_drop_counter", None)
+        if counter is None:
+            counter = DropCounter()
+            self._drop_counter = counter
+        return counter
 
     @abstractmethod
     def supported_entities(self) -> frozenset[str]:

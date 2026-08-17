@@ -44,7 +44,7 @@ from __future__ import annotations
 from typing import Any
 
 from pii_reduction.contracts.entities import EntityMatch
-from pii_reduction.entities.mapping import DropCounter, LabelMapping
+from pii_reduction.entities.mapping import LabelMapping
 from pii_reduction.entities.taxonomy import EMAIL, PERSON, PHONE
 from pii_reduction.providers.base import BaseProvider
 from pii_reduction.providers.errors import ProviderError, ProviderNotAvailableError
@@ -169,7 +169,6 @@ class PresidioProvider(BaseProvider):
         self._mapping = LabelMapping(
             provider=self.name, table=NATIVE_LABELS, dropped=DROPPED_LABELS
         )
-        self.drop_counter = DropCounter()
 
     @property
     def models(self) -> dict[str, str]:

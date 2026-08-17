@@ -196,6 +196,28 @@ class TestRunMetrics:
             assert value not in rendered
 
 
+class TestDroppedLabels:
+    """ADR-0004: a provider dropping native labels must show up in run metrics."""
+
+    def test_dropped_labels_reach_the_run_record(
+        self, pipeline: Pipeline, dataset: SourceDataset
+    ) -> None:
+        provider = pipeline._processors[0].providers[0]
+        provider.drop_counter.record_declared(provider.name, "URL")
+        provider.drop_counter.record_unmapped(provider.name, "NRP")
+
+        run = pipeline.process(dataset).run
+        assert run.dropped_labels == {
+            f"{provider.name}:URL": 1,
+            f"{provider.name}:NRP": 1,
+        }
+
+    def test_a_provider_that_drops_nothing_reports_nothing(
+        self, pipeline: Pipeline, dataset: SourceDataset
+    ) -> None:
+        assert pipeline.process(dataset).run.dropped_labels == {}
+
+
 class TestAudit:
     def test_audit_rows_carry_spans_but_no_text(
         self, pipeline: Pipeline, dataset: SourceDataset

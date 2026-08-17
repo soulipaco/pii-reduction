@@ -244,6 +244,13 @@ class Pipeline:
                 )
             )
 
+        # ADR-0004: dropped native labels must reach observability output. A provider
+        # upgrade that starts emitting an unmapped label loses coverage silently
+        # otherwise, and `dropped_labels: {}` would read as "nothing was dropped".
+        for processor in self._processors:
+            for provider in processor.providers:
+                metrics.dropped_labels.update(provider.drop_counter.as_dict())
+
         for column, values in outputs.items():
             frame[column] = values
         frame[RUN_ID_COLUMN] = self.run_id
