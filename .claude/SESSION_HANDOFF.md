@@ -1268,9 +1268,12 @@ integration**, `ruff` and `mypy src tests` clean in the dev environment and in a
 throwaway core-only one. The committed corpus still rebuilds byte-identically. Three
 demo packs build from two public sources and all 49 of their gates pass on both chains.
 
-Increment D is pushed and **CI is green on both of its pushes**. Q4's fifteen tests are
-`integration`-marked, so they run in the nightly job and **never on a push** — "CI
-green" has never meant they passed there, and cannot.
+Everything is pushed and **CI is green on all three pushes** (runs 32155683694 and
+32162154845). Q4's fifteen diagnosis tests are `integration`-marked and never run on a
+push; they were verified cross-runner by a dispatched Integration run (32162320370):
+87 integration tests passed and both gate sets held, 9/9 and 13/13. **The Greek
+mechanisms therefore reproduce on GitHub's runner** — the diagnosis is
+machine-independent, not an artifact of this laptop.
 
 **The queue is empty.** Next is `docs/11_ROADMAP.md` order: **Increment E** — benchmark
 hardening, split discipline (ADR-0011's calibrate-then-read-test protocol, which the
