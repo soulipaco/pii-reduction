@@ -27,4 +27,7 @@ from pii_reduction.synthetic.registry import load_registry
 
 if __name__ == "__main__":
     keys = sys.argv[1:] or sorted(load_registry(DEFAULT_REGISTRY))
+    # One `main` call per dataset so each failure is reported with its own message and
+    # exit code; the retrieval itself lives in `synthetic.packs.fetch_dataset`, which
+    # both this script and the CLI go through.
     sys.exit(max(main(["fetch-dataset", key]) for key in keys))

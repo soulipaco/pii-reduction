@@ -64,6 +64,9 @@ class RemoteFile:
     path: str
     sha256: str
     size_bytes: int
+    #: What this file is *for*, so a reader can select it without parsing the path —
+    #: how the Greek half of MASSIVE is told from the German one.
+    role: str = ""
 
     def __post_init__(self) -> None:
         if not self.url.startswith("https://"):

@@ -21,10 +21,9 @@ import pytest
 import yaml
 
 from pii_reduction.entities.taxonomy import EMAIL, PERSON, PHONE
-from pii_reduction.parsers.transcript import TranscriptParser
 from pii_reduction.synthetic.corpus import load_corpus, write_corpus
 from pii_reduction.synthetic.errors import CorpusError, DatasetDownloadError
-from pii_reduction.synthetic.packs import PACKS, build_pack, pack_spec
+from pii_reduction.synthetic.packs import PACKS, _parser_for, build_pack, pack_spec
 from pii_reduction.synthetic.public import read_bitext, read_massive, substitute_order_numbers
 from pii_reduction.synthetic.values import PoolValueProvider
 
@@ -175,7 +174,7 @@ class TestTheSourceTextIsRespected:
 
     def test_transcript_prefixes_survive_injection(self, sources: tuple[Path, Path]) -> None:
         corpus = build("support_conversations", sources)
-        parser = TranscriptParser({"preserve_prefix": True, "fallback": "preserve_line"})
+        parser = _parser_for("transcript")
         for document in corpus.documents:
             prefixes = [
                 segment.text
@@ -189,7 +188,7 @@ class TestTheSourceTextIsRespected:
         # An entity hidden in a speaker prefix is guaranteed leakage no pipeline can
         # avoid, and the pack would report a detection failure that is a generator bug.
         corpus = build("support_conversations", sources)
-        parser = TranscriptParser({"preserve_prefix": True, "fallback": "preserve_line"})
+        parser = _parser_for("transcript")
         texts = corpus.texts()
         for entity in corpus.entities:
             regions = [
@@ -243,9 +242,23 @@ class TestProvenanceTravelsWithThePack:
         assert isinstance(meta["source_files"], list) and meta["source_files"]
 
     def test_the_transformation_is_recorded(self, sources: tuple[Path, Path]) -> None:
-        # docs/02_PUBLIC_DATA_STRATEGY.md requires it per dataset.
-        assert "Order Number" in str(build("support_tickets", sources).meta["transformation"])
-        assert "unedited" in str(build("multilingual_utterances", sources).meta["transformation"])
+        # docs/02_PUBLIC_DATA_STRATEGY.md requires it per dataset, and selection is the
+        # transformation that most affects what was measured — which rows, out of how
+        # many, chosen how.
+        tickets = str(build("support_tickets", sources).meta["transformation"])
+        assert "Order Number" in tickets
+        assert "seeded from the pack seed" in tickets
+        utterances = str(build("multilingual_utterances", sources).meta["transformation"])
+        assert "no edit" in utterances
+        assert "seeded from the pack seed" in utterances
+
+    def test_an_attribution_obligation_travels_into_the_pack(
+        self, sources: tuple[Path, Path]
+    ) -> None:
+        # CC BY requires attribution and an indication of changes. The pack is what
+        # someone would publish, so the obligation has to reach it rather than staying
+        # in a registry comment.
+        assert "attribution_required" in build("support_tickets", sources).meta
 
 
 class TestRefusals:
@@ -341,6 +354,32 @@ class TestTheReaders:
 
 
 class TestTheShippedPackSpecs:
+    def test_each_pack_injects_with_the_parser_the_benchmark_will_use(self) -> None:
+        """The duplication `_parser_for` documents, made mechanical.
+
+        Injection restricts insertion points to the parser's processable regions. If the
+        pack's parser and the dataset config's parser drift — ADR-0016 added a
+        `split_lines` option to `plain_text` that could one day be turned on — entities
+        land in regions the pipeline segments differently, and the pack reports a recall
+        regression that is really a generator bug.
+        """
+        from pii_reduction.benchmark import DEFAULT_DATASETS
+        from pii_reduction.config.loader import load_resolved_dataset
+        from pii_reduction.parsers.registry import build_parser
+
+        for document_type, dataset in DEFAULT_DATASETS.items():
+            column = load_resolved_dataset(Path("configs"), dataset).columns[0]
+            configured = build_parser(column.parser, dict(column.parser_options))
+            injected = _parser_for(document_type)
+            assert type(injected) is type(configured)
+            # Compared by what they do, not by their attributes: segmentation is the
+            # thing that has to agree, and a sample carrying both a speaker prefix and a
+            # sentence break exercises every option either parser has today.
+            sample = "Customer: my order is late. please help\nAgent: certainly. checking now"
+            assert injected.parse(sample).segments == configured.parse(sample).segments, (
+                f"{document_type}: injection and the benchmark would segment differently"
+            )
+
     def test_every_pack_names_a_dataset_the_registry_knows(self) -> None:
         from pii_reduction.synthetic.registry import load_registry
 

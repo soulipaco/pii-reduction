@@ -12,6 +12,7 @@ synthetic pools (ADR-0014).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from itertools import pairwise
 
 import pytest
@@ -19,6 +20,7 @@ import pytest
 from pii_reduction.entities.taxonomy import ADDRESS, EMAIL, PERSON, PHONE
 from pii_reduction.parsers import TranscriptParser
 from pii_reduction.providers import DeterministicProvider
+from pii_reduction.synthetic.corpus import ProtectedToken
 from pii_reduction.synthetic.errors import CorpusError, GroundTruthError
 from pii_reduction.synthetic.injection import (
     InjectionPlan,
@@ -235,6 +237,79 @@ class TestInjectedValuesAreFindable:
             if entity.entity_type in {EMAIL, PHONE}
         }
         assert expected <= found
+
+
+class TestProtectedTokensTravelWithTheDocument:
+    """Spans the caller recorded against the base text, moved by the insertions.
+
+    A public pack substitutes identifiers into its base documents before injection, and
+    those are what the over-redaction metric — the only automated defence of AGENTS.md
+    rule 5 — is measured against. A drifted protected span reports damage the reducer
+    never did, or hides damage it did.
+
+    These are unit tests rather than pack tests on purpose: the pack fixture happens to
+    contain short order numbers, so none of the refusals below can fire through it.
+    """
+
+    BASE = "Order ORD-77001 is late. It has not arrived."
+    TOKEN = ProtectedToken(document_id="doc_0001", token="ORD-77001", kind="order", start=6, end=15)
+
+    def run(self, protected: tuple[ProtectedToken, ...], text: str = BASE):  # type: ignore[no-untyped-def]
+        return inject(
+            text,
+            (PERSON_PLAN, EMAIL_PLAN),
+            document_id="doc_0001",
+            language="en",
+            document_type="plain",
+            difficulty_tier=1,
+            protected=protected,
+        )
+
+    def test_a_protected_span_still_slices_back_after_insertions(self) -> None:
+        result = self.run((self.TOKEN,))
+        token = result.protected[0]
+        assert result.document.text[token.start : token.end] == token.token
+        assert result.document.text.count("ORD-77001") == 1
+
+    def test_the_token_moves_by_exactly_what_was_inserted_before_it(self) -> None:
+        # The arithmetic itself. The shift must equal the growth of the text ahead of
+        # the token, not merely be in the right direction.
+        result = self.run((self.TOKEN,))
+        moved = result.protected[0]
+        inserted_before = result.document.text.index("ORD-77001") - self.BASE.index("ORD-77001")
+        assert moved.start == self.TOKEN.start + inserted_before
+        assert moved.end == self.TOKEN.end + inserted_before
+
+    def test_a_token_from_another_document_is_refused(self) -> None:
+        # Its offsets were measured against a text this call never sees, so shifting
+        # them would produce a confidently wrong span rather than an error.
+        stray = replace(self.TOKEN, document_id="doc_0002")
+        with pytest.raises(CorpusError, match="another document"):
+            self.run((stray,))
+
+    def test_a_token_whose_offsets_are_already_wrong_is_refused(self) -> None:
+        with pytest.raises(GroundTruthError, match="protected span"):
+            self.run((replace(self.TOKEN, start=0, end=9),))
+
+    def test_the_refusal_names_offsets_and_not_the_token(self) -> None:
+        # Same rule as the entity path: the message must stay privacy-safe if this is
+        # ever pointed at text that is not synthetic (AGENTS.md rule 8).
+        with pytest.raises(GroundTruthError) as raised:
+            self.run((replace(self.TOKEN, start=0, end=9),))
+        assert "ORD-77001" not in str(raised.value)
+
+    def test_nothing_is_inserted_inside_a_protected_token(self) -> None:
+        """An identifier split by an inserted phrase is no longer that identifier.
+
+        Today's order numbers contain no sentence boundary, so this is constructed: a
+        token that spans one. Without the guard the insertion lands mid-token, the span
+        stops slicing back, and the build aborts instead of producing a pack.
+        """
+        text = "Reference A. B ends here. Nothing else."
+        token = ProtectedToken(document_id="doc_0001", token="A. B", kind="order", start=10, end=14)
+        result = self.run((token,), text=text)
+        kept = result.protected[0]
+        assert result.document.text[kept.start : kept.end] == kept.token
 
 
 class TestPlanValidation:

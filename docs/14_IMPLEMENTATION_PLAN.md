@@ -84,11 +84,18 @@ src/pii_reduction/
 ├── evaluation/       # strict/relaxed span matching, P/R/F1, leakage, over-redaction,
 │                     # manifest-driven ground truth loading. Never imported by
 │                     # processing/.
-└── observability/    # run metrics accumulation, privacy-safe logging helpers.
+├── observability/    # run metrics accumulation, privacy-safe logging helpers.
+└── synthetic/        # build-time: corpus generation, injection, the public-dataset
+                      # registry, retrieval and the demo pack builder. Added in A6 and
+                      # extended in D; §3 originally put this under `demo/`, which
+                      # AGENTS.md rule 3 correctly overrode — `demo/` holds runnable
+                      # front doors only. Depends on the interface layers; nothing on
+                      # the runtime path depends on it (docs/01_ARCHITECTURE.md).
 ```
 
 Repo level, created only when their first content lands: `configs/` (YAML shipped
-with the demo), `tests/`, `demo/` (corpus build + injection), later `notebooks/`,
+with the demo), `tests/`, `demo/` (runnable front doors for corpus and pack builds; the logic
+lives in `synthetic/`), later `notebooks/`,
 `resources/`.
 
 Dependency direction (enforced by architecture-guardian review at each increment):
@@ -257,7 +264,7 @@ hold.
 - Dataset registry (`demo/registry.yaml`) with licence/provenance per
   `docs/02_PUBLIC_DATA_STRATEGY.md`; download scripts (no raw data committed):
   Bitext support tickets (CDLA-Sharing-1.0; template placeholders become injection
-  points), MultiWOZ 2.2 (MIT; rendered into transcript format), MASSIVE de/el
+  points), MultiWOZ 2.2 (**rejected in session 6 — real PII in its published text, ADR-0018**; the transcript pack is rendered from Bitext instead), MASSIVE de/el
   (CC BY 4.0; multilingual short text). Injection at scale reusing the A6 engine.
 - **Exit:** each demo pack reproducible from documented commands; provenance
   registry complete; injected ground truth validates against documents.
@@ -310,8 +317,11 @@ hold.
   `databricks` extra is already isolated; parity tests run on fixtures, not on
   shared interpreter state).
 - If Bitext's CDLA-Sharing-1.0 share-alike terms prove awkward for redistributing
-  *derived* injected corpora, fall back to MultiWOZ (MIT) for the ticket-style demo
-  too (registry keeps both; decision point at Increment D).
+  *derived* injected corpora — **the MultiWOZ (MIT) fallback this line proposed no
+  longer exists.** Session 6 rejected MultiWOZ for carrying real PII (ADR-0018), and
+  Bitext now renders both English packs. Since no pack is committed, the obligation
+  travels no further than the machine that built one; publishing a pack would need a
+  new permissively-licensed source.
 - Greek NER quality via `xx_ent_wiki_sm` may be too weak to present honestly; the
   benchmark will show it, and the honest fallback is reporting Greek as
   deterministic-entities-only until Phase 7 adds a multilingual transformer.
@@ -647,6 +657,11 @@ MultiWOZ's rejection removed (ADR-0018).
 - Greek PERSON is licence-bound to `xx_ent_wiki_sm` until Phase 7 (ADR-0007) — but see
   Q4: the public-dataset pack scores it far higher than the synthetic corpus does, so
   part of that gap may not be the model.
+- **Licence obligations are recorded but not emitted.** MASSIVE is CC BY 4.0 and Bitext
+  is share-alike; both facts reach a pack's `meta.json` (`license`, `share_alike`,
+  `attribution_required`, `source_url`, `transformation`), but no NOTICE file is
+  written. Nothing is published today, so nothing is owed yet — this becomes real the
+  moment a pack is distributed.
 - ADDRESS stays in the taxonomy, undetected, until a capable provider exists (ADR-0002).
 - Pseudonymization collision detection is per process, not global (ADR-0013 §4).
 - Language detection is per field, not per segment; code-switching would need the

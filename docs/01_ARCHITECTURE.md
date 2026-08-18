@@ -391,6 +391,17 @@ contracts
 processing/orchestrator depends on those interfaces.
 ```
 
+`synthetic/` sits **beside** `processing/`, not under it: it is a build-time package
+that generates the corpora and demo packs everything else is measured on. It may depend
+on the interface layers (it uses `parsers/` so that injection respects the same
+segmentation the pipeline will apply, and `entities/` for the taxonomy), and **nothing
+on the runtime path may depend on it** — only entry points (`cli.py`, `benchmark.py`)
+import it. It is also the one package that opens a network socket, in
+`synthetic/fetch.py`, which retrieves public datasets at build time (ADR-0017). That is
+deliberately not a source adapter: `sources/` is on the runtime path and returns
+`SourceDataset`, while `fetch()` returns a file path and is never reachable from
+`pipeline.process`.
+
 ## Local and Databricks parity
 
 The local runner and Databricks runner should both construct the same processing pipeline.

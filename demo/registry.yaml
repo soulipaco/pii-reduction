@@ -13,6 +13,11 @@
 # but `false`, the base text may not be published in a pack, only measured locally —
 # and synthetic PII is injected regardless, because ground-truth spans are knowable
 # only for entities we placed ourselves.
+#
+# **A `reason:` under `rejected:` must never quote a matched value.** It is printed to
+# stderr when someone tries to build from a rejected source, so a reason that quoted the
+# real phone number it found would publish that number every time the refusal fired.
+# State counts, file names and where the finding came from — as the two below do.
 
 version: 1
 
@@ -24,9 +29,11 @@ datasets:
     license: CDLA-Sharing-1.0
     license_url: https://cdla.dev/sharing-1-0/
     redistribution_allowed: true
-    # Share-alike: a derived pack carries the same licence. ADR-0010 flagged this as
-    # the decision point — if that proves awkward for redistributing injected
-    # derivatives, MultiWOZ (MIT) covers the same document shape.
+    # Share-alike: a derived pack carries the same licence. ADR-0010 named MultiWOZ
+    # (MIT) as the escape route if that proved awkward. **There is no escape route** —
+    # MultiWOZ is under `rejected:` below for carrying real PII (ADR-0018), and this
+    # entry now renders both English packs. Since no pack is committed the obligation
+    # travels no further than the machine that built one.
     share_alike: true
     contains_real_pii: false
     # The corpus is generated from templates with placeholder slots, so the "PII" it
@@ -95,11 +102,21 @@ datasets:
     document_type: plain
     languages: [de, el]
     difficulty_tier: 2
+    # CC BY 4.0 requires attribution and an indication that changes were made. A pack
+    # built from this carries that obligation; `meta.json` records source_url, licence,
+    # repository, revision and the transformation, which is what an attribution notice
+    # would be written from. No pack is published today, so nothing is emitted yet —
+    # recorded here rather than left implicit (plan §8, known deferrals).
+    attribution_required: true
     notes: >
       Short multilingual utterances. Supplies the German and Greek slices, which the
       synthetic corpus can only cover with templates the project wrote itself. Short
       text also exercises the ADR-0012 language gate on real input rather than on
       strings chosen to test it.
+
+      Transformation: the de-DE and el-GR *validation* files only, one utterance per
+      document, taken as written with no substitution and no edit; documents selected
+      by a seeded shuffle rather than from the head of the file.
 
 # Rejected, recorded so the decision is not re-litigated (ADR-0010, session 2):
 #

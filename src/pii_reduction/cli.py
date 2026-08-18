@@ -23,15 +23,19 @@ from pii_reduction.evaluation.gates import (
 )
 from pii_reduction.evaluation.report import render_markdown
 from pii_reduction.synthetic.corpus import build_corpus, write_corpus
-from pii_reduction.synthetic.fetch import DEFAULT_CACHE_DIR, fetch
-from pii_reduction.synthetic.packs import PACKS, build_pack, pack_spec
-from pii_reduction.synthetic.registry import require_publishable
+from pii_reduction.synthetic.fetch import DEFAULT_CACHE_DIR
+from pii_reduction.synthetic.packs import (
+    DEFAULT_REGISTRY,
+    PACKS,
+    build_pack,
+    fetch_dataset,
+    pack_spec,
+)
 
 __all__ = ["main"]
 
 DEFAULT_CORPUS_DIR = Path("tests/fixtures/corpus")
 DEFAULT_CONFIGS_DIR = Path("configs")
-DEFAULT_REGISTRY = Path("demo/registry.yaml")
 DEFAULT_PACK_DIR = Path("demo/packs")
 #: These two define the committed corpus. `configs/benchmark_gates.yaml` records them
 #: as the provenance of every gate value, and a test asserts the two agree — regenerate
@@ -177,12 +181,13 @@ def _fetch_dataset(args: argparse.Namespace) -> int:
     several packs, or one behind a proxy, "did the download work" and "did the build
     work" are different questions and should be answerable separately.
     """
-    entry = require_publishable(args.dataset, path=args.registry)
+    entry, fetched = fetch_dataset(args.dataset, registry_path=args.registry, cache_dir=args.cache)
     retrieval = entry.require_retrieval()
     print(f"{entry.name} ({entry.license}) — {retrieval.repository}@{retrieval.revision[:12]}")
-    for role, remote in zip(retrieval.roles, retrieval.files, strict=True):
-        path = fetch(remote, cache_dir=args.cache)
-        print(f"  {role}: {path} ({remote.size_bytes} bytes, sha256 verified)")
+    for role, path in fetched:
+        print(f"  {role}: {path} (sha256 verified)")
+    if entry.attribution_required:
+        print(f"  note: {entry.license} requires attribution and an indication of changes")
     if entry.share_alike:
         print(
             f"  note: {entry.license} is share-alike — anything built from this carries "

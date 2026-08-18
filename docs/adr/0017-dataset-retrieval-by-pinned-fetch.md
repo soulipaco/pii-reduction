@@ -91,6 +91,20 @@ Reasons, in the order they decided it:
   than by a workflow. The synthetic gates in `configs/benchmark_gates.yaml` are
   unaffected and remain the CI regression floor.
 
+- **The fetcher lives in `synthetic/`, not `sources/`, and that is a deliberate
+  placement.** `sources/` is the runtime path: a `SourceAdapter` returns a
+  `SourceDataset` and is reached from `pipeline.process`. `fetch()` returns a file path,
+  runs at corpus *construction* time, and is never reachable from the pipeline. Putting
+  a networked build-time tool into `sources/` would place it on the production
+  processing path, which is the more expensive mistake. `docs/01_ARCHITECTURE.md` now
+  records `synthetic/` as a build-time package for the same reason.
+- **`registry.py` depends on `fetch.RemoteFile`**, so the licence record and the
+  download instructions are one record and cannot drift. The cost is that a *malformed
+  registry entry* is detected by `RemoteFile`'s validation, which raises a
+  download-flavoured error; `registry.py` catches it and re-raises with the registry
+  file and dataset key, so the fault is not misattributed to a transfer that never
+  started.
+
 ## Alternatives rejected
 
 - **A `demo` extra with `datasets`.** Rejected on 1–3 above. It would also make the

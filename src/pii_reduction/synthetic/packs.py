@@ -50,6 +50,7 @@ __all__ = [
     "PACK_VERSION",
     "PackSpec",
     "build_pack",
+    "fetch_dataset",
     "pack_spec",
 ]
 
@@ -194,6 +195,32 @@ PACKS: dict[str, PackSpec] = {
 }
 
 
+def fetch_dataset(
+    key: str,
+    *,
+    registry_path: str | Path = DEFAULT_REGISTRY,
+    cache_dir: str | Path = DEFAULT_CACHE_DIR,
+    allow_download: bool = True,
+) -> tuple[DatasetEntry, tuple[tuple[str, Path], ...]]:
+    """Gate, then retrieve every file of one registered dataset.
+
+    Returns the entry and one ``(role, path)`` per file. Library code rather than CLI
+    code because ``demo/download_datasets.py`` needs it too, and a demo script that has
+    to re-enter the argument parser to reuse logic is the shape ``AGENTS.md`` rule 3
+    exists to prevent.
+
+    The licence gate runs before the first byte moves: there is no reason to spend a
+    transfer discovering that a source may not be used.
+    """
+    entry = require_publishable(key, path=registry_path)
+    retrieval = entry.require_retrieval()
+    fetched = tuple(
+        (remote.role, fetch(remote, cache_dir=cache_dir, allow_download=allow_download))
+        for remote in retrieval.files
+    )
+    return entry, fetched
+
+
 def pack_spec(key: str) -> PackSpec:
     spec = PACKS.get(key)
     if spec is None:
@@ -327,6 +354,10 @@ def build_pack(
         "source_url": entry.source_url,
         "license": entry.license,
         "share_alike": entry.share_alike,
+        # CC BY and friends require attribution and an indication of modification. The
+        # obligation travels with the pack rather than staying in the registry, because
+        # the pack is what someone would publish.
+        "attribution_required": entry.attribution_required,
         "contains_real_pii": entry.contains_real_pii,
         "source_repository": retrieval.repository,
         "source_revision": retrieval.revision,
@@ -345,7 +376,16 @@ def build_pack(
 
 
 def _transformation(spec: PackSpec) -> str:
-    """What was done to the source before injection — a `docs/02` requirement."""
+    """What was done to the source before injection — a `docs/02` requirement.
+
+    Selection is named first because it is the transformation that most affects what was
+    measured: which rows, out of how many, chosen how. Reconstructible from the seed and
+    the counts, but a provenance record that has to be reconstructed is not one.
+    """
+    selection = (
+        f"{spec.documents} documents selected by a shuffle seeded from the pack seed, "
+        "not from the head of the file"
+    )
     if spec.dataset == "bitext_customer_support":
         layout = (
             "rendered as 'Customer:'/'Agent:' transcript turns"
@@ -354,7 +394,11 @@ def _transformation(spec: PackSpec) -> str:
         )
         return (
             "rows carrying any {{Placeholder}} other than {{Order Number}} excluded; "
-            "instruction and response " + layout + "; every {{Order Number}} replaced "
-            "with a synthetic identifier recorded as a protected token; no other edit"
+            f"{selection}; instruction and response " + layout + "; every "
+            "{{Order Number}} replaced with a synthetic identifier recorded as a "
+            "protected token; no other edit"
         )
-    return "one utterance per document, unedited; no identifiers substituted"
+    return (
+        f"validation split only, {selection}; one utterance per document, taken as "
+        "written with no substitution and no edit"
+    )

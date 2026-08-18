@@ -27,7 +27,7 @@ from typing import Any
 
 import yaml
 
-from pii_reduction.synthetic.errors import CorpusError
+from pii_reduction.synthetic.errors import CorpusError, DatasetDownloadError
 from pii_reduction.synthetic.fetch import RemoteFile
 
 __all__ = [
@@ -79,16 +79,15 @@ class RetrievalSpec:
     repository: str
     revision: str
     files: tuple[RemoteFile, ...]
-    roles: tuple[str, ...]
 
     def file_for(self, role: str) -> RemoteFile:
         """The file playing ``role`` — how a reader picks the Greek half of MASSIVE."""
-        for wanted, remote in zip(self.roles, self.files, strict=True):
-            if wanted == role:
+        for remote in self.files:
+            if remote.role == role:
                 return remote
         raise CorpusError(
             f"retrieval block has no file with role {role!r} "
-            f"(roles: {', '.join(self.roles) or 'none'})"
+            f"(roles: {', '.join(remote.role for remote in self.files) or 'none'})"
         )
 
 
@@ -110,6 +109,10 @@ class DatasetEntry:
     share_alike: bool = False
     license_url: str = ""
     notes: str = ""
+    #: The licence obligates attribution (CC BY and friends). Recorded so the obligation
+    #: travels into a pack's meta rather than living only in a comment nobody reads when
+    #: a pack is finally published.
+    attribution_required: bool = False
     #: Optional at load time, required to fetch anything. Validating its shape here and
     #: its presence at the point of use keeps a registry that documents a manually
     #: obtained corpus legal, while still refusing to download from an unpinned entry.
@@ -198,11 +201,16 @@ def _entry(key: str, raw: Any, *, path: Path) -> DatasetEntry:
         share_alike=_strict_bool(raw, "share_alike", context=context, default=False),
         license_url=str(raw.get("license_url", "")),
         notes=str(raw.get("notes", "")),
-        retrieval=_retrieval(raw.get("retrieval"), context=context),
+        attribution_required=_strict_bool(
+            raw, "attribution_required", context=context, default=False
+        ),
+        retrieval=_retrieval(
+            raw.get("retrieval"), method=str(raw["retrieval_method"]), context=context
+        ),
     )
 
 
-def _retrieval(raw: Any, *, context: str) -> RetrievalSpec | None:
+def _retrieval(raw: Any, *, method: str, context: str) -> RetrievalSpec | None:
     """Parse and pin-check a ``retrieval:`` block (ADR-0017).
 
     The revision must be a full 40-character commit hash. A branch name would look
@@ -213,6 +221,16 @@ def _retrieval(raw: Any, *, context: str) -> RetrievalSpec | None:
         return None
     if not isinstance(raw, dict):
         raise CorpusError(f"{context}: 'retrieval' must be a mapping, got {type(raw).__name__}")
+    if method != "huggingface":
+        # The block resolves to a huggingface.co URL. Accepting it under another method
+        # would point the fetcher at the wrong host and report the resulting 404 as
+        # "the pinned revision may have been removed upstream", which is the kind of
+        # quiet wrongness this module exists to eliminate.
+        raise CorpusError(
+            f"{context}: a 'retrieval' block is only understood for "
+            f"retrieval_method 'huggingface', not {method!r}. A dataset obtained another "
+            "way records how in 'notes' and is fetched by hand"
+        )
 
     missing = [field for field in ("repository", "revision", "files") if field not in raw]
     if missing:
@@ -243,16 +261,23 @@ def _retrieval(raw: Any, *, context: str) -> RetrievalSpec | None:
                 f"{', '.join(absent)}"
             )
         path = str(entry["path"])
-        remotes.append(
-            RemoteFile(
-                url=HUGGINGFACE_FILE_URL.format(
-                    repository=repository, revision=revision, path=path
-                ),
-                path=f"{repository}/{path}",
-                sha256=str(entry["sha256"]),
-                size_bytes=int(entry["bytes"]),
+        try:
+            remotes.append(
+                RemoteFile(
+                    url=HUGGINGFACE_FILE_URL.format(
+                        repository=repository, revision=revision, path=path
+                    ),
+                    path=f"{repository}/{path}",
+                    sha256=str(entry["sha256"]),
+                    size_bytes=int(entry["bytes"]),
+                    role=str(entry["role"]),
+                )
             )
-        )
+        except DatasetDownloadError as error:
+            # A malformed entry is a bad *registry*, not a failed download. Reported as
+            # the former, with the file that caused it, so the fault is not misattributed
+            # to a transfer that never started.
+            raise CorpusError(f"{context}: {error}") from error
         roles.append(str(entry["role"]))
 
     if len(set(roles)) != len(roles):
@@ -261,9 +286,7 @@ def _retrieval(raw: Any, *, context: str) -> RetrievalSpec | None:
             "reader selects its file by role, so a duplicate silently hands it the "
             "wrong one"
         )
-    return RetrievalSpec(
-        repository=repository, revision=revision, files=tuple(remotes), roles=tuple(roles)
-    )
+    return RetrievalSpec(repository=repository, revision=revision, files=tuple(remotes))
 
 
 def load_rejected(path: str | Path) -> dict[str, str]:
