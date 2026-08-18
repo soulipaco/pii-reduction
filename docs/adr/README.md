@@ -25,3 +25,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0016](0016-line-splitting-option-not-a-key-value-parser.md) | `split_lines` option on the plain-text parser instead of the planned `key_value` parser |
 | [0017](0017-dataset-retrieval-by-pinned-fetch.md) | Public datasets fetched as pinned files with recorded checksums, not via `datasets` |
 | [0018](0018-bitext-supplies-both-packs-after-multiwoz-rejection.md) | MultiWOZ rejected for real PII; Bitext renders both the ticket and conversation packs |
+| [0019](0019-greek-person-three-failure-modes.md) | Greek PERSON is span absorption + label confusion + the άνω τελεία; the corpus is not made easier |

@@ -157,9 +157,11 @@ providers:
 
 ### Known limitations
 
-- **Greek PERSON detection is weak** — see the numbers below. The multilingual model
-  finds few Greek names and its boundaries wander; a probe saw the preceding verb
-  (`Ονομάζομαι`) absorbed into the span.
+- **Greek PERSON detection is weak — but not because the model fails to find the
+  names** (ADR-0019). It usually returns a span covering the name and then gets the
+  boundary or the label wrong: the preceding verb `Ονομάζομαι` is absorbed into the
+  span, and two of the eight pool names come back exactly placed but labelled `ORG`
+  or `LOC`. See the diagnosis below; a remedy aimed at detection will move little.
 - The flat 0.85 NER score means false positives cannot be filtered by confidence. The
   probe found the word "Email" tagged PERSON at 0.85 in one sentence.
 - The default email recognizer rejects `.test` and `.invalid` domains, which is why
@@ -206,18 +208,29 @@ Three things this table says plainly:
    widened the relaxed side slightly, because keeping every line fragment of a
    crossing span redacts the occasional neighbouring label. That is the deliberate
    safe-direction trade; the rest is Greek boundary fuzziness.
-3. **Greek is the outstanding gap**, and it has been read as a licensing consequence
-   rather than a modelling oversight. Until a permissively-licensed multilingual model
-   arrives (roadmap Phase 7), Greek PERSON coverage should be described as weak and the
-   Greek demo positioned as deterministic-entities-only.
+3. **Greek is the outstanding gap, and it is three bugs rather than one weakness**
+   (ADR-0019, plan §8 Q4). It had been read as a pure licensing consequence; the
+   diagnosis says otherwise. Probed directly, `xx_ent_wiki_sm` almost always returns a
+   span covering the Greek name and then gets the label or the boundary wrong —
+   "nothing found" is the rare case, and German on the same model and sentence shape is
+   8/8.
 
-   **The public-dataset packs complicate that reading and it is now an open question**
-   (plan §8 Q4). On MASSIVE utterances — real Greek written by native speakers for
-   another purpose — the *same* `xx_ent_wiki_sm` model reaches **0.606** Greek PERSON
-   strict recall over a support of 66, with German at 1.000 on the same text. The two
-   corpora are not comparable slice for slice, so this is not a claim that Greek
-   detection improved; it is a reason to find out how much of the 0.111-0.222 belongs to
-   the model and how much to the synthetic Greek templates.
+   | mechanism | measured | remedy family |
+   |---|---|---|
+   | **span absorption** — `Ονομάζομαι {name}` returns `PER 'Ονομάζομαι Ελένη Παππά'` | 7/8, and all of tier 4 | ADR-0016: repair the output |
+   | **label confusion** — an exact span with a non-`PER` label (`ORG`, `LOC`, and `MISC` in other carriers), which never reaches the normalized taxonomy | 2/8 in a neutral sentence | evidence-gated promotion, untested |
+   | **άνω τελεία** — `Παππά· δεν` scores 3/8 where `Παππά, δεν` scores 6/8 | halves detection *in the one tier-1 template that uses it* | none; it is correct Greek |
+
+   So Greek PERSON coverage should still be described as weak and the Greek demo
+   positioned as deterministic-entities-only — but a remedy should target boundaries and
+   labels first. Detection is the smallest of the three: only 4 of 48 probes returned no
+   span at all, and tier 4 is 100% boundary error, so better *finding* cannot touch it.
+
+   On the `multilingual_utterances` pack the same model reaches **0.606** over a support
+   of 66. That is not a better Greek result; it is easier Greek — single short clauses
+   with none of the three triggers. It must not be quoted as the Greek number, and the
+   synthetic corpus is deliberately **not** made easier to close the difference, because
+   that would tune the benchmark to the model.
 
    English tier 3 (key/value blocks) was the second weakest slice at 0.333 and is now
    1.000: the model had been finding every name and running the span through the line

@@ -31,7 +31,7 @@ LOCATION
 HEALTH_ID
 ```
 
-Provider-native labels should never leak throughout the codebase.
+Provider-native labels should never leak throughout the codebase: no span carrying one may cross out of a provider adapter, and nothing under `src/` outside `providers/` may name one. Tests that deliberately characterise a provider or a model *below* that boundary are the one exception, and say so.
 
 ## Provider abstraction
 

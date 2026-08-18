@@ -18,6 +18,7 @@ from pii_reduction.synthetic import (
     write_corpus,
 )
 from pii_reduction.synthetic.corpus import CORPUS_FILE, MANIFEST_FILE, META_FILE, PROTECTED_FILE
+from pii_reduction.synthetic.templates import templates_for
 from pii_reduction.synthetic.values import PHONES
 
 pytestmark = pytest.mark.unit
@@ -213,3 +214,34 @@ class TestCommittedCorpus:
         for entity in corpus.entities:
             if entity.entity_type == EMAIL:
                 assert "example." in entity.surface
+
+
+class TestTheGreekTemplatesAreNotTunedToTheModel:
+    """ADR-0019's decision, asserted where someone would otherwise quietly undo it.
+
+    Each of the three Greek failure modes has an obvious corpus-side "fix" that would
+    raise the published Greek number by making the text easier — which is tuning the
+    benchmark to the model, the one thing `AGENTS.md`'s benchmark-integrity rule
+    forbids. These two features are the ones a well-meaning session would delete.
+
+    Deliberately in the **unit** tier, not beside the rest of the Greek diagnosis in
+    `tests/test_greek_person_diagnosis.py`. That module needs a model and so runs only
+    nightly; this assertion needs nothing, and the moment it has to fire is when someone
+    edits the templates, runs `/qa`, and sees green.
+    """
+
+    def test_the_ano_teleia_is_still_there(self) -> None:
+        greek = "\n".join(spec.template for spec in templates_for("el"))
+        assert "·" in greek, (
+            "the άνω τελεία was removed from the Greek templates. It is correct Greek, and "
+            "the model mislabels a name that precedes it (PER -> MISC, 6/8 -> 3/8); "
+            "deleting it raises the published number by making the corpus easier (ADR-0019)"
+        )
+
+    def test_the_transcript_phrasing_that_triggers_span_absorption_is_still_there(self) -> None:
+        greek = "\n".join(spec.template for spec in templates_for("el"))
+        assert "Ονομάζομαι" in greek, (
+            "the tier-4 Greek phrasing was rewritten. The model absorbs that capitalised "
+            "verb into the name span for 7 of 8 pool names, which is the whole of Greek "
+            "tier-4 recall; rephrasing hides the bug rather than fixing it (ADR-0019)"
+        )

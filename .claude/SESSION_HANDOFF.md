@@ -1263,21 +1263,35 @@ ADR.
 
 ### Start here (session 7)
 
-**State:** Increment D is complete. **799 default-tier tests, 73 integration**, `ruff`
-and `mypy src tests` clean in both the dev environment and a throwaway core-only one.
-The committed corpus still rebuilds byte-identically. Three demo packs build from two
-public sources and all 49 of their gates pass on both chains.
+**State:** Increment D complete **and Q4 answered**. **809 default-tier tests, 87
+integration**, `ruff` and `mypy src tests` clean in the dev environment and in a
+throwaway core-only one. The committed corpus still rebuilds byte-identically. Three
+demo packs build from two public sources and all 49 of their gates pass on both chains.
 
-**Pick up Q4** in `docs/14_IMPLEMENTATION_PLAN.md` §8: *why does Greek PERSON score
-0.606 on public text and 0.111-0.222 on ours?* Same model, same eight names, German
-1.000 on both. Since ADR-0007 that gap has been booked as a licensing limit; this says
-part of it may be the corpus. It is the cheapest open question in the repository, and
-§8 lists the confounds to eliminate first — the packs are all tier 2, their names sit in
-well-formed injected sentences, and they reuse the same name pool.
+Increment D is pushed and **CI is green on both of its pushes**. Q4's fifteen tests are
+`integration`-marked, so they run in the nightly job and **never on a push** — "CI
+green" has never meant they passed there, and cannot.
 
-**Read the numbers before touching them:** plan §8's "Public-dataset packs" section,
-including its limitations list. The one that matters most: the two English packs are the
-same source rows under two parsers, so they are **one** measurement, not two agreeing.
+**The queue is empty.** Next is `docs/11_ROADMAP.md` order: **Increment E** — benchmark
+hardening, split discipline (ADR-0011's calibrate-then-read-test protocol, which the
+gates deliberately do *not* implement), and mask-vs-redact leakage variants per
+ADR-0013 §5.
+
+**Read ADR-0019 before touching anything Greek.** The one-line "Greek is weak because
+the good models are non-commercial" explanation is superseded. The model almost always
+*finds* the Greek names and then gets the label or the boundary wrong, and the three
+mechanisms have three different remedies. Plan §8 Q4 has the table; the mechanisms are
+pinned by `tests/test_greek_person_diagnosis.py`, which fails on purpose if a model bump
+changes them. It pins the **model**, below the adapter — two of the three mechanisms are
+invisible above it — so a Presidio-side change could move Greek without failing it.
+
+**Do not "fix" the Greek templates.** Removing the άνω τελεία or rephrasing
+`Ονομάζομαι` would raise the published Greek number by making the corpus easier. A test
+asserts both are still there and says why.
+
+**Read the pack numbers with their limitations** (plan §8). The one that matters most:
+the two English packs are the same source rows under two parsers, so they are **one**
+measurement, not two agreeing.
 
 ### What Increment D actually shipped
 
@@ -1369,3 +1383,41 @@ Full tables are in plan §8. The four findings worth carrying:
 - **No pack and no raw data is committed.** `.gitignore` covers `demo/packs/` and
   `data/downloads/`. The registry's `retrieval:` pin is what makes a pack reproducible
   instead of stored.
+
+### Q4 — the Greek diagnosis, and why no number moved
+
+The pack asked the question and a direct probe answered it (ADR-0019). Counts are out
+of the eight committed Greek names, against `xx_ent_wiki_sm`:
+
+| carrier | exact PER | wrong label | wrong span | nothing |
+|---|---|---|---|---|
+| the name alone | 3 | 1 | 2 | 2 |
+| `Ο πελάτης είναι {name}.` | **6** | 2 | 0 | 0 |
+| synthetic tier-4 (`Ονομάζομαι {name}`) | **0** | 0 | 8 | 0 |
+| German equivalent | **8** | 0 | 0 | 0 |
+
+**It is not a detection failure.** Three mechanisms:
+
+1. **Span absorption** — `Ονομάζομαι {name}` comes back as
+   `PER 'Ονομάζομαι Ελένη Παππά'`, 7 of 8 times. A capitalised token before the name is
+   swallowed. That is ADR-0016's English bug *within* a line, where line-boundary span
+   repair cannot reach it. Greek tier-4 0.000 is a boundary failure.
+2. **Label confusion** — an exact span with the wrong label: `ORG` and `LOC` in the
+   neutral carrier, `MISC` in others. ADR-0004 correctly refuses to map any of them, so
+   the name is found and then dropped. **Do not look for a morphological rule** — three
+   of the pool's five genitive surnames are labelled correctly; the first draft of
+   ADR-0019 claimed otherwise and the audit caught it.
+3. **The άνω τελεία** — `Παππά· δεν` scores 3/8 where `Παππά, δεν` scores 6/8. Only the
+   middle dot; comma, semicolon and full stop are all fine.
+
+The public pack scores 0.606 because MASSIVE utterances are single short clauses that
+trigger none of the three. **The synthetic Greek is legitimately harder, not
+miscalibrated**, so nothing was changed and no published number moved. That was the
+whole decision: every mechanism has an obvious corpus-side fix that would raise the
+number by making the text easier, which is tuning the benchmark to the model.
+
+Method worth reusing: change **one** thing at a time against a fixed carrier sentence,
+and record *what the model returned instead* — exact / wrong label / wrong span /
+nothing — rather than only whether it was right. The "wrong span" column is what turned
+a five-year-old-sounding "Greek is weak" into three separate, actionable bugs, and it is
+the same column that solved Q2.

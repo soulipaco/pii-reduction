@@ -334,7 +334,7 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 6 (2026-08-18), after Increment D (queue item Q3).
+Last updated: session 6 (2026-08-18), after Increment D (Q3) and the Greek diagnosis (Q4).
 
 ### Complete
 
@@ -351,7 +351,8 @@ Last updated: session 6 (2026-08-18), after Increment D (queue item Q3).
 | Q1 | `.github/workflows/{ci,integration}.yml`, `evaluation/gates.py`, `configs/benchmark_gates.yaml` | 511 default / 72 integration |
 | Q2 | span repair at the provider boundary, identifier guard, `key_value` parser, `split_lines` (ADR-0016) | 682 default / 73 integration |
 | D (part) | `synthetic/injection.py`, `synthetic/registry.py`, `demo/registry.yaml` | 730 default / 73 integration |
-| D | `synthetic/fetch.py`, `synthetic/public.py`, `synthetic/packs.py`, `fetch-dataset` + `build-pack`, three demo packs and their gate sets (ADR-0017, ADR-0018) | 799 default / 73 integration |
+| D | `synthetic/fetch.py`, `synthetic/public.py`, `synthetic/packs.py`, `fetch-dataset` + `build-pack`, three demo packs and their gate sets (ADR-0017, ADR-0018) | 807 default / 73 integration (799 when D first landed; the audit-fix commit added 8) |
+| Q4 | Greek PERSON diagnosed: span absorption, label confusion, άνω τελεία (ADR-0019). No number moved — the corpus is deliberately not made easier | 809 default / 87 integration |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -620,25 +621,78 @@ identically without replaying the pack, and two documents with identical base te
 receive different entities. Sharing a provider would now *break* that property, because
 a document's values would depend on where its row sat in the run. A test pins it.
 
-#### Q4. Why Greek scores 0.606 on public text and 0.111-0.222 on ours — **next**
+#### Q4. Why Greek scores 0.606 on public text and 0.111-0.222 on ours — **complete**
 
-The lead Increment D produced, and the cheapest open question in the repository: the
-same model and the same eight Greek names reach 0.606 strict recall on MASSIVE
-utterances and 0.111-0.222 on the synthetic Greek templates, while German is 1.000 on
-both. Since ADR-0007 the Greek gap has been treated as a licensing limit — the good
-spaCy models are CC BY-NC-SA and excluded — and this says part of it may be the corpus
-instead.
+**Answered, and the answer replaces the one-line explanation this project has used
+since ADR-0007.** Full reasoning and measurements in ADR-0019; pinned by
+`tests/test_greek_person_diagnosis.py` (integration tier).
 
-Confounds to eliminate before believing anything, because the two corpora differ in
-more than one way at once: the pack is all tier 2 while the synthetic Greek spans tiers
-1-4; a pack's names sit in well-formed injected sentences (`με λένε {value}`) while the
-templates place them after a label or in noisy lower-case fragments; and the packs use
-the same name pool, so this is not evidence about unseen names.
+**Greek PERSON is not a detection failure.** Probed directly against
+`xx_ent_wiki_sm` with the committed eight-name pool, the model almost always returns a
+span covering the name — and then gets the label or the boundary wrong. "Nothing
+found" is the rare case. Counts out of 8:
 
-**Exit:** an attributable answer — phrasing, tier mix, or model — measured on a
-constructed comparison rather than on the two corpora as they stand, and either a fix
-to the synthetic Greek templates or a recorded finding that the gap is real. Whichever
-it is, `docs/15_PROVIDERS.md` and the Greek deferral below need updating to match.
+| carrier | exact PER | wrong label | wrong span | nothing |
+|---|---|---|---|---|
+| the name alone | 3 | 1 | 2 | **2** |
+| `Ο πελάτης είναι {name}.` | **6** | 2 | 0 | 0 |
+| synthetic tier-1 (name + email + ticket) | 2 | 1 | 5 | 0 |
+| synthetic tier-3 `Από: {name}` | 1 | 1 | 4 | 2 |
+| synthetic tier-4 (`Ονομάζομαι {name}`) | **0** | 0 | 8 | 0 |
+| German `Der Kontoinhaber ist {name}.` | **8** | 0 | 0 | 0 |
+
+Three mechanisms, three different remedies:
+
+1. **Span absorption — the whole of tier 4.** `Ονομάζομαι {name}` returns
+   `PER 'Ονομάζομαι Ελένη Παππά'` for 7 of 8 names: a capitalised token immediately
+   before the name is swallowed. Measured both on that clause alone and on the full
+   template line with its `2026-04-03 11:20:24 - Πελάτης: ` prefix — 0 exact spans and 8
+   wrong spans either way. Strict matching scores that as a miss *and* a false
+   positive — ADR-0016's English tier-3 bug, but *within* a line, so line-boundary span
+   repair cannot see it. Lower-casing the verb recovers 5/8. **Greek tier-4 0.000 is a
+   boundary failure, not a detection failure.**
+2. **Label confusion.** Two of the eight names come back with an *exact span* and a
+   non-`PER` label even in a neutral sentence — one `ORG`, one `LOC`; other carriers add
+   `MISC`. ADR-0004's mapping correctly refuses all three, so the name is found and then
+   dropped — and note *where*: the adapter asks Presidio for its three native labels
+   only, so these never arrive rather than arriving and being unmapped. A promotion
+   remedy has to change the **request**, not the mapping table. **There is no
+   morphological rule** either: three of the pool's five genitive surnames are
+   labelled `PER` correctly, so which names fail is a property of the model's
+   training data, not of Greek grammar.
+3. **The άνω τελεία flips the label.** `…Παππά, δεν…` gives 6/8; `…Παππά· δεν…` gives
+   3/8 — exactly half. Comma, semicolon and full stop are all 6/8; only the middle dot.
+   With U+0387 rather than the corpus's U+00B7 the tokenizer glues it to the surname as
+   well, so the span is wrong too.
+
+**Why the pack scores higher:** MASSIVE utterances are single short clauses with no
+adjacent entity strings, no field label, no άνω τελεία and no capitalised verb before
+the name. They avoid all three. The synthetic templates hit all three *by being more
+realistic Greek*.
+
+**Decision: the corpus is not changed** (ADR-0019). Each mechanism has an obvious
+corpus-side "fix" that would raise the published number by making the text easier —
+tuning the benchmark to the model, which `AGENTS.md` forbids. The synthetic Greek is
+legitimately harder than the public Greek; both numbers are correct measurements of
+different text, and the pack's 0.606 must not be quoted as *the* Greek result.
+
+**Exit criterion met:** the answer is attributable and measured on a constructed
+comparison rather than on the two corpora as they stand, each mechanism isolated by
+changing one thing at a time, and the finding is recorded with a test that fails if a
+model bump changes it. No published number moved, because none should have.
+
+**What it opens** (ranked by what the measurement supports, none started): Greek span
+absorption as an ADR-0016-family remedy — repair the output, and the rule must be
+structural rather than a list of Greek words; evidence-gated promotion of `LOC`, `ORG` **and**
+`MISC` — which one appears varies by carrier, so a one-label remedy would miss the
+rest — which trades leakage for over-redaction and needs a measurement before an
+implementation; and a better-licensed Greek model at Phase 7, now with a benchmark that
+can say which of the three it fixed.
+
+**Narrowed rather than ruled out:** treating Greek as a *pure* detection problem. Only
+4 of the 40 Greek probes returned no span at all, and tier 4 is 100% boundary error — detection
+work cannot touch it. But 2 of 8 do go silent in the tier-3 `Από:` form, so better
+detection would move tier 3; it is simply the smallest of the three effects.
 
 ### After the queue
 
@@ -654,9 +708,10 @@ MultiWOZ's rejection removed (ADR-0018).
 
 ### Known deferrals carried forward
 
-- Greek PERSON is licence-bound to `xx_ent_wiki_sm` until Phase 7 (ADR-0007) — but see
-  Q4: the public-dataset pack scores it far higher than the synthetic corpus does, so
-  part of that gap may not be the model.
+- Greek PERSON is licence-bound to `xx_ent_wiki_sm` until Phase 7 (ADR-0007), **and
+  the gap is now diagnosed** (Q4, ADR-0019): span absorption, `LOC`/`MISC` label
+  confusion, and the άνω τελεία. Two of the three are not licensing problems. The
+  corpus is deliberately not made easier to improve the number.
 - **Licence obligations are recorded but not emitted.** MASSIVE is CC BY 4.0 and Bitext
   is share-alike; both facts reach a pack's `meta.json` (`license`, `share_alike`,
   `attribution_required`, `source_url`, `transformation`), but no NOTICE file is

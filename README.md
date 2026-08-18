@@ -61,7 +61,7 @@ pii-reduction benchmark --gates configs/benchmark_gates.yaml
 | document clean rate | 0.161 | 0.774 |
 | over-redaction rate | 0.000 | 0.000 |
 
-PERSON recall reaches 1.000 for German and 0.889–1.000 for English across every difficulty tier, but **0.000–0.222 for Greek**: the good Greek spaCy models are non-commercial and excluded on licensing grounds (ADR-0007), so Greek routes through a multilingual model. `docs/15_PROVIDERS.md` publishes that gap per language and tier rather than reporting an average that hides it.
+PERSON recall reaches 1.000 for German and 0.889–1.000 for English across every difficulty tier, but **0.000–0.222 for Greek**. The good Greek spaCy models are non-commercial and excluded on licensing grounds (ADR-0007), so Greek routes through a multilingual model — but that is only part of the story. Measured directly (ADR-0019), the model usually *finds* the Greek names and then gets the boundary or the label wrong, so two of the three mechanisms behind that number are not licensing problems at all. `docs/15_PROVIDERS.md` publishes the gap per language and tier rather than reporting an average that hides it.
 
 To regenerate the corpus (same seed gives a byte-identical corpus and manifest):
 
@@ -98,7 +98,9 @@ On the packs, EMAIL and PHONE hold at 1.000 precision and recall across 1,600 en
 in three languages, and the hybrid chain reaches strict F1 0.998–0.999 on English with
 leakage 0.000. The interesting numbers are elsewhere: PERSON *precision* is 0.985–0.995
 because public prose contains names no manifest knows about, and Greek PERSON recall is
-0.606 against 0.111–0.222 on the synthetic corpus with the same model. `docs/14_IMPLEMENTATION_PLAN.md`
+0.606 against 0.111–0.222 on the synthetic corpus with the same model — which is
+**easier Greek, not better detection**: single short clauses avoid all three of the
+failure modes the synthetic templates trigger (ADR-0019). `docs/14_IMPLEMENTATION_PLAN.md`
 §8 publishes all of it beside the synthetic numbers, with the limitations that keep it
 honest.
 
