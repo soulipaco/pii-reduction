@@ -21,8 +21,9 @@ __all__ = [
     "KNOWN_SOURCE_TYPES",
 ]
 
-#: Increment A2. ``note_history`` and ``key_value`` are deferred (plan §5, §6).
-KNOWN_PARSERS = frozenset({"plain_text", "transcript"})
+#: Increment A2; ``key_value`` added in session 5 (ADR-0016). ``note_history``
+#: remains deferred (plan §5, §6).
+KNOWN_PARSERS = frozenset({"plain_text", "transcript", "key_value"})
 
 #: Increment A4. ``mask`` and ``pseudonymize`` were pulled forward from roadmap
 #: Phase 8 by explicit decision (ADR-0013).

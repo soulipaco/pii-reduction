@@ -17,6 +17,13 @@ destination:
 
 columns:
   text:
+    # Stays plain_text. `key_value` raises English tier-3 PERSON recall from 0.333 to
+    # 1.000 and whole-corpus strict F1 from 0.886 to 0.910, but holding the label out
+    # of processing also removes the context that was *suppressing* false positives on
+    # bare identifiers: `KB Article: KB000002739` and `Rechnername: DEMO-PC-6963` are
+    # then tagged PERSON and redacted, taking over-redaction from 0.000 to 0.020.
+    # Q2's exit criterion requires over-redaction to stay 0.000, so neither remedy
+    # ships enabled until identifier false positives are suppressed (ADR-0016, plan §8).
     parser: plain_text
     entities: [PERSON, EMAIL, PHONE]
     output_column: text_pii_redacted

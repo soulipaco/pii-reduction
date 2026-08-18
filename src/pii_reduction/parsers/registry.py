@@ -12,12 +12,14 @@ from typing import Any
 
 from pii_reduction.parsers.base import BaseParser
 from pii_reduction.parsers.errors import ParserError
+from pii_reduction.parsers.key_value import KeyValueParser
 from pii_reduction.parsers.plain_text import PlainTextParser
 from pii_reduction.parsers.transcript import TranscriptParser
 
 __all__ = ["available_parsers", "build_parser"]
 
 _PARSERS: dict[str, Callable[[dict[str, Any] | None], BaseParser]] = {
+    KeyValueParser.name: KeyValueParser,
     PlainTextParser.name: PlainTextParser,
     TranscriptParser.name: TranscriptParser,
 }

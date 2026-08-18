@@ -1,6 +1,14 @@
-# ADR-0016: a `split_lines` option on the plain-text parser, not the planned `key_value` parser
+# ADR-0016: line-scoped segmentation for key/value text, and why neither form ships enabled
 
 **Status:** accepted · **Date:** 2026-08-18 · **Session:** 5
+
+> **Amended the same session.** This ADR was written when `split_lines` was the only
+> remedy and the `key_value` parser was still deferred. Both now exist, `key_value` is
+> registered, and a whole-corpus measurement changed the conclusion: **neither is
+> enabled in any shipped configuration**, for a reason worth reading — see
+> *Consequences*. The original decision (a segmentation option rather than a new
+> document contract) stands for `split_lines`; the reasoning about `key_value` being
+> "the next step" has been overtaken by measurement.
 
 ## Context
 
@@ -73,9 +81,36 @@ Reasoning:
   in a German slice, so plan §8 Q2's "no drop in any other slice" is **not** satisfied
   by line-splitting alone. The option therefore ships enabled in **no** shipped
   configuration; Q2 is not complete.
-- The `key_value` parser is the candidate to close that gap, because a label marked
-  non-processable can never become a PERSON candidate — `'Rechnername: DEMO-PC-6949'`
-  yields the false positive, `'DEMO-PC-6949'` alone yields nothing.
+- **`key_value` was built, and it closes that gap — while opening a worse one.**
+  Holding the label out of processing does remove the `Rechnername` false positive.
+  On the dev+calibration splits it looked unambiguously better than `split_lines`:
+  strict F1 0.857 → 0.896, precision 0.904 → 0.945, relaxed F1 back to baseline, en
+  tier-3 PERSON 0.000 → 1.000, over-redaction 0.000, and **no slice regressed**.
+
+  The whole-corpus run said otherwise. Strict F1 0.886 → 0.910 and en tier-3 PERSON
+  0.333 → 1.000, but **over-redaction 0.000 → 0.020** and leakage 0.117 → 0.122:
+
+  ```text
+  'KB Article: KB000002739'    → value ' KB000002739'  tagged PERSON → redacted
+  'Rechnername: DEMO-PC-6963'  → value ' DEMO-PC-6963' tagged PERSON → redacted
+  ```
+
+  The label was not only noise — it was *context that suppressed false positives on
+  bare identifiers*. Removing it cuts both ways. Q2's exit criterion requires
+  over-redaction to stay 0.000, so `key_value` does not ship enabled either.
+
+- **The development splits did not reveal this.** Both destroyed identifiers are in
+  the test split, and dev+calibration (45 documents) reported over-redaction 0.000.
+  Developing against dev/calibration remains right — it is what stops iterating on the
+  test split — but it is not sufficient evidence to enable a change. The whole-corpus
+  gate run is, and it is the reason the gates exist.
+
+- **What both remedies actually need is identifier-false-positive suppression**, not a
+  third parser: a way for the pipeline to refuse a PERSON span whose surface is
+  ticket-, KB-, machine-, version- or order-shaped. That belongs with the reconciler or
+  a provider-level guard, applies to both segmentation forms, and is independently
+  useful — the same false positives can occur in prose. Recorded as Q2's remaining
+  work in plan §8.
 - Two parsers now split lines with duplicated logic. They are deliberately **not**
   refactored onto a shared line splitter: they do not agree on line *semantics* (the
   transcript parser splits a line into speaker prefix and body; this one does not), so
@@ -90,10 +125,13 @@ Reasoning:
 
 ## Alternatives rejected
 
-- **A `key_value` registered parser now.** Rejected as the *first* step, not on merit:
-  it is the better long-term answer, but it needs a label-detection heuristic (the
-  transcript parser's speaker rules, or a new one), and shipping the cheap fix first
-  established the cause with measurements rather than assumption.
+- **Shipping either remedy on the strength of the dev/calibration numbers.** Both
+  looked good there. The whole-corpus run is what caught the over-redaction, and a
+  metric the exit criterion pins at 0.000 is not a rounding concern.
+- **Weakening the over-redaction gate to 0.020 so `key_value` could ship.** The gate is
+  the only automated defence of AGENTS.md rule 5, the regression is real rather than a
+  metric artifact (two identifiers genuinely destroyed), and `CONTRIBUTING.md` forbids
+  weakening a gate to make a change pass.
 - **Per-tier provider options / a custom recognizer** (plan §8's other candidates).
   Both were aimed at a detection failure. There is no detection failure.
 - **Making line-splitting the default.** Would silently change behaviour for every

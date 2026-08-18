@@ -29,28 +29,17 @@ line-structured text::
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from pii_reduction.contracts.segments import TextSegment
 from pii_reduction.parsers.base import BaseParser, ParseResult
 from pii_reduction.parsers.errors import ParserError
+from pii_reduction.parsers.lines import LINE_BREAK_RE, SEGMENT_TYPE_BREAK
 
 __all__ = ["PlainTextParser"]
 
 SEGMENT_ID = "field_0000"
 SEGMENT_TYPE = "plain_text"
-SEGMENT_TYPE_BREAK = "line_break"
-
-#: CR, LF and CRLF only — deliberately not ``str.splitlines``, which also breaks on
-#: U+2028 and U+0085 and would silently change what counts as a line in text this
-#: project is full of. ``transcript.py`` defines the same pattern for the same reason.
-#: The duplication is two lines and is left deliberately: a shared line-splitting
-#: module is worth building when the two parsers need to agree on line *semantics*,
-#: and they currently do not — the transcript parser splits into speaker prefix and
-#: body, this one does not. Sharing only the regex would advertise an agreement that
-#: does not exist.
-_LINE_BREAK_RE = re.compile(r"\r\n|\r|\n")
 
 DEFAULT_OPTIONS: dict[str, Any] = {
     "split_lines": False,
@@ -126,9 +115,9 @@ class PlainTextParser(BaseParser):
         # named as a break. `segment_id` is persisted into the audit table, so
         # numbering the break between lines 0 and 1 as `line_0001` would make the
         # audit disagree with the transcript parser about what the number means.
-        for index, piece in enumerate(_LINE_BREAK_RE.split(text)):
+        for index, piece in enumerate(LINE_BREAK_RE.split(text)):
             if index:
-                match = _LINE_BREAK_RE.match(text, cursor)
+                match = LINE_BREAK_RE.match(text, cursor)
                 if match is None:  # pragma: no cover - split guarantees a break here
                     raise ParserError(f"parser {self.name!r}: line break expected at {cursor}")
                 add(

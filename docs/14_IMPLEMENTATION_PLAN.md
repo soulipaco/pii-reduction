@@ -426,20 +426,38 @@ parser is line-oriented. It is not merely a scoring artifact: reduction currentl
 destroys the field label (`Customer: <PERSON> number: …`), a structure-preservation
 failure the over-redaction metric cannot see because labels are not protected tokens.
 
-Landed (ADR-0016): `split_lines` on `PlainTextParser`, default off. Measured on
-**dev+calibration**, `deterministic_presidio`: en tier-3 PERSON recall 0.000 → 1.000
-(support 3), PERSON overall 0.595 → 0.676, strict F1 0.857 → 0.890, over-redaction
-unchanged at 0.000.
+Two remedies are built and tested (ADR-0016): `split_lines` on `PlainTextParser`, and
+the `key_value` parser, now registered. **Neither is enabled in any shipped config, and
+Q2 is not complete.** Both fix the span and both fail the exit criterion:
 
-**It is not enabled in any shipped config, and Q2 is not complete**, because it
-introduces one German false positive: on its own line `Rechnername:` ("computer name")
-is tagged PERSON where whole-block context suppressed it. Net strict F1 rises, but
-"no drop in any other slice" below is not satisfied.
+| whole corpus, hybrid chain | shipped | `split_lines` | `key_value` |
+|---|---|---|---|
+| en tier-3 PERSON recall | 0.333 | 1.000 | 1.000 |
+| strict F1 | 0.886 | — | 0.910 |
+| leakage | 0.117 | — | 0.122 |
+| **over-redaction** | **0.000** | 0.000 | **0.020** |
+| new false positives | — | German `Rechnername` | identifiers (below) |
 
-**Next step, with the probe already done:** the deferred `key_value` parser. Marking
-the label non-processable removes that false positive without costing detection —
-`'Grace Okafor'` alone still yields an exact span, `'Rechnername: DEMO-PC-6949'` yields
-the false positive while `'DEMO-PC-6949'` alone yields nothing.
+Holding the label out of processing removes the context that was *suppressing* false
+positives on bare identifiers:
+
+```text
+'KB Article: KB000002739'    → ' KB000002739'  tagged PERSON → redacted
+'Rechnername: DEMO-PC-6963'  → ' DEMO-PC-6963' tagged PERSON → redacted
+```
+
+**Note for the next session: dev+calibration did not reveal this.** Both destroyed
+identifiers are in the test split, and the development splits reported over-redaction
+0.000 with no slice regressing. Developing against dev/calibration is still right — it
+is what stops iterating on the test split — but it is not sufficient evidence to
+enable a change. Run the whole-corpus gates before claiming a remedy works.
+
+**Remaining work is not a third parser.** Both remedies need identifier
+false-positive suppression: a way to refuse a PERSON span whose surface is ticket-,
+KB-, machine-, version- or order-shaped. That belongs with the reconciler or a
+provider-level guard, applies to both segmentation forms, and is useful independently
+— the same false positives can occur in prose. Then re-measure, enable whichever
+remedy wins, and raise the floors.
 
 Also fixed here, because Q2 depends on it: `run_benchmark` scored a subset against the
 **whole** corpus's ground truth, so a dev+calibration run reported over-redaction 0.627

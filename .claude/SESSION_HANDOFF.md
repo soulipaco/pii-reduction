@@ -283,11 +283,15 @@ something, not as a prerequisite. To pick up work:
    measured baseline, and the queue with exit criteria.
 2. **Q1 is complete.** Remote is `soulipaco/pii-reduction` (private); both workflows
    are green on GitHub.
-3. **Q2 is diagnosed and half-built.** The cause was not a detection failure — Presidio
-   finds every name and the *span* crosses the line break. `split_lines` on
-   `PlainTextParser` (ADR-0016) fixes it but adds one German false positive, so it is
-   enabled in no config and Q2 is open. The next step is the `key_value` parser, and
-   the deciding probe is already done — see plan §8 Q2. Then Increment D.
+3. **Q2 is diagnosed, with two remedies built and neither shipped.** The cause was not
+   a detection failure — Presidio finds every name and the *span* crosses the line
+   break. `split_lines` and the `key_value` parser both fix it; both introduce false
+   positives, and `key_value` takes over-redaction from 0.000 to 0.020 by redacting
+   `KB000002739` and `DEMO-PC-6963` once their labels stop giving the model context.
+   The remaining work is **identifier false-positive suppression** in the reconciler
+   or a provider guard — not a third parser. See plan §8 Q2 and ADR-0016. Then D.
+   **Do not enable either remedy on dev/calibration evidence alone**: those splits
+   reported over-redaction 0.000 and no regression; the whole-corpus gates caught it.
 4. **Work Q2 against `--split dev` / `--split calibration`, not the whole corpus.**
    The gates are whole-corpus numbers that CI re-reads on every push, so iterating
    against them is tuning on a set that is 60% test split (ADR-0011). Read the

@@ -20,26 +20,18 @@ silently.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
 from typing import Any
 
-from pii_reduction.contracts.segments import TextSegment
-from pii_reduction.parsers.base import BaseParser, ParseResult
 from pii_reduction.parsers.errors import ParserError
+from pii_reduction.parsers.lines import LabelledLineParser
 
 __all__ = ["TranscriptParser"]
 
 SEGMENT_TYPE_PREFIX = "transcript_prefix"
 SEGMENT_TYPE_BODY = "transcript_body"
-SEGMENT_TYPE_BREAK = "line_break"
 
 #: Fallback reasons recorded on the parse result (counted in run metrics).
 FALLBACK_NO_SPEAKER_PREFIX = "no_speaker_prefix"
-
-#: A colon directly after one of these is a URI scheme, not a speaker delimiter.
-URI_SCHEMES = frozenset({"http", "https", "ftp", "ftps", "mailto", "tel", "file", "data", "sip"})
-
-_LINE_BREAK_RE = re.compile(r"\r\n|\r|\n")
 
 _TIMESTAMP = (
     r"\d{4}[-/]\d{2}[-/]\d{2}"  # 2026-04-03 or 2026/04/03
@@ -60,10 +52,13 @@ KNOWN_FALLBACK_POLICIES = frozenset({"preserve_line"})
 KNOWN_LINE_MODES = frozenset({"auto"})
 
 
-class TranscriptParser(BaseParser):
+class TranscriptParser(LabelledLineParser):
     """Line-oriented transcript segmenter with byte-exact reconstruction."""
 
     name = "transcript"
+    segment_type_prefix = SEGMENT_TYPE_PREFIX
+    segment_type_body = SEGMENT_TYPE_BODY
+    fallback_no_prefix = FALLBACK_NO_SPEAKER_PREFIX
 
     def __init__(self, options: dict[str, Any] | None = None) -> None:
         merged = dict(DEFAULT_OPTIONS)
@@ -92,9 +87,11 @@ class TranscriptParser(BaseParser):
                 f"(known: {', '.join(sorted(KNOWN_LINE_MODES))})"
             )
 
+        super().__init__(
+            max_label_length=int(merged["max_speaker_length"]),
+            max_label_words=int(merged["max_speaker_words"]),
+        )
         self.options = merged
-        self._max_speaker_length = int(merged["max_speaker_length"])
-        self._max_speaker_words = int(merged["max_speaker_words"])
         self._preserve_prefix = bool(merged["preserve_prefix"])
 
         delimiter_class = re.escape("".join(delimiters))
@@ -110,86 +107,6 @@ class TranscriptParser(BaseParser):
             re.DOTALL,
         )
 
-    # -- parsing -----------------------------------------------------------------
-
-    def parse(self, text: str) -> ParseResult:
-        self._require_text(text)
-
-        segments: list[TextSegment] = []
-        fallbacks: list[str] = []
-        ordinal = 0
-
-        for line_no, (line, break_text, start) in enumerate(_iter_lines(text)):
-            if line:
-                prefix, body = self._split_line(line)
-                if prefix is None:
-                    fallbacks.append(FALLBACK_NO_SPEAKER_PREFIX)
-                else:
-                    segments.append(
-                        TextSegment(
-                            segment_id=f"line_{line_no:04d}_prefix",
-                            ordinal=ordinal,
-                            text=prefix,
-                            processable=False,
-                            segment_type=SEGMENT_TYPE_PREFIX,
-                            source_start=start,
-                            source_end=start + len(prefix),
-                            metadata={"line_no": line_no},
-                        )
-                    )
-                    ordinal += 1
-                body_start = start + (len(prefix) if prefix else 0)
-                segments.append(
-                    TextSegment(
-                        segment_id=f"line_{line_no:04d}_body",
-                        ordinal=ordinal,
-                        text=body,
-                        processable=True,
-                        segment_type=SEGMENT_TYPE_BODY,
-                        source_start=body_start,
-                        source_end=body_start + len(body),
-                        metadata={"line_no": line_no, "has_prefix": prefix is not None},
-                    )
-                )
-                ordinal += 1
-
-            if break_text:
-                segments.append(
-                    TextSegment(
-                        segment_id=f"line_{line_no:04d}_break",
-                        ordinal=ordinal,
-                        text=break_text,
-                        processable=False,
-                        segment_type=SEGMENT_TYPE_BREAK,
-                        source_start=start + len(line),
-                        source_end=start + len(line) + len(break_text),
-                        metadata={"line_no": line_no},
-                    )
-                )
-                ordinal += 1
-
-        if not segments:
-            # Empty field: still emit one (empty) body so downstream code has a
-            # segment to process and the round-trip holds.
-            segments.append(
-                TextSegment(
-                    segment_id="line_0000_body",
-                    ordinal=0,
-                    text="",
-                    processable=True,
-                    segment_type=SEGMENT_TYPE_BODY,
-                    source_start=0,
-                    source_end=0,
-                    metadata={"line_no": 0, "has_prefix": False},
-                )
-            )
-
-        return ParseResult(
-            parser=self.name,
-            segments=tuple(segments),
-            fallbacks=tuple(fallbacks),
-        )
-
     # -- line splitting ----------------------------------------------------------
 
     def _split_line(self, line: str) -> tuple[str | None, str]:
@@ -198,41 +115,10 @@ class TranscriptParser(BaseParser):
             match = pattern.match(line)
             if match is None:
                 continue
-            if not self._is_speaker(match.group("speaker"), body=match.group("body")):
+            if not self._is_label(match.group("speaker"), body=match.group("body")):
                 continue
             prefix = match.group("lead") + match.group("speaker") + match.group("delim")
             if not self._preserve_prefix:
                 return None, line
             return prefix, match.group("body")
         return None, line
-
-    def _is_speaker(self, candidate: str, *, body: str) -> bool:
-        """Decide whether the text before a delimiter is a speaker or ordinary prose."""
-        speaker = candidate.strip()
-        if not speaker:
-            return False
-        if len(speaker) > self._max_speaker_length:
-            return False
-        if len(speaker.split()) > self._max_speaker_words:
-            return False
-        if not any(character.isalpha() for character in speaker):
-            return False
-        # "call me at 09:15" - a digit right before the delimiter means a time or ratio.
-        if speaker[-1].isdigit():
-            return False
-        # "https://example.com" and "mailto:someone@example.com".
-        return not (body.startswith("//") or speaker.split()[-1].lower() in URI_SCHEMES)
-
-
-def _iter_lines(text: str) -> Iterator[tuple[str, str, int]]:
-    """Yield ``(line, line_break, start_offset)`` preserving the exact break characters.
-
-    ``str.splitlines`` also breaks on characters such as U+2028, which would change
-    what counts as a line; this splits on CR, LF and CRLF only.
-    """
-    position = 0
-    for match in _LINE_BREAK_RE.finditer(text):
-        yield text[position : match.start()], match.group(0), position
-        position = match.end()
-    if position < len(text):
-        yield text[position:], "", position

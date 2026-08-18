@@ -15,12 +15,14 @@ import pytest
 
 from pii_reduction.config.registries import KNOWN_PARSERS
 from pii_reduction.parsers import (
+    KeyValueParser,
     ParserError,
     PlainTextParser,
     TranscriptParser,
     available_parsers,
     build_parser,
 )
+from pii_reduction.parsers.key_value import FALLBACK_NO_KEY
 from pii_reduction.parsers.transcript import FALLBACK_NO_SPEAKER_PREFIX
 
 pytestmark = pytest.mark.unit
@@ -430,3 +432,105 @@ class TestCallerContract:
         before = source
         transcript_parser().parse(source)
         assert source == before
+
+
+class TestKeyValueParser:
+    """``Field name: value`` lines, with the label held out of processing.
+
+    Why the label is non-processable is the whole point (ADR-0016): on its own line
+    the German ``Rechnername:`` is tagged PERSON, and a label that never reaches a
+    provider can never become a false positive. The cost is that PII in the label
+    position is invisible, which is why this parser is chosen per column rather than
+    used as a default.
+    """
+
+    @pytest.mark.parametrize("key", sorted(TRANSCRIPTS))
+    def test_round_trip(self, key: str) -> None:
+        source = TRANSCRIPTS[key]
+        parser = KeyValueParser()
+        assert parser.reconstruct(parser.parse(source)) == source
+
+    @pytest.mark.parametrize("key", sorted(TRANSCRIPTS))
+    def test_segments_tile_the_source_exactly(self, key: str) -> None:
+        source = TRANSCRIPTS[key]
+        for segment in KeyValueParser().parse(source).segments:
+            assert source[segment.source_start : segment.source_end] == segment.text
+
+    def test_the_label_is_held_out_of_processing(self) -> None:
+        result = KeyValueParser().parse("Customer: Grace Okafor\nMachine name: DEMO-PC-6928")
+        assert [s.text for s in result.segments if not s.processable] == [
+            "Customer:",
+            "\n",
+            "Machine name:",
+        ]
+        assert [s.text for s in result.segments if s.processable] == [
+            " Grace Okafor",
+            " DEMO-PC-6928",
+        ]
+
+    def test_a_line_without_a_label_stays_whole_and_is_recorded(self) -> None:
+        result = KeyValueParser().parse("Please email the customer today.")
+        assert [s.text for s in result.segments if s.processable] == [
+            "Please email the customer today."
+        ]
+        assert result.fallbacks == (FALLBACK_NO_KEY,)
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "call me at 09:15 tomorrow",  # a time, not a label
+            "the ratio is 3:1 overall",  # a ratio
+            "see https://example.com for details",  # a URI scheme
+        ],
+    )
+    def test_colons_that_are_not_labels_are_left_alone(self, line: str) -> None:
+        result = KeyValueParser().parse(line)
+        assert [s.text for s in result.segments if s.processable] == [line]
+        assert result.fallbacks == (FALLBACK_NO_KEY,)
+
+    def test_a_long_sentence_ending_in_a_colon_is_not_a_label(self) -> None:
+        line = "We reviewed every open incident this week and concluded the following: nothing."
+        result = KeyValueParser().parse(line)
+        assert [s.text for s in result.segments if s.processable] == [line]
+
+    def test_crlf_survives_a_substitution_byte_for_byte(self) -> None:
+        parser = KeyValueParser()
+        source = "Customer: Grace Okafor\r\nDepartment: Support\r\n"
+        result = parser.parse(source)
+        first = result.processable_segments[0]
+        rebuilt = parser.reconstruct(result, {first.segment_id: " <PERSON>"})
+        assert rebuilt == "Customer: <PERSON>\r\nDepartment: Support\r\n"
+        assert "\n" not in rebuilt.replace("\r\n", "")
+
+    def test_the_label_cannot_be_transformed(self) -> None:
+        # AGENTS.md rule 5: structure is immutable, and the base class enforces it.
+        parser = KeyValueParser()
+        result = parser.parse("Customer: Grace Okafor")
+        label = next(s for s in result.segments if not s.processable)
+        with pytest.raises(ParserError, match="not processable"):
+            parser.reconstruct(result, {label.segment_id: "Owner:"})
+
+    def test_preserve_key_false_processes_the_whole_line(self) -> None:
+        result = KeyValueParser({"preserve_key": False}).parse("Customer: Grace Okafor")
+        assert [s.text for s in result.segments if s.processable] == ["Customer: Grace Okafor"]
+
+    def test_unknown_options_are_actionable(self) -> None:
+        with pytest.raises(ParserError) as exc_info:
+            KeyValueParser({"speaker_delimiters": [":"]})
+        assert "speaker_delimiters" in str(exc_info.value)
+        assert "key_delimiters" in str(exc_info.value)
+
+    @pytest.mark.parametrize("bad", [0, -1, "four", True])
+    def test_key_limits_must_be_positive_integers(self, bad: object) -> None:
+        with pytest.raises(ParserError, match="positive integer"):
+            KeyValueParser({"max_key_words": bad})
+
+    def test_alternative_delimiter(self) -> None:
+        result = KeyValueParser({"key_delimiters": ["="]}).parse("Customer=Grace Okafor")
+        assert [s.text for s in result.segments if not s.processable] == ["Customer="]
+
+    def test_empty_input_still_yields_one_processable_segment(self) -> None:
+        result = KeyValueParser().parse("")
+        assert len(result.segments) == 1
+        assert result.segments[0].processable
+        assert result.source_text() == ""
