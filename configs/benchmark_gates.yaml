@@ -45,9 +45,10 @@ measured:
   splits: all (dev + calibration + test)
   strategy: redact
   date: 2026-08-18   # re-measured after ADR-0016 span repair
-  # The commit that carries the measured code. Recorded in the commit that follows
-  # the one raising these floors, because a commit cannot name its own hash.
-  commit: pending
+  # The commit that carries the measured code — d9b01d6, not its parent. Recorded in
+  # the commit that follows the one raising these floors, because a commit cannot name
+  # its own hash. Checking out this hash and re-running must reproduce the floors.
+  commit: d9b01d6
   # The Presidio numbers move with the model version, by design (ADR-0009 pins the md
   # tier for CI). If a model bump moves them, the nightly job fails loudly and the fix
   # is to re-measure and re-commit this file with the new versions recorded here —
