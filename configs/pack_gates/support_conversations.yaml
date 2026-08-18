@@ -28,6 +28,11 @@ measured:
   strategy: redact
   date: 2026-08-18
   session: 6
+  # The commit carrying the code these floors were measured on — recorded in the
+  # commit that follows it, because a commit cannot name its own hash. Checking
+  # out this hash, rebuilding the pack from the pinned source and re-running must
+  # reproduce the floors below.
+  commit: 96eae02
   # What this pack is actually for: the transcript parser's speaker heuristic on text
   # nobody wrote for it. 7,104 of Bitext's 26,872 responses contain newlines, so
   # continuation lines with no speaker prefix exercise the `no_speaker_prefix` fallback
