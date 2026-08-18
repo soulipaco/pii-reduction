@@ -35,6 +35,31 @@ Provider-native labels should never leak throughout the codebase.
 
 ## Provider abstraction
 
+### Provider output normalization
+
+Two things are normalized before a candidate leaves the provider layer, so no
+downstream layer ever sees a malformed span:
+
+- **Labels**, in each adapter's own mapping table — provider-native strings never
+  cross the boundary (ADR-0004).
+- **Offsets**, in the shared base: spans are validated against the text, and for
+  entity types whose surface cannot contain a line break, a span that crosses one is
+  trimmed back to the longest line fragment it covers (ADR-0016). Which entity types
+  those are is a static fact on `EntityDefinition.surface_may_span_lines`, not a
+  per-layer list; `ADDRESS` is excluded because a postal address written across
+  several lines is one address.
+
+Trimming is repair, not rejection: an NER model that runs a PERSON span through a line
+break was right about the entity and wrong about where it stops. Dropping the span
+would leave the name in the output; keeping it destroys the next line's text. The
+*longest* fragment is kept rather than the first, because the name may fall on either
+side of the break — `Customer:` + break + `Peter Novak` is as common as the reverse,
+and keeping the first fragment there would redact the label and leak the name.
+
+Spans trimmed or emptied by this rule are counted into provider drop metrics rather
+than discarded silently.
+
+
 Suggested provider interface:
 
 ```python

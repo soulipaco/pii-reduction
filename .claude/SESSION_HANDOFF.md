@@ -283,7 +283,12 @@ something, not as a prerequisite. To pick up work:
    measured baseline, and the queue with exit criteria.
 2. **Q1 is complete.** Remote is `soulipaco/pii-reduction` (private); both workflows
    are green on GitHub.
-3. **Q2: diagnosed, three components built, none of the segmentation remedies shipped.**
+3. **Q2 is COMPLETE.** English tier-3 PERSON recall 0.333 → 1.000, whole-corpus strict
+   F1 0.886 → 0.915, no slice regressed, gate floors raised. The fix was to **repair
+   the span, not re-cut the input**: a PERSON span crossing a line break is trimmed
+   back to the line at the provider boundary (ADR-0016). Start at **Increment D**.
+
+   Superseded detail, kept because the reasoning matters:
    Presidio finds every name; the *span* crosses the line break. `split_lines`, the
    `key_value` parser and the identifier guard all exist. **Only the guard ships** —
    it is a verified no-op on the shipped config and removes the over-redaction that

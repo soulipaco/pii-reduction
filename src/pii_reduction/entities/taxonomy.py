@@ -37,6 +37,7 @@ __all__ = [
     "default_replacement",
     "is_known",
     "known_labels",
+    "line_bounded_labels",
     "require_known",
 ]
 
@@ -57,6 +58,13 @@ class EntityDefinition:
     priority: int
     description: str
     detected_at_baseline: bool = True
+    #: May a single instance of this entity legitimately span more than one line?
+    #:
+    #: A static fact about the surface, not a policy: a person's name never contains a
+    #: line break, a postal address written across several lines is still one address.
+    #: Providers use it to trim spans an NER model ran through a break (ADR-0016), so
+    #: the answer lives here rather than being restated per layer.
+    surface_may_span_lines: bool = True
 
 
 TAXONOMY: Mapping[str, EntityDefinition] = MappingProxyType(
@@ -66,12 +74,14 @@ TAXONOMY: Mapping[str, EntityDefinition] = MappingProxyType(
             replacement="<EMAIL>",
             priority=100,
             description="Email address. Deterministic recognizer at baseline.",
+            surface_may_span_lines=False,
         ),
         PHONE: EntityDefinition(
             label=PHONE,
             replacement="<PHONE>",
             priority=90,
             description="Telephone number. Deterministic recognizer at baseline.",
+            surface_may_span_lines=False,
         ),
         ADDRESS: EntityDefinition(
             label=ADDRESS,
@@ -85,6 +95,7 @@ TAXONOMY: Mapping[str, EntityDefinition] = MappingProxyType(
             replacement="<PERSON>",
             priority=50,
             description="Person name. Requires an NLP provider (Increment B).",
+            surface_may_span_lines=False,
         ),
     }
 )
@@ -117,6 +128,18 @@ def require_known(label: str, *, context: str | None = None) -> str:
 
 def default_replacement(label: str) -> str:
     return TAXONOMY[require_known(label)].replacement
+
+
+def line_bounded_labels() -> frozenset[str]:
+    """Labels whose surface cannot contain a line break.
+
+    One definition, read by the provider boundary (which trims such spans) and by
+    anything else that needs the fact. ``ADDRESS`` is absent: a postal address written
+    across several lines is one address, and trimming it would cut a real entity.
+    """
+    return frozenset(
+        label for label, definition in TAXONOMY.items() if not definition.surface_may_span_lines
+    )
 
 
 def default_priority(label: str) -> int:

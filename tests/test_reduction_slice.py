@@ -20,7 +20,7 @@ import pytest
 from pii_reduction.contracts.entities import ResolvedEntity
 from pii_reduction.entities import reconcile
 from pii_reduction.entities.taxonomy import EMAIL, PERSON, PHONE
-from pii_reduction.parsers import TranscriptParser
+from pii_reduction.parsers import PlainTextParser, TranscriptParser
 from pii_reduction.providers import DeterministicProvider
 from pii_reduction.reducers import MaskReducer, PseudonymizeReducer, RedactReducer
 from pii_reduction.reducers.base import BaseReducer
@@ -155,3 +155,40 @@ class TestOtherStrategiesOnTheSameSlice:
             output = process(DEMO_2, reducer=reducer)
             for prefix in PREFIXES:
                 assert prefix in output, reducer.name
+
+
+class TestKeyValueStructurePreserved:
+    """The plain-text counterpart of the transcript-prefix assertion (AGENTS.md rule 5).
+
+    Before ADR-0016's span repair, reduction of a multi-line key/value block produced
+    ``Customer: <PERSON> number: ...`` — the next line's label eaten and the line
+    structure collapsed. The benchmark's over-redaction metric could not see it,
+    because field labels are not protected tokens. This asserts on the reduced text,
+    which is what makes the fix permanent.
+    """
+
+    def test_a_field_label_after_the_name_survives_reduction(self) -> None:
+        text = "Customer: Grace Okafor" + chr(10) + "Mobile number: 000"
+        parser = PlainTextParser()
+        parsed = parser.parse(text)
+        segment = parsed.processable_segments[0]
+        # The span the model produced before repair: name + break + next label.
+        person = ResolvedEntity(
+            start=10,
+            end=text.index("number") - 1,
+            entity_type=PERSON,
+            selected_provider="double",
+            resolution_rule="test",
+        )
+        trimmed = ResolvedEntity(
+            start=10,
+            end=text.index(chr(10)),
+            entity_type=PERSON,
+            selected_provider="double",
+            resolution_rule="test",
+        )
+        before = RedactReducer().reduce(segment.text, [person]).text
+        after = RedactReducer().reduce(segment.text, [trimmed]).text
+        assert "Mobile number:" not in before
+        assert after == "Customer: <PERSON>" + chr(10) + "Mobile number: 000"
+        assert after.count(chr(10)) == text.count(chr(10))

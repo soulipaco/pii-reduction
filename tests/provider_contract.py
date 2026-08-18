@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from pii_reduction.entities.taxonomy import known_labels
-from pii_reduction.providers.base import BaseProvider
+from pii_reduction.providers.base import LINE_BOUNDED_ENTITIES, BaseProvider
 from pii_reduction.providers.errors import ProviderError
 
 
@@ -25,6 +25,9 @@ class ProviderContractTests:
     sample_text: str = ""
     #: Language code to pass; providers may ignore it.
     sample_language: str | None = "en"
+    #: Multi-line sample. Defaults to ``sample_text`` split across two lines, which is
+    #: enough to exercise the line-bounded invariant for any provider.
+    multiline_sample_text: str = ""
 
     def detect(self, text: str, **kwargs: object) -> list:  # type: ignore[type-arg]
         return self.provider.detect(text, language=self.sample_language, **kwargs)  # type: ignore[arg-type]
@@ -93,3 +96,20 @@ class ProviderContractTests:
     def test_matches_carry_no_surface_text(self) -> None:
         for match in self.detect(self.sample_text):
             assert "text" not in match.model_dump()
+
+    def test_line_bounded_spans_never_cross_a_line_break(self) -> None:
+        """A PERSON span may not contain a line break (ADR-0016).
+
+        In the shared suite rather than beside the repair code so both real providers
+        inherit it: the repair lives in ``BaseProvider``, but until this assertion
+        existed nothing checked that the *Presidio* adapter honours it — only the
+        benchmark gate did, and that needs models and a gates run.
+        """
+        text = self.multiline_sample_text or self.sample_text.replace(" ", chr(10), 1)
+        for match in self.detect(text):
+            if match.entity_type not in LINE_BOUNDED_ENTITIES:
+                continue
+            surface = text[match.start : match.end]
+            assert chr(10) not in surface and chr(13) not in surface, (
+                f"{match.entity_type} span crosses a line break"
+            )

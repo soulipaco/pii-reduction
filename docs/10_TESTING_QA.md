@@ -96,6 +96,8 @@ Every provider must:
 
 - return normalized entity labels,
 - return valid offsets,
+- return spans that do not cross a line break, for entity types whose surface cannot
+  contain one (`EntityDefinition.surface_may_span_lines`; ADR-0016),
 - respect requested entity scope,
 - handle empty text,
 - handle null through caller contract,

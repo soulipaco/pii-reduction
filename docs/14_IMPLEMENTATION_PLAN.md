@@ -324,7 +324,7 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 4 (2026-08-18), after queue item Q1.
+Last updated: session 5 (2026-08-18), after queue items Q1 and Q2.
 
 ### Complete
 
@@ -339,6 +339,7 @@ Last updated: session 4 (2026-08-18), after queue item Q1.
 | B | `providers/presidio_provider.py`, `docs/15_PROVIDERS.md`, chain comparison | +45 integration |
 | C | `language/` — lingua detector, ADR-0012 gate, per-language provider routing | 480 default / 71 integration |
 | Q1 | `.github/workflows/{ci,integration}.yml`, `evaluation/gates.py`, `configs/benchmark_gates.yaml` | 511 default / 72 integration |
+| Q2 | span repair at the provider boundary, identifier guard, `key_value` parser, `split_lines` (ADR-0016) | 682 default / 73 integration |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -346,20 +347,20 @@ Last updated: session 4 (2026-08-18), after queue item Q1.
 
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
-| strict F1 | 0.723 | 0.886 |
-| relaxed F1 | 0.723 | 0.921 |
+| strict F1 | 0.723 | 0.902 |
+| relaxed F1 | 0.723 | 0.914 |
 | leakage rate | 0.433 | 0.117 |
 | document clean rate | 0.161 | 0.774 |
 | over-redaction rate | 0.000 | 0.000 |
-| PERSON precision / recall | 0.000 / 0.000 | 0.820 / 0.641 |
+| PERSON precision / recall | 0.000 / 0.000 | 0.833 / 0.705 |
 
 PERSON strict recall by language and tier, hybrid chain:
 
 | language | tier 1 clean | tier 2 noisy | tier 3 structured | tier 4 transcript |
 |---|---|---|---|---|
-| en | 1.000 | 0.889 | **0.333** | 1.000 |
+| en | 1.000 | 0.889 | 1.000 | 1.000 |
 | de | 1.000 | 1.000 | 1.000 | 1.000 |
-| **el** | **0.222** | **0.111** | **0.000** | **0.000** |
+| **el** | **0.222** | **0.111** | **0.167** | **0.000** |
 
 Language detection against the corpus's known language: 99/102 agreement, **zero**
 confident misclassifications, 3 abstentions to `und`.
@@ -411,118 +412,60 @@ and verified in a throwaway core-only venv. **A green local run does not prove t
 push tier is green**; check a clean core-only environment when touching anything the
 extras reach.
 
-Every hybrid gate value reproduced **exactly** on GitHub's runner (strict F1 0.886,
-PERSON 0.820/0.641, en tier 3 0.333, el tier 1 0.222). The published baseline is
-therefore machine-independent, not an artifact of one laptop.
+Every hybrid gate value **as it stood at Q1** reproduced exactly on GitHub's runner
+(strict F1 0.886, PERSON 0.820/0.641, en tier 3 0.333, el tier 1 0.222), so the
+baseline is machine-independent rather than an artifact of one laptop. Q2 moved those
+numbers and its floors have been verified locally only — the nightly integration run
+is the first cross-runner check of them.
 
-#### Q2. English tier-3 PERSON recall (currently 0.333) — **diagnosed, remedy partial**
+#### Q2. English tier-3 PERSON recall — **complete** (0.333 → 1.000)
 
-**The cause is not what this section assumed.** Presidio detects every name in the
-failing documents; the *span* is wrong. Given a multi-line key/value block as one
-segment, spaCy runs the entity boundary through the line break — `Peter Novak\nMobile`
-where truth is `Peter Novak` — which strict matching counts as a miss and a false
-positive. Tier 4 scores 1.000 with the same model and names because the transcript
-parser is line-oriented. It is not merely a scoring artifact: reduction currently
-destroys the field label (`Customer: <PERSON> number: …`), a structure-preservation
-failure the over-redaction metric cannot see because labels are not protected tokens.
+**The cause was a span boundary, not detection.** Presidio found every name; handed a
+multi-line key/value block it ran the entity boundary through the line break and
+returned `Peter Novak` + newline + `Mobile`, which strict matching counts as a miss
+*and* a false positive. It also destroyed the next line's label in the output — a
+structure-preservation failure the over-redaction metric cannot see, because labels
+are not protected tokens.
 
-Three components are built and tested (ADR-0016): `split_lines` on `PlainTextParser`,
-the `key_value` parser, and the identifier guard. **Only the guard is enabled, and Q2
-is not complete.**
+**The fix repairs the span instead of re-cutting the input** (ADR-0016): a PERSON span
+crossing a line break is trimmed back to the line, at the provider boundary. Detection
+is untouched, so no context is lost and no configuration changes.
 
-*First measurement, before the guard existed* — both remedies fixed the span and both
-failed the exit criterion:
+Three remedies were built and measured whole-corpus on the hybrid chain:
 
-| whole corpus, hybrid chain (pre-guard) | shipped | `split_lines` | `key_value` |
-|---|---|---|---|
-| en tier-3 PERSON recall | 0.333 | 1.000 | 1.000 |
-| strict F1 | 0.886 | — | 0.910 |
-| leakage | 0.117 | — | 0.122 |
-| **over-redaction** | **0.000** | 0.000 | **0.020** |
-| new false positives | — | German `Rechnername` | identifiers (below) |
+| | shipped | `split_lines` | `key_value` | **span repair** |
+|---|---|---|---|---|
+| strict F1 | 0.886 | 0.902 | 0.915 | **0.902** |
+| relaxed F1 | 0.921 | 0.913 | 0.927 | **0.914** |
+| en tier-3 PERSON | 0.333 | 1.000 | 1.000 | **1.000** |
+| el tier-3 PERSON | 0.000 | 0.000 | 0.000 | **0.167** |
+| PERSON precision / recall | 0.820 / 0.641 | — | — | **0.833 / 0.705** |
+| over-redaction | 0.000 | 0.000 | 0.000 | **0.000** |
+| leakage | 0.117 | 0.122 | 0.122 | **0.117** |
+| document clean rate | 0.774 | 0.763 | 0.763 | **0.774** |
 
-Holding the label out of processing removes the context that was *suppressing* false
-positives on bare identifiers:
+**Exit criterion met:** English tier-3 PERSON recall improved 0.333 → 1.000,
+over-redaction stayed 0.000, and **no slice regressed** — Greek tier 3 improved as
+well. Gate floors were raised to these numbers, so the fix is now protected.
 
-```text
-'KB Article: KB000002739'    → ' KB000002739'  tagged PERSON → redacted
-'Rechnername: DEMO-PC-6963'  → ' DEMO-PC-6963' tagged PERSON → redacted
-```
+The two segmentation remedies remain available per column and are enabled nowhere.
+Both fixed the span by re-cutting the input and both paid for it in lost context: each
+leaked a Greek name, and `key_value` also turned one provider call per document into
+one per line, which matters under ADR-0015. The lesson is general — the model's
+accuracy depends on the text it is shown, so a remedy that changes the input trades
+one error for another, while one that changes the output cannot.
 
-**Note for the next session: dev+calibration did not reveal this.** Both destroyed
-identifiers are in the test split, and the development splits reported over-redaction
-0.000 with no slice regressing. Developing against dev/calibration is still right — it
-is what stops iterating on the test split — but it is not sufficient evidence to
-enable a change. Run the whole-corpus gates before claiming a remedy works.
+Also shipped: the **identifier guard** (PERSON-scoped), which refuses a PERSON span
+whose surface is a machine identifier. It was built to unblock `key_value` and is not
+needed by the remedy that won, but it is correct in its own right and a verified no-op
+on the shipped configuration.
 
-**The identifier guard now ships** (`patterns.is_identifier_shaped`, applied by the
-reconciler as rejection reason `identifier_shaped`, default scope PERSON).
-It is a structural rule — no token in the surface is name-like — rather than a list of
-identifier formats, so it does not fit the fixture. It is a **verified no-op on the
-shipped configuration**: all twelve hybrid gates returned identical values.
+Eliminated candidate, recorded so nobody repeats it: Presidio's `context=` cannot
+recover a missed name. It boosts scores of candidates a recognizer already produced;
+PERSON comes from the spaCy NER reading the text it was given.
 
-*Second measurement, with the guard active* — this is the current picture:
-
-| whole corpus, hybrid chain (with guard) | shipped | `split_lines` | `key_value` |
-|---|---|---|---|
-| strict F1 | 0.886 | 0.902 | **0.915** |
-| relaxed F1 | 0.921 | 0.913 | **0.927** |
-| en tier-3 PERSON recall | 0.333 | 1.000 | **1.000** |
-| over-redaction | 0.000 | 0.000 | 0.000 |
-| leakage | **0.117** | 0.122 | 0.122 |
-| document clean rate | **0.774** | 0.763 | 0.763 |
-
-The over-redaction regression is gone and `key_value` is the better remedy. **Neither
-ships**, by the repository owner's decision: both leak one more entity — the Greek
-`Ελένη Παππά` in `Από: Ελένη Παππά`, which `xx_ent_wiki_sm` finds with block context
-and misses on the isolated line. Its slice recall is 0.000 before and after, because
-the old detection produced an over-long span that failed strict matching *while still
-redacting the name*. A leakage regression is not a fair trade for a detection gain in
-a PII reduction tool, and `leakage_rate` is gated at 0.117.
-
-**Q2 remains open on a narrower problem: recover Greek detection under line-scoped
-segmentation.** Candidates, in ADR-0016: pass the label to the provider as context
-words without making it processable; or detect at two granularities and let the
-reconciler choose (the overlap ordering is the open question — today's "longer span
-wins" would re-select the over-long span and undo the English fix). A third is
-architectural: segmentation is per column while detection routing is per language, so
-"line-scope English, block-scope Greek" cannot currently be expressed.
-
-Note also that `key_value` turns one provider call per document into one per line and
-slowed the whole-corpus run by roughly an order of magnitude here. Under ADR-0015
-(CPU-only) that is a selection criterion, not a footnote.
-
-Also fixed here, because Q2 depends on it: `run_benchmark` scored a subset against the
-**whole** corpus's ground truth, so a dev+calibration run reported over-redaction 0.627
-against a true 0.000. Any split-scoped number measured before this fix is not
-comparable with one measured after.
-
-The weakest slice that is **not** licence-bound, so the cheapest real quality win.
-Structured key/value text (`Customer: Maria Rossi` on its own line) gives the NER
-model no sentence context.
-
-Investigate before changing anything: confirm on the failing tier-3 documents whether
-the misses are context-window effects, the transcript/plain parser splitting the
-label from the value, or Presidio's recognizer configuration. Candidate remedies in
-increasing cost: a key/value parser that marks labels non-processable and passes the
-value with context, per-tier provider options, or a custom recognizer. Any change is
-judged by the benchmark, not by inspection.
-
-**How to work it without tuning on the test split.** The gate value for this slice is
-a whole-corpus number and CI re-reads it on every run, so iterating "change it, read
-the gate, change again" is tuning against a set that is 60% test split — precisely what
-ADR-0011 and `AGENTS.md` forbid. Develop the remedy against `--split dev` and
-`--split calibration`, read the whole-corpus number **once** when you are done, and
-raise the floor then. `--gates` refuses to run with `--split` so the two cannot be
-mixed up by accident.
-
-**Exit:** English tier-3 PERSON strict recall measurably improved with no regression
-in over-redaction (must stay 0.000) and no drop in any other slice; the new numbers
-replace those in this section and in `docs/15_PROVIDERS.md`, and the
-`en_tier3_person_strict_recall` floor in `configs/benchmark_gates.yaml` is raised to
-the new measured value. The other gates are what enforce "no drop in any other
-slice" — if a remedy trades Greek or precision for English, the hybrid gate set fails
-and says which gate.
+Still open, and unchanged by this: Greek PERSON is weak (0.222 / 0.111 / 0.167 /
+0.000 by tier) and licence-bound to `xx_ent_wiki_sm` until roadmap Phase 7 (ADR-0007).
 
 #### Q3. Increment D — public datasets (§5 above)
 

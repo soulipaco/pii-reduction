@@ -175,22 +175,22 @@ providers:
 |---|---|---|---|---|
 | EMAIL | 1.000 | 1.000 | 1.000 | 51 |
 | PHONE | 1.000 | 1.000 | 1.000 | 51 |
-| PERSON | 0.820 | 0.641 | 0.719 | 78 |
+| PERSON | 0.833 | 0.705 | 0.764 | 78 |
 
 PERSON strict recall by language and tier:
 
 | language | tier 1 (clean) | tier 2 (noisy) | tier 3 (structured) | tier 4 (transcript) |
 |---|---|---|---|---|
-| en | 1.000 | 0.889 | 0.333 | 1.000 |
+| en | 1.000 | 0.889 | 1.000 | 1.000 |
 | de | 1.000 | 1.000 | 1.000 | 1.000 |
-| **el** | **0.222** | **0.111** | **0.000** | **0.000** |
+| **el** | **0.222** | **0.111** | **0.167** | **0.000** |
 
 Chain comparison, whole corpus:
 
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
-| strict F1 | 0.723 | **0.886** |
-| relaxed F1 | 0.723 | **0.921** |
+| strict F1 | 0.723 | **0.902** |
+| relaxed F1 | 0.723 | **0.914** |
 | leakage rate | 0.433 | **0.117** |
 | document clean rate | 0.161 | **0.774** |
 | over-redaction rate | 0.000 | **0.000** |
@@ -199,11 +199,18 @@ Three things this table says plainly:
 
 1. Adding an NER provider is what moved leakage from 43.3% to 11.7%; deterministic
    recognizers alone cannot cover names.
-2. **The strict–relaxed gap opened** (0.886 vs 0.921) the moment a model joined. That
-   gap is boundary quality: spans that cover the right name with the wrong edges. It
-   was zero while only deterministic spans existed (ADR-0011).
+2. **The strict–relaxed gap is boundary quality** — spans covering the right name with
+   the wrong edges. It was zero while only deterministic spans existed (ADR-0011),
+   opened to 0.886 vs 0.921 the moment a model joined, and is 0.902 vs 0.914 after
+   ADR-0016's span repair. Repair narrowed the *strict* side by fixing boundaries and
+   widened the relaxed side slightly, because keeping every line fragment of a
+   crossing span redacts the occasional neighbouring label. That is the deliberate
+   safe-direction trade; the rest is Greek boundary fuzziness.
 3. **Greek is the outstanding gap**, and it is a licensing consequence rather than a
    modelling oversight. Until a permissively-licensed multilingual model arrives
    (roadmap Phase 7), Greek PERSON coverage should be described as weak and the Greek
-   demo positioned as deterministic-entities-only. English tier 3 (key/value blocks,
-   0.333) is the second weakest slice and is worth a look before Phase 7.
+   demo positioned as deterministic-entities-only.
+
+   English tier 3 (key/value blocks) was the second weakest slice at 0.333 and is now
+   1.000: the model had been finding every name and running the span through the line
+   break, so the fix was to trim the span rather than to detect harder (ADR-0016).

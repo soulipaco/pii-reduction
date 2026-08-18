@@ -1,22 +1,47 @@
-# ADR-0016: line-scoped segmentation for key/value text, and why neither form ships enabled
+# ADR-0016: repair the span, do not re-cut the input
 
 **Status:** accepted · **Date:** 2026-08-18 · **Session:** 5
 
-> **Amended twice in the same session; read this before the Decision section.**
-> Final state:
+> **Amended three times in one session. This block is the decision; the sections
+> below are the road that led to it.**
 >
-> - `split_lines` and the `key_value` parser both exist and are tested. **Neither is
->   enabled in any shipped configuration**, so no published number changed.
-> - The **identifier guard ships enabled**, scoped to **PERSON only** — ADDRESS was
->   removed by the privacy audit, see *Consequences*. It is a verified no-op
->   on the shipped configuration — all twelve hybrid gates returned identical values —
->   and it removes the over-redaction regression that blocked `key_value`.
-> - What still blocks both remedies is **not** over-redaction any more. It is a single
->   leaked Greek name caused by context loss, which the detection metrics do not show.
+> The English tier-3 failure is a *span boundary* error, not a detection failure.
+> Three remedies were built and measured:
 >
-> The Decision section below records the reasoning as it stood when only `split_lines`
-> existed: its conclusion "do not add a `key_value` parser for this" was overtaken by
-> measurement, and the parser was built. Consequences is the current record.
+> | whole corpus, hybrid | shipped | `split_lines` | `key_value` | **span repair** |
+> |---|---|---|---|---|
+> | strict F1 | 0.886 | 0.902 | 0.915 | **0.902** |
+> | relaxed F1 | 0.921 | 0.913 | 0.927 | **0.914** |
+> | en tier-3 PERSON | 0.333 | 1.000 | 1.000 | **1.000** |
+> | el tier-3 PERSON | 0.000 | 0.000 | 0.000 | **0.167** |
+> | over-redaction | 0.000 | 0.000 | 0.000 | **0.000** |
+> | leakage | 0.117 | 0.122 | 0.122 | **0.117** |
+> | document clean rate | 0.774 | 0.763 | 0.763 | **0.774** |
+>
+> **Span repair ships.** A PERSON span that crosses a line break is split into one
+> span per line, at the provider boundary (`providers/base.py::_bound_to_line`).
+> No detection slice regressed and two improved (en tier 3 0.333 → 1.000, el tier 3
+> 0.000 → 0.167); leakage, over-redaction and document clean rate all hold exactly at
+> baseline.
+>
+> **Every fragment is kept, not the best one, and that choice costs relaxed F1**
+> (0.921 → 0.914, a gate deliberately lowered). `Peter Novak` + break + `Mobile` and a
+> hard-wrapped `Jürgen` + break + `Müller` are structurally identical, so no rule can
+> tell a trailing label from the second half of a name. Dropping a fragment risks
+> leaving half a name in the output — and `leakage_rate` cannot see that, because it
+> matches only the exact *full* surface. Keeping every fragment sometimes redacts a
+> neighbouring label instead, which is the direction this project measures and gates
+> at 0.000. The safe error was chosen over the flattering one.
+>
+> `split_lines` and the `key_value` parser remain available per column but are
+> **enabled nowhere**. Both fixed the span by re-cutting the *input*, and every such
+> remedy pays for it in lost context: both leaked a Greek name, and `key_value` also
+> multiplied provider calls by the number of lines. Span repair changes the *output*
+> instead, so detection is untouched and the context cannot be lost by construction.
+>
+> The identifier guard (PERSON-scoped) also ships. It was built to unblock
+> `key_value`; it turned out not to be needed for the remedy that won, but it is a
+> correct rule in its own right and a verified no-op on the shipped configuration.
 
 ## Context
 
@@ -216,3 +241,48 @@ Also worth carrying forward: `key_value` turns one provider call per document in
 per line, and the whole-corpus benchmark run slowed by roughly an order of magnitude on
 the development machine. Under ADR-0015 (CPU-only deployment) that cost is a selection
 criterion, not a footnote.
+
+
+## The remedy that won, and why the others did not
+
+Every earlier attempt re-cut the input: split the field into lines, or split each line
+into label and value. Each fixed the boundary and each cost context, because the
+model's accuracy depends on the text it is shown. That is not a tuning problem to be
+solved with a better split — it is inherent to changing the input.
+
+Span repair changes the output. Detection runs exactly as before, on the whole block;
+a PERSON span that crosses a line break is trimmed back to the line. It cannot lose
+context, because it does not touch what the model sees.
+
+It is **repair rather than rejection** deliberately: the model was right about the
+entity and wrong only about where it stops. Dropping the span would leave the name in
+the output; keeping it destroys the next line's label. Trimming is the only option
+that is right on both counts.
+
+It lives at the provider boundary rather than in the reconciler because the text and
+the match are already in hand there — no optional `text=` parameter, and no downstream
+layer ever sees a malformed span.
+
+`ADDRESS` is excluded from `LINE_BOUNDED_ENTITIES`: a postal address written across
+several lines is one address, and trimming it at the first break would cut a real
+entity in half.
+
+### What this cost, and what it did not
+
+Nothing operationally: one provider call per document, as before. No configuration
+change, so every existing user gets the fix rather than only those who opt a column
+in. No corpus change.
+
+### Candidate eliminated
+
+Presidio's `context=` parameter cannot recover a missed name. It feeds the
+context-aware *enhancer*, which boosts the score of candidates a recognizer already
+produced; PERSON comes from the spaCy NER reading the text it was given. Probed
+directly on the Greek line with and without context words: no PERSON either way.
+Recorded so the next session does not spend the same afternoon on it.
+
+### Still open
+
+Greek PERSON remains weak (0.222 / 0.111 / 0.167 / 0.000 by tier) and licence-bound to
+`xx_ent_wiki_sm` until roadmap Phase 7 (ADR-0007). Span repair improved tier 3 by one
+entity; it did not change the licensing reality.

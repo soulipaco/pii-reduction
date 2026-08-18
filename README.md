@@ -56,12 +56,12 @@ pii-reduction benchmark --gates configs/benchmark_gates.yaml
 
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
-| strict F1 | 0.723 | 0.886 |
+| strict F1 | 0.723 | 0.902 |
 | leakage rate | 0.433 | 0.117 |
 | document clean rate | 0.161 | 0.774 |
 | over-redaction rate | 0.000 | 0.000 |
 
-PERSON recall reaches 1.000 for German and 0.889–1.000 for English on clean and transcript text, but **0.000–0.222 for Greek**: the good Greek spaCy models are non-commercial and excluded on licensing grounds (ADR-0007), so Greek routes through a multilingual model. `docs/15_PROVIDERS.md` publishes that gap per language and tier rather than reporting an average that hides it.
+PERSON recall reaches 1.000 for German and 0.889–1.000 for English across every difficulty tier, but **0.000–0.222 for Greek**: the good Greek spaCy models are non-commercial and excluded on licensing grounds (ADR-0007), so Greek routes through a multilingual model. `docs/15_PROVIDERS.md` publishes that gap per language and tier rather than reporting an average that hides it.
 
 To regenerate the corpus (same seed gives a byte-identical corpus and manifest):
 

@@ -44,8 +44,10 @@ measured:
   # unaffected by these gates.
   splits: all (dev + calibration + test)
   strategy: redact
-  date: 2026-08-18
-  commit: 4fc9cfd
+  date: 2026-08-18   # re-measured after ADR-0016 span repair
+  # The commit that carries the measured code. Recorded in the commit that follows
+  # the one raising these floors, because a commit cannot name its own hash.
+  commit: pending
   # The Presidio numbers move with the model version, by design (ADR-0009 pins the md
   # tier for CI). If a model bump moves them, the nightly job fails loudly and the fix
   # is to re-measure and re-commit this file with the new versions recorded here —
@@ -122,15 +124,22 @@ gate_sets:
     gates:
       - name: overall_strict_f1
         metric: strict_f1
-        min: 0.886
+        min: 0.902
         support: 180
+      # LOWERED from 0.927, and below the 0.921 that predates span repair. The
+      # reason, per CONTRIBUTING.md: 0.927 was measured with a rule that kept only one
+      # line fragment of a crossing PERSON span. That rule leaks — a hard-wrapped name
+      # loses a half, and `leakage_rate` cannot see it because it matches only the
+      # exact full surface. Keeping every fragment never leaks and costs relaxed
+      # precision, because a redacted neighbouring label is a false positive. The
+      # trade is deliberate and recorded in ADR-0016.
       - name: overall_relaxed_f1
         metric: relaxed_f1
-        min: 0.921
+        min: 0.914
         support: 180
       - name: overall_strict_precision
         metric: strict_precision
-        min: 0.933
+        min: 0.935
         support: 180
       # EMAIL and PHONE must stay exactly where the deterministic chain had them:
       # adding a provider is not allowed to disturb what already worked.
@@ -147,12 +156,12 @@ gate_sets:
       - name: person_strict_precision
         metric: strict_precision
         entity_type: PERSON
-        min: 0.820
+        min: 0.833
         support: 78
       - name: person_strict_recall
         metric: strict_recall
         entity_type: PERSON
-        min: 0.641
+        min: 0.705
         support: 78
       - name: leakage_rate
         metric: leakage_rate
@@ -166,15 +175,14 @@ gate_sets:
         metric: over_redaction_rate
         max: 0.000
         support: 102
-      # The two weakest PERSON slices are gated individually so that an overall
-      # improvement cannot hide a regression in them. English tier 3 is the target of
-      # queue item Q2; when it improves, this floor moves up with it.
+      # English tier 3 was Q2's target. ADR-0016's span repair took it from 0.333 to
+      # 1.000, and this floor moved with it — the gate now protects the fix.
       - name: en_tier3_person_strict_recall
         metric: strict_recall
         entity_type: PERSON
         language: en
         difficulty_tier: 3
-        min: 0.333
+        min: 1.000
         support: 6
       # Greek PERSON is licence-bound to xx_ent_wiki_sm until roadmap Phase 7
       # (ADR-0007). The floor records where it actually is, so the honest number is
@@ -186,3 +194,12 @@ gate_sets:
         difficulty_tier: 1
         min: 0.222
         support: 9
+      # Greek tier 3 went 0.000 -> 0.167 with span repair. One entity, but claimed in
+      # three documents, so it is gated rather than left as prose.
+      - name: el_tier3_person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        language: el
+        difficulty_tier: 3
+        min: 0.167
+        support: 6
