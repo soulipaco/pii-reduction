@@ -24,7 +24,7 @@ This repository skeleton defines the architecture, data contracts, evaluation fr
 
 The first vertical slice is implemented and measured (Increments A1–A6, B and C of `docs/14_IMPLEMENTATION_PLAN.md`): CSV/pandas sources, plain-text and transcript parsers, deterministic EMAIL/PHONE and Presidio NER providers, language detection with per-language provider routing, entity reconciliation, redact/mask/pseudonymize reducers, local outputs with run metrics, a seeded synthetic corpus with an injection manifest, and the evaluation framework.
 
-Every number published below is enforced rather than only reported: they are locked as regression gates in `configs/benchmark_gates.yaml` and checked by CI on the committed corpus.
+Every number published below is enforced rather than only reported: they are locked as regression gates in `configs/benchmark_gates.yaml` and checked by CI on the committed corpus. The public-dataset packs carry their own gate sets under `configs/pack_gates/`, measured on their own corpora — never a reason to loosen the synthetic floors.
 
 `docs/14_IMPLEMENTATION_PLAN.md` §8 carries the live status, the measured baseline, and what is queued next.
 
@@ -68,6 +68,39 @@ To regenerate the corpus (same seed gives a byte-identical corpus and manifest):
 ```bash
 python demo/build_corpus.py --out tests/fixtures/corpus --seed 42
 ```
+
+### Public-dataset demo packs
+
+The corpus above is templates this project wrote, so a provider that does well on it has
+only been asked an easy question. Three packs measure the same pipeline on text written
+by other people, with synthetic PII injected into it so the ground truth is still exact:
+
+```bash
+python demo/build_pack.py support_tickets
+pii-reduction benchmark --corpus demo/packs/support_tickets --chain deterministic_presidio
+```
+
+| pack | source | shape |
+|---|---|---|
+| `support_tickets` | Bitext customer support (CDLA-Sharing-1.0) | English support notes |
+| `support_conversations` | the same exchanges, as Customer/Agent turns | English transcripts |
+| `multilingual_utterances` | MASSIVE (CC BY 4.0) | short lower-case German and Greek |
+
+**No raw data and no pack is committed.** Each source file is fetched from a pinned
+commit revision and verified against a SHA-256 recorded in `demo/registry.yaml`
+(ADR-0017), so a pack is rebuilt rather than stored. The registry is a gate, not a
+document: an unregistered dataset, a non-permissive licence, or a source carrying real
+personal data is refused before anything downloads — which is how MultiWOZ 2.2 left the
+demo set once its published text turned out to contain real Cambridge phone numbers
+(ADR-0018).
+
+On the packs, EMAIL and PHONE hold at 1.000 precision and recall across 1,600 entities
+in three languages, and the hybrid chain reaches strict F1 0.998–0.999 on English with
+leakage 0.000. The interesting numbers are elsewhere: PERSON *precision* is 0.985–0.995
+because public prose contains names no manifest knows about, and Greek PERSON recall is
+0.606 against 0.111–0.222 on the synthetic corpus with the same model. `docs/14_IMPLEMENTATION_PLAN.md`
+§8 publishes all of it beside the synthetic numbers, with the limitations that keep it
+honest.
 
 The recommended first implementation is a public-data demo with three families of text:
 

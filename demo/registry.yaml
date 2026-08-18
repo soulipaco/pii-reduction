@@ -1,0 +1,144 @@
+# Public dataset registry (docs/02_PUBLIC_DATA_STRATEGY.md, ADR-0010).
+#
+# One entry per public corpus this project can build a demo pack from. The registry is
+# the licence record: nothing may be downloaded, injected into or published as a pack
+# unless it has an entry here, and `redistribution_allowed` decides whether any derived
+# artifact can be committed.
+#
+# **No raw data is committed under any entry.** Every pack is rebuilt from the source
+# with `demo/build_pack.py`, which is why `version` and `retrieval_method` matter: they
+# are what makes "reproducible from documented commands" true rather than aspirational.
+#
+# `contains_real_pii` is the field to read before anything else. Where it is anything
+# but `false`, the base text may not be published in a pack, only measured locally —
+# and synthetic PII is injected regardless, because ground-truth spans are knowable
+# only for entities we placed ourselves.
+
+version: 1
+
+datasets:
+
+  bitext_customer_support:
+    name: Bitext Customer Service Tagged Training Dataset
+    source_url: https://huggingface.co/datasets/bitext/Bitext-customer-support-llm-chatbot-training-dataset
+    license: CDLA-Sharing-1.0
+    license_url: https://cdla.dev/sharing-1-0/
+    redistribution_allowed: true
+    # Share-alike: a derived pack carries the same licence. ADR-0010 flagged this as
+    # the decision point — if that proves awkward for redistributing injected
+    # derivatives, MultiWOZ (MIT) covers the same document shape.
+    share_alike: true
+    contains_real_pii: false
+    # The corpus is generated from templates with placeholder slots, so the "PII" it
+    # ships is already synthetic. That is what makes it safe to inject into.
+    retrieval_method: huggingface
+    version: "11"   # published file is ...-v11.csv; "1.0" was wrong
+    # The pin (ADR-0017). `revision` is a full commit hash, never a branch: a branch can
+    # move, and a pack rebuilt from a moved source is not the pack whose numbers were
+    # published. Each file carries the sha256 and byte count measured on 2026-08-18, and
+    # the fetcher refuses anything else — including a cached copy that stops matching.
+    retrieval:
+      repository: bitext/Bitext-customer-support-llm-chatbot-training-dataset
+      revision: 430d1a89bd93bd1fa23c16f29dd53e73f0087443
+      files:
+        - role: table
+          path: Bitext_Sample_Customer_Support_Training_Dataset_27K_responses-v11.csv
+          sha256: 6f81102b0100b97b8468eb04368033a23206bf1fde9d53500d5806ec1001a434
+          bytes: 19202474
+    document_type: plain
+    languages: [en]
+    difficulty_tier: 1
+    notes: >
+      Customer-support utterances with intent labels. Renders both English packs
+      (ADR-0018): `support_tickets` as a plain note, `support_conversations` as
+      Customer/Agent transcript turns from the same instruction/response pair.
+
+      The source is heavily templated, so entity values must vary per document or a
+      pack measures one name rather than a population — `inject()` derives its seed
+      from the document id for exactly that reason.
+
+      Rows whose text carries any `{{Placeholder}}` other than `{{Order Number}}` are
+      excluded; the order-number placeholder is filled with a synthetic identifier and
+      recorded as a protected token, which is what makes over-redaction measurable on
+      public text.
+
+  massive:
+    name: MASSIVE
+    source_url: https://huggingface.co/datasets/AmazonScience/massive
+    license: CC-BY-4.0
+    license_url: https://creativecommons.org/licenses/by/4.0/
+    redistribution_allowed: true
+    share_alike: false
+    contains_real_pii: false
+    retrieval_method: huggingface
+    version: "1.1"
+    # `main` holds only a loading script, so the pin is on HuggingFace's generated
+    # parquet branch. Pinning the *commit* rather than `refs/convert/parquet` is what
+    # keeps the URL stable when that branch is regenerated: the old commit stays
+    # resolvable, and if it is ever collected the fetch 404s instead of quietly
+    # returning different bytes (ADR-0017).
+    #
+    # Both files are named 0000.parquet and differ only by directory, which is why the
+    # cache keys on the full path and readers select by `role` rather than by filename.
+    retrieval:
+      repository: AmazonScience/massive
+      revision: ed58ac423a2f4121720918bf5301577edce4ffd3
+      files:
+        - role: de
+          path: de-DE/validation/0000.parquet
+          sha256: 42797d430834f891c85413b8b421bcbd852d9ccbb082f203b33ac821c3a7c583
+          bytes: 162914
+        - role: el
+          path: el-GR/validation/0000.parquet
+          sha256: 9937cca72f5036df215545ff7926b0b9ecb9cdbbf50469cf7129213c92cbd5cb
+          bytes: 209878
+    document_type: plain
+    languages: [de, el]
+    difficulty_tier: 2
+    notes: >
+      Short multilingual utterances. Supplies the German and Greek slices, which the
+      synthetic corpus can only cover with templates the project wrote itself. Short
+      text also exercises the ADR-0012 language gate on real input rather than on
+      strings chosen to test it.
+
+# Rejected, recorded so the decision is not re-litigated (ADR-0010, session 2):
+#
+#   kaggle_customer_support_twitter — CC BY-NC-SA (non-commercial, incompatible with
+#     this repository's MIT licence) and contains real PII from real accounts. Both
+#     reasons are independently disqualifying.
+rejected:
+
+  multiwoz_22:
+    name: MultiWOZ 2.2
+    source_url: https://github.com/budzianowski/multiwoz
+    license: MIT
+    redistribution_allowed: true
+    contains_real_pii: true
+    reason: >
+      The dialogues are fictional but the entities in them are not: MultiWOZ is built
+      over a scrape of real Cambridge (UK) venue listings, and the wizard reads those
+      database values aloud, so they appear in the published utterance text. A single
+      dev file contains 192 utterances carrying real Cambridge landlines (112 distinct
+      numbers) and 191 carrying real UK postcodes; `db/police_db.json` names a real
+      police station with its address and landline. Verified against
+      `budzianowski/multiwoz@master` during the session-5 privacy audit.
+
+      Two independent harms, either one disqualifying. Publishing a pack would
+      redistribute hundreds of real dialable numbers as "call this number" demo text —
+      the harm ADR-0014 was written after, an order of magnitude larger. And those
+      values are not in the injection manifest, so every one scores as a false
+      positive and the pack's precision would measure a contaminant.
+
+      This supersedes ADR-0010, which chose MultiWOZ as the MIT fallback if Bitext's
+      share-alike terms proved awkward. That fallback is gone; a replacement
+      transcript source is needed, or a scrubbing transformation must be written,
+      recorded here and validated before MultiWOZ can be used at all.
+
+  kaggle_customer_support_twitter:
+    source_url: https://www.kaggle.com/datasets/thoughtvector/customer-support-on-twitter
+    license: CC-BY-NC-SA-4.0
+    redistribution_allowed: false
+    contains_real_pii: true
+    reason: >
+      Non-commercial licence incompatible with MIT, and the text is real customer
+      tweets containing real personal data.

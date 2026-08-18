@@ -206,11 +206,47 @@ Three things this table says plainly:
    widened the relaxed side slightly, because keeping every line fragment of a
    crossing span redacts the occasional neighbouring label. That is the deliberate
    safe-direction trade; the rest is Greek boundary fuzziness.
-3. **Greek is the outstanding gap**, and it is a licensing consequence rather than a
-   modelling oversight. Until a permissively-licensed multilingual model arrives
-   (roadmap Phase 7), Greek PERSON coverage should be described as weak and the Greek
-   demo positioned as deterministic-entities-only.
+3. **Greek is the outstanding gap**, and it has been read as a licensing consequence
+   rather than a modelling oversight. Until a permissively-licensed multilingual model
+   arrives (roadmap Phase 7), Greek PERSON coverage should be described as weak and the
+   Greek demo positioned as deterministic-entities-only.
+
+   **The public-dataset packs complicate that reading and it is now an open question**
+   (plan §8 Q4). On MASSIVE utterances — real Greek written by native speakers for
+   another purpose — the *same* `xx_ent_wiki_sm` model reaches **0.606** Greek PERSON
+   strict recall over a support of 66, with German at 1.000 on the same text. The two
+   corpora are not comparable slice for slice, so this is not a claim that Greek
+   detection improved; it is a reason to find out how much of the 0.111-0.222 belongs to
+   the model and how much to the synthetic Greek templates.
 
    English tier 3 (key/value blocks) was the second weakest slice at 0.333 and is now
    1.000: the model had been finding every name and running the span through the line
    break, so the fix was to trim the span rather than to detect harder (ADR-0016).
+
+### Measured on public text
+
+The table above is the committed synthetic corpus — templates this project wrote. The
+demo packs (plan §8, ADR-0018) run the same chain over text written by other people,
+with synthetic PII injected so ground truth stays exact. Rebuild and measure:
+
+```bash
+python demo/build_pack.py support_tickets
+pii-reduction benchmark --corpus demo/packs/support_tickets --chain deterministic_presidio
+```
+
+| pack | strict F1 | PERSON precision | PERSON recall | leakage | over-redaction |
+|---|---|---|---|---|---|
+| `support_tickets` (en, plain) | 0.998 | 0.985 | 1.000 | 0.000 | 0.000 (56 tokens) |
+| `support_conversations` (en, transcript) | 0.999 | 0.995 | 1.000 | 0.000 | 0.000 (56 tokens) |
+| `multilingual_utterances` (de/el, plain) | 0.930 | 0.781 | 0.805 | 0.065 | no support |
+
+What changes when the text is not ours: **recall stops being the hard part and precision
+starts.** Every injected English name is found; the errors are spans in the public prose
+that no manifest knows about. The synthetic corpus cannot show this failure mode at all,
+because its non-PII text was written by the same hand as its entities.
+
+These packs carry their own gate sets under `configs/pack_gates/`, run on demand — they
+need a download, and CI is offline (ADR-0017). The limitations that keep these numbers
+honest are listed in `docs/14_IMPLEMENTATION_PLAN.md` §8; the most important is that
+injected values come from the same eight-name pools as the synthetic corpus, so a pack
+measures the realism of the surrounding text and not the diversity of the values.

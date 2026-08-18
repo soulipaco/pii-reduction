@@ -324,7 +324,7 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 5 (2026-08-18), after queue items Q1 and Q2.
+Last updated: session 6 (2026-08-18), after Increment D (queue item Q3).
 
 ### Complete
 
@@ -340,6 +340,8 @@ Last updated: session 5 (2026-08-18), after queue items Q1 and Q2.
 | C | `language/` — lingua detector, ADR-0012 gate, per-language provider routing | 480 default / 71 integration |
 | Q1 | `.github/workflows/{ci,integration}.yml`, `evaluation/gates.py`, `configs/benchmark_gates.yaml` | 511 default / 72 integration |
 | Q2 | span repair at the provider boundary, identifier guard, `key_value` parser, `split_lines` (ADR-0016) | 682 default / 73 integration |
+| D (part) | `synthetic/injection.py`, `synthetic/registry.py`, `demo/registry.yaml` | 730 default / 73 integration |
+| D | `synthetic/fetch.py`, `synthetic/public.py`, `synthetic/packs.py`, `fetch-dataset` + `build-pack`, three demo packs and their gate sets (ADR-0017, ADR-0018) | 799 default / 73 integration |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -368,6 +370,89 @@ confident misclassifications, 3 abstentions to `und`.
 Every number above was re-measured in session 4 and reproduced exactly. They are now
 also enforced: `configs/benchmark_gates.yaml` holds them as gates, so this table and
 that file must agree.
+
+### Public-dataset packs, measured beside the synthetic corpus
+
+**Beside, not instead of.** The table above is the committed regression corpus and the
+floors in `configs/benchmark_gates.yaml` still guard it. Each pack below is a *new*
+gate set on its own corpus (`configs/pack_gates/<pack>.yaml`) and is never a reason to
+loosen a synthetic floor.
+
+No pack is committed. Each is rebuilt from a pinned, checksummed source (ADR-0017):
+
+```bash
+python demo/download_datasets.py                  # fetch and verify, or let build-pack do it
+python demo/build_pack.py support_tickets
+pii-reduction benchmark --corpus demo/packs/support_tickets     --chain deterministic_presidio --gates configs/pack_gates/support_tickets.yaml
+```
+
+| pack | source | type | tier | documents | entities | protected |
+|---|---|---|---|---|---|---|
+| `support_tickets` | Bitext (CDLA-Sharing-1.0) | plain | 1 | 200 | 600 | 56 |
+| `support_conversations` | Bitext, same rows as turns | transcript | 4 | 200 | 600 | 56 |
+| `multilingual_utterances` | MASSIVE de/el (CC BY 4.0) | plain | 2 | 200 | 400 | 0 |
+
+Measured 2026-08-18, seed 42, `redact`, whole pack:
+
+| metric | tickets det. | tickets hybrid | conversations det. | conversations hybrid | utterances det. | utterances hybrid |
+|---|---|---|---|---|---|---|
+| strict precision | 1.000 | 0.995 | 1.000 | 0.998 | 1.000 | 0.926 |
+| strict recall | 0.667 | **1.000** | 0.667 | **1.000** | 0.667 | 0.935 |
+| strict F1 | 0.800 | 0.998 | 0.800 | 0.999 | 0.801 | 0.930 |
+| relaxed F1 | 0.800 | 0.998 | 0.800 | 0.999 | 0.801 | 0.930 |
+| leakage rate | 0.333 | **0.000** | 0.333 | **0.000** | 0.333 | 0.065 |
+| document clean rate | 0.000 | 1.000 | 0.000 | 1.000 | 0.335 | 0.870 |
+| over-redaction rate | 0.000 | 0.000 | 0.000 | 0.000 | n/a | n/a |
+
+PERSON strict recall by language, hybrid chain:
+
+| | en (tickets) | en (conversations) | de | el |
+|---|---|---|---|---|
+| recall | 1.000 | 1.000 | **1.000** | **0.606** |
+| precision | 0.985 | 0.995 | — | — |
+
+Five things these numbers say that the synthetic corpus cannot:
+
+1. **The deterministic recognizers did not merely fit the corpus they were built
+   against.** EMAIL and PHONE hold at 1.000 precision *and* recall on 1,600 entities in
+   public prose, in three languages and two scripts, including lower-case unpunctuated
+   Greek.
+2. **Greek PERSON recall is 0.606 here against 0.111–0.222 on the synthetic corpus**,
+   with the same `xx_ent_wiki_sm` model and the same name pool, while German is 1.000.
+   The two corpora are not comparable slice for slice — different phrasing, different
+   tier mix, and a pack's names sit in well-formed injected sentences — so this is not
+   a claim that Greek detection improved. It is evidence that the *synthetic Greek
+   templates* account for part of a gap that has been treated as a pure licensing limit
+   since ADR-0007, and it is the most valuable lead this increment produced.
+3. **Precision is where public text is hard.** Recall is 1.000 on both English packs;
+   the only detection errors are false positives in prose nobody wrote for us (PERSON
+   precision 0.985 and 0.995). A template corpus cannot show this, because its non-PII
+   text was written by the same hand as its entities.
+4. **The transcript parser survives text it was not designed against.** Same sentences,
+   same entities, two parsers: the conversation pack scores 0.999 to the ticket pack's
+   0.998, and every speaker prefix reconstructs. PERSON precision is *higher* under
+   line-scoped segments (0.995 vs 0.985) — the mirror image of ADR-0016's finding that
+   line-scoping costs context where a name genuinely spans a break.
+5. **Over-redaction stays 0.000 on identifiers that came from the source**, not from a
+   template of ours: the 56 order numbers substituted into the Bitext text.
+
+Limitations, stated so the numbers are not read as more than they are:
+
+- **The two English packs are one measurement, not two.** Same source rows, same
+  document ids, same injected values; only the rendering and the parser differ.
+- **Injected values come from the same pools as the synthetic corpus** (eight names per
+  language, ADR-0014). A pack measures the realism of the surrounding *text*, not the
+  diversity of the values, so high recall partly reflects names the provider has
+  already seen in the committed corpus.
+- **Names sit in well-formed injected sentences.** "My name is …" is an easier context
+  than a bare name in a signature block, which is why recall is 1.000 while precision
+  is not.
+- **`multilingual_utterances` has no over-redaction number.** MASSIVE carries no
+  identifiers, so the metric has zero support and no gate is written for it — a gate
+  that measures nothing must never be green.
+- **No pack runs in CI.** Building one needs a download, and the default tier is
+  deliberately offline as well as model-free (ADR-0009, ADR-0017). The pack gate files
+  are checked for validity by the test suite; their *numbers* are run on demand.
 
 ### Queue
 
@@ -467,23 +552,83 @@ PERSON comes from the spaCy NER reading the text it was given.
 Still open, and unchanged by this: Greek PERSON is weak (0.222 / 0.111 / 0.167 /
 0.000 by tier) and licence-bound to `xx_ent_wiki_sm` until roadmap Phase 7 (ADR-0007).
 
-#### Q3. Increment D — public datasets (§5 above)
+#### Q3. Increment D — public datasets (§5 above) — **complete**
 
-Bitext (CDLA-Sharing-1.0), MultiWOZ 2.2 (MIT), MASSIVE de/el (CC BY 4.0) with the
-provenance registry, download scripts committing no raw data, and injection at scale
-reusing `pii_reduction.synthetic`. This is the first honest test of the transcript
-parser's speaker heuristic on text nobody wrote for it, and of the phone/email
-recognizers outside a corpus built to suit them.
+Three packs, built from two sources, measured on both chains, published above beside
+the synthetic numbers. **MultiWOZ is out** — the session-5 privacy audit found real
+Cambridge landlines and postcodes in its published utterance text, so it moved to the
+registry's `rejected:` block and Bitext now renders both English packs (ADR-0018).
 
-Injected values must come from the ADR-0014 pools — never invented ad hoc, never
-lifted from the source data.
+What landed:
 
-**Exit:** each demo pack reproducible from documented commands; provenance registry
-complete per `docs/02_PUBLIC_DATA_STRATEGY.md`; injected ground truth validates
-against its documents; benchmark rerun and the numbers published beside the synthetic
-ones rather than replacing them. The synthetic gates in `configs/benchmark_gates.yaml`
-stay as they are — a public-dataset pack is a **new** gate set measured on its own
-corpus, not a reason to loosen the ones that guard the committed regression set.
+- **`synthetic/fetch.py`** — files fetched at a pinned commit revision and verified
+  against a SHA-256 recorded in `demo/registry.yaml`. Stdlib only, no new extra
+  (ADR-0017 chose this over a `datasets` extra; ADR-0008's list is unchanged).
+  A cached file that fails its digest is refused rather than re-downloaded, because a
+  cache that repairs itself hides a tampered one as well as a truncated one.
+- **`synthetic/registry.py`** gained the `retrieval:` block and `load_rejected`, so a
+  rejected dataset is answered with *why* rather than "unknown dataset" — the
+  difference between a decision and an oversight.
+- **`synthetic/public.py`** — Bitext and MASSIVE readers. Selection is a seeded shuffle,
+  not the head of the file (Bitext ships sorted by category). Rows carrying any
+  `{{Placeholder}}` other than `{{Order Number}}` are excluded; that one is filled with
+  a synthetic identifier **recorded as a protected token**, which is what makes
+  over-redaction measurable on public text.
+- **`synthetic/packs.py`** — the pack specs and `build_pack`, the first real caller of
+  `inject()`.
+- **`inject()` gained `protected=`**: spans recorded against the base text are shifted
+  by the same arithmetic as the injected entities and verified the same way. Offset
+  arithmetic belongs in one place; a second implementation is a second chance to drift.
+- **`eligible_offsets` now offers each processable region's start.** Without it a
+  transcript's only candidates are sentence breaks, so every name in a two-turn document
+  landed in whichever turn was longest, and nine documents received nothing at all.
+- **`pii-reduction fetch-dataset` and `build-pack`**, with `demo/download_datasets.py`
+  and `demo/build_pack.py` as front doors beside `demo/build_corpus.py`.
+
+**Exit criteria, met:**
+
+- *Reproducible from documented commands* — `demo/build_pack.py <pack>` against a
+  pinned revision with recorded checksums; the pack's `meta.json` names the repository,
+  revision and per-file digest it was built from.
+- *Provenance registry complete* — every field `docs/02_PUBLIC_DATA_STRATEGY.md`
+  requires, plus the retrieval pin and the transformation performed before use.
+- *Injected ground truth validates against its documents* — every span slices back to
+  its own surface, checked at build time, again on write, and again on load.
+- *Numbers published beside the synthetic ones* — the section above. The synthetic
+  gates in `configs/benchmark_gates.yaml` are untouched; each pack has its own gate set
+  under `configs/pack_gates/`, and a test asserts no workflow gates on a pack.
+
+**Deliberately not done:** the `incident_notes` pack. ADR-0010 named three families and
+this delivers two; incident metadata combined with generated work notes needs no public
+source and is better placed with Increment E's mask/redact variants than bolted on here.
+
+**One superseded constraint, recorded because the old advice is still in the session-5
+handoff.** That handoff said to share **one** `ValueProvider` across a pack, or a
+repetitive corpus would give every row the same name. The injector solved it the other
+way instead: values derive from `(seed, document_id)`, so a document regenerates
+identically without replaying the pack, and two documents with identical base text still
+receive different entities. Sharing a provider would now *break* that property, because
+a document's values would depend on where its row sat in the run. A test pins it.
+
+#### Q4. Why Greek scores 0.606 on public text and 0.111-0.222 on ours — **next**
+
+The lead Increment D produced, and the cheapest open question in the repository: the
+same model and the same eight Greek names reach 0.606 strict recall on MASSIVE
+utterances and 0.111-0.222 on the synthetic Greek templates, while German is 1.000 on
+both. Since ADR-0007 the Greek gap has been treated as a licensing limit — the good
+spaCy models are CC BY-NC-SA and excluded — and this says part of it may be the corpus
+instead.
+
+Confounds to eliminate before believing anything, because the two corpora differ in
+more than one way at once: the pack is all tier 2 while the synthetic Greek spans tiers
+1-4; a pack's names sit in well-formed injected sentences (`με λένε {value}`) while the
+templates place them after a label or in noisy lower-case fragments; and the packs use
+the same name pool, so this is not evidence about unseen names.
+
+**Exit:** an attributable answer — phrasing, tier mix, or model — measured on a
+constructed comparison rather than on the two corpora as they stand, and either a fix
+to the synthetic Greek templates or a recorded finding that the gap is real. Whichever
+it is, `docs/15_PROVIDERS.md` and the Greek deferral below need updating to match.
 
 ### After the queue
 
@@ -493,9 +638,15 @@ Connect). Two parked ideas with their rationale are in the session-3 handoff:
 MLflow trace redaction, and GLiNER for the Greek gap — the latter subject to
 **ADR-0015 (CPU-only)**.
 
+Also open from Increment D: the `incident_notes` pack (ADR-0010's third family), and a
+permissively-licensed public transcript corpus free of real PII, to replace the one
+MultiWOZ's rejection removed (ADR-0018).
+
 ### Known deferrals carried forward
 
-- Greek PERSON is licence-bound to `xx_ent_wiki_sm` until Phase 7 (ADR-0007).
+- Greek PERSON is licence-bound to `xx_ent_wiki_sm` until Phase 7 (ADR-0007) — but see
+  Q4: the public-dataset pack scores it far higher than the synthetic corpus does, so
+  part of that gap may not be the model.
 - ADDRESS stays in the taxonomy, undetected, until a capable provider exists (ADR-0002).
 - Pseudonymization collision detection is per process, not global (ADR-0013 §4).
 - Language detection is per field, not per segment; code-switching would need the

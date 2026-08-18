@@ -4,11 +4,21 @@ from __future__ import annotations
 
 from pii_reduction.contracts.errors import PiiReductionError
 
-__all__ = ["CorpusError", "GroundTruthError"]
+__all__ = ["CorpusError", "DatasetDownloadError", "GroundTruthError"]
 
 
 class CorpusError(PiiReductionError):
     """A corpus could not be generated or its templates are malformed."""
+
+
+class DatasetDownloadError(CorpusError):
+    """A public dataset file could not be retrieved, or is not the file we recorded.
+
+    A subclass of :class:`CorpusError` because a failed retrieval is a corpus that
+    cannot be built, and every caller already handles that. It has its own name
+    because the remedy is different: a checksum mismatch is answered by re-recording
+    the retrieval block (ADR-0017), not by fixing a template.
+    """
 
 
 class GroundTruthError(PiiReductionError):

@@ -1,0 +1,130 @@
+# Regression gates for the `multilingual_utterances` demo pack — short, lower-case
+# German and Greek assistant utterances from MASSIVE.
+#
+# This is the pack that says something the committed corpus cannot. The synthetic
+# German and Greek are templates this project wrote; these are sentences written by
+# native speakers for another purpose entirely, unpunctuated and lower case.
+#
+# **There is no over-redaction gate here, and that is not an oversight.** MASSIVE
+# carries no identifiers, so the pack has zero protected tokens and the metric has zero
+# support. A gate that measures nothing must never be green (ADR-0009), so none is
+# written. Over-redaction is gated on the two Bitext packs, which do have identifiers.
+#
+# Run on demand — building the pack needs a download (ADR-0017) and CI is offline:
+#
+#   python demo/build_pack.py multilingual_utterances
+#   pii-reduction benchmark --corpus demo/packs/multilingual_utterances \
+#       --gates configs/pack_gates/multilingual_utterances.yaml
+#   pii-reduction benchmark --corpus demo/packs/multilingual_utterances \
+#       --chain deterministic_presidio --gates configs/pack_gates/multilingual_utterances.yaml
+
+version: 1
+
+measured:
+  pack: multilingual_utterances (200 documents, 400 entities, de + el, tier 2)
+  source: AmazonScience/massive (de-DE and el-GR validation parquet)
+  source_revision: ed58ac423a2f4121720918bf5301577edce4ffd3
+  seed: 42
+  splits: all (dev + calibration + test)
+  strategy: redact
+  date: 2026-08-18
+  session: 6
+  versions:
+    presidio-analyzer: 2.2.364
+    spacy: 3.8.15
+    de_core_news_md: 3.8.0
+    xx_ent_wiki_sm: 3.8.0
+
+gate_sets:
+
+  deterministic_only:
+    description: >
+      The model-free chain. EMAIL and PHONE hold at 1.000 on lower-case unpunctuated
+      text in two scripts, including Greek — worth gating precisely because the
+      recognizers were tuned on text this project wrote.
+    gates:
+      - name: email_strict_recall
+        metric: strict_recall
+        entity_type: EMAIL
+        min: 1.000
+        support: 134
+      - name: phone_strict_recall
+        metric: strict_recall
+        entity_type: PHONE
+        min: 1.000
+        support: 133
+      - name: overall_strict_precision
+        metric: strict_precision
+        min: 1.000
+        support: 400
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.801
+        support: 400
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.333
+        support: 400
+
+  deterministic_presidio:
+    description: >
+      The hybrid chain, and the pack's headline result. **Greek PERSON strict recall is
+      0.606 here against 0.111-0.222 on the committed synthetic corpus** with the same
+      `xx_ent_wiki_sm` model and the same name pool. The two corpora are not comparable
+      slice for slice — different phrasing, different tier mix — so this is not a claim
+      that Greek detection improved. It is evidence that the synthetic Greek templates,
+      not the model alone, account for part of the gap that has been treated as a hard
+      licensing limit since ADR-0007. Worth a diagnosis before more model work.
+
+      German PERSON is 1.000 on the same text, so the gap is Greek-specific rather than
+      a property of lower-case public utterances.
+    gates:
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.930
+        support: 400
+      - name: overall_strict_recall
+        metric: strict_recall
+        min: 0.935
+        support: 400
+      - name: overall_strict_precision
+        metric: strict_precision
+        min: 0.926
+        support: 400
+      - name: email_strict_f1
+        metric: strict_f1
+        entity_type: EMAIL
+        min: 1.000
+        support: 134
+      - name: phone_strict_f1
+        metric: strict_f1
+        entity_type: PHONE
+        min: 1.000
+        support: 133
+      - name: person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        min: 0.805
+        support: 133
+      - name: german_person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        language: de
+        difficulty_tier: "2"
+        min: 1.000
+        support: 67
+      - name: greek_person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        language: el
+        difficulty_tier: "2"
+        min: 0.606
+        support: 66
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.065
+        support: 400
+      - name: document_clean_rate
+        metric: document_clean_rate
+        min: 0.870
+        support: 200

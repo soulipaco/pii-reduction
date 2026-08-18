@@ -1,0 +1,141 @@
+# Regression gates for the `support_tickets` demo pack — English Bitext support notes.
+#
+# A NEW gate set on its own corpus, not a replacement for anything. The synthetic floors
+# in `configs/benchmark_gates.yaml` guard the committed regression corpus and are
+# untouched by these numbers; a pack that scores well is not a reason to loosen them.
+#
+# These gates are run on demand, not by a workflow. Building the pack needs a download
+# (ADR-0017) and CI is deliberately offline, so nothing here can be a push gate:
+#
+#   python demo/build_pack.py support_tickets
+#   pii-reduction benchmark --corpus demo/packs/support_tickets \
+#       --gates configs/pack_gates/support_tickets.yaml
+#   pii-reduction benchmark --corpus demo/packs/support_tickets \
+#       --chain deterministic_presidio --gates configs/pack_gates/support_tickets.yaml
+#
+# Every value was measured, not chosen, at the three decimals the benchmark prints.
+# CONTRIBUTING.md applies here as it does to the synthetic gates: lowering a floor is a
+# claim that the metric or the gate was wrong, and it needs that reason in the commit.
+
+version: 1
+
+measured:
+  pack: support_tickets (200 documents, 600 entities, 56 protected tokens, en, tier 1)
+  # What actually defines this corpus. `build-pack` with this seed against this source
+  # revision reproduces it byte for byte; the checksums are in demo/registry.yaml and
+  # the fetcher refuses anything else.
+  source: bitext/Bitext-customer-support-llm-chatbot-training-dataset
+  source_revision: 430d1a89bd93bd1fa23c16f29dd53e73f0087443
+  seed: 42
+  splits: all (dev + calibration + test)
+  strategy: redact
+  date: 2026-08-18
+  session: 6
+  versions:
+    presidio-analyzer: 2.2.364
+    spacy: 3.8.15
+    en_core_web_md: 3.8.0
+    xx_ent_wiki_sm: 3.8.0
+
+gate_sets:
+
+  deterministic_only:
+    description: >
+      The model-free chain. EMAIL and PHONE are exact on public prose, which is the
+      claim worth gating: the deterministic recognizers were built against a corpus
+      this project wrote, and these floors say they did not merely fit it. PERSON is
+      ungated — nothing in this chain detects names, and 0.000 is the honest picture.
+    gates:
+      - name: email_strict_recall
+        metric: strict_recall
+        entity_type: EMAIL
+        min: 1.000
+        support: 200
+      - name: email_strict_precision
+        metric: strict_precision
+        entity_type: EMAIL
+        min: 1.000
+        support: 200
+      - name: phone_strict_recall
+        metric: strict_recall
+        entity_type: PHONE
+        min: 1.000
+        support: 200
+      - name: phone_strict_precision
+        metric: strict_precision
+        entity_type: PHONE
+        min: 1.000
+        support: 200
+      # No false positive anywhere in 200 documents of real support prose. This is the
+      # gate the synthetic corpus cannot provide: its non-PII text is also ours.
+      - name: overall_strict_precision
+        metric: strict_precision
+        min: 1.000
+        support: 600
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.800
+        support: 600
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.333
+        support: 600
+      # The preservation gate, on identifiers that came from the source corpus rather
+      # than from a template of ours: the 56 order numbers substituted into the text.
+      - name: over_redaction_rate
+        metric: over_redaction_rate
+        max: 0.000
+        support: 56
+
+  deterministic_presidio:
+    description: >
+      The hybrid chain. Needs the presidio + language extras and the md spaCy models.
+      Recall is 1.000 across all three types; the interesting number is precision, at
+      0.985 for PERSON — three spans in the public prose that no manifest knows about.
+      That is the failure mode a template corpus cannot show, because its non-PII text
+      was written by the same hand as its entities.
+    gates:
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.998
+        support: 600
+      - name: overall_relaxed_f1
+        metric: relaxed_f1
+        min: 0.998
+        support: 600
+      - name: overall_strict_recall
+        metric: strict_recall
+        min: 1.000
+        support: 600
+      - name: person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        min: 1.000
+        support: 200
+      - name: person_strict_precision
+        metric: strict_precision
+        entity_type: PERSON
+        min: 0.985
+        support: 200
+      - name: email_strict_f1
+        metric: strict_f1
+        entity_type: EMAIL
+        min: 1.000
+        support: 200
+      - name: phone_strict_f1
+        metric: strict_f1
+        entity_type: PHONE
+        min: 1.000
+        support: 200
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.000
+        support: 600
+      - name: document_clean_rate
+        metric: document_clean_rate
+        min: 1.000
+        support: 200
+      - name: over_redaction_rate
+        metric: over_redaction_rate
+        max: 0.000
+        support: 56

@@ -23,11 +23,16 @@ from pii_reduction.evaluation.gates import (
 )
 from pii_reduction.evaluation.report import render_markdown
 from pii_reduction.synthetic.corpus import build_corpus, write_corpus
+from pii_reduction.synthetic.fetch import DEFAULT_CACHE_DIR, fetch
+from pii_reduction.synthetic.packs import PACKS, build_pack, pack_spec
+from pii_reduction.synthetic.registry import require_publishable
 
 __all__ = ["main"]
 
 DEFAULT_CORPUS_DIR = Path("tests/fixtures/corpus")
 DEFAULT_CONFIGS_DIR = Path("configs")
+DEFAULT_REGISTRY = Path("demo/registry.yaml")
+DEFAULT_PACK_DIR = Path("demo/packs")
 #: These two define the committed corpus. `configs/benchmark_gates.yaml` records them
 #: as the provenance of every gate value, and a test asserts the two agree — regenerate
 #: with different values and you are measuring a different corpus.
@@ -47,6 +52,36 @@ def _build_parser() -> argparse.ArgumentParser:
     corpus.add_argument("--seed", type=int, default=DEFAULT_SEED)
     corpus.add_argument(
         "--documents-per-language", type=int, default=DEFAULT_DOCUMENTS_PER_LANGUAGE
+    )
+
+    download = subparsers.add_parser(
+        "fetch-dataset",
+        help="download a registered public dataset and verify it against its checksums",
+    )
+    download.add_argument("dataset", help="registry key, e.g. bitext_customer_support")
+    download.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
+    download.add_argument("--cache", type=Path, default=DEFAULT_CACHE_DIR)
+
+    pack = subparsers.add_parser(
+        "build-pack", help="build a demo pack from a public dataset (fetching it if needed)"
+    )
+    pack.add_argument("pack", choices=sorted(PACKS), help="which pack to build")
+    pack.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help=f"output directory (default: {DEFAULT_PACK_DIR}/<pack>)",
+    )
+    pack.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
+    pack.add_argument("--cache", type=Path, default=DEFAULT_CACHE_DIR)
+    pack.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    pack.add_argument(
+        "--documents", type=int, default=None, help="override the pack's document count"
+    )
+    pack.add_argument(
+        "--offline",
+        action="store_true",
+        help="fail rather than download; use only what the cache already holds",
     )
 
     benchmark = subparsers.add_parser(
@@ -109,6 +144,12 @@ def _run(argv: Sequence[str] | None) -> int:
             print(f"  {name}: {path}")
         return 0
 
+    if args.command == "fetch-dataset":
+        return _fetch_dataset(args)
+
+    if args.command == "build-pack":
+        return _build_pack(args)
+
     outcome = run_benchmark(
         corpus_dir=args.corpus,
         configs_dir=args.configs,
@@ -127,6 +168,51 @@ def _run(argv: Sequence[str] | None) -> int:
     print()
     print(report.render())
     return 0 if report.passed else 1
+
+
+def _fetch_dataset(args: argparse.Namespace) -> int:
+    """Download one registered dataset. The licence gate runs before the transfer.
+
+    Deliberately a separate command from ``build-pack``: on a machine that will build
+    several packs, or one behind a proxy, "did the download work" and "did the build
+    work" are different questions and should be answerable separately.
+    """
+    entry = require_publishable(args.dataset, path=args.registry)
+    retrieval = entry.require_retrieval()
+    print(f"{entry.name} ({entry.license}) — {retrieval.repository}@{retrieval.revision[:12]}")
+    for role, remote in zip(retrieval.roles, retrieval.files, strict=True):
+        path = fetch(remote, cache_dir=args.cache)
+        print(f"  {role}: {path} ({remote.size_bytes} bytes, sha256 verified)")
+    if entry.share_alike:
+        print(
+            f"  note: {entry.license} is share-alike — anything built from this carries "
+            "the same obligation"
+        )
+    return 0
+
+
+def _build_pack(args: argparse.Namespace) -> int:
+    spec = pack_spec(args.pack)
+    corpus = build_pack(
+        args.pack,
+        registry_path=args.registry,
+        cache_dir=args.cache,
+        seed=args.seed,
+        documents=args.documents,
+        allow_download=not args.offline,
+    )
+    out = args.out if args.out is not None else DEFAULT_PACK_DIR / args.pack
+    written = write_corpus(corpus, out)
+    print(
+        f"pack {spec.key}: {corpus.meta['documents']} documents, "
+        f"{corpus.meta['entities']} entities, "
+        f"{corpus.meta['protected_tokens']} protected tokens "
+        f"from {corpus.meta['dataset_name']} ({corpus.meta['license']})"
+    )
+    for name, path in sorted(written.items()):
+        print(f"  {name}: {path}")
+    print(f"\nbenchmark it with:\n  pii-reduction benchmark --corpus {out}")
+    return 0
 
 
 def _check_gates(

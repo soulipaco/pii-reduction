@@ -2,6 +2,15 @@
 
 **Status:** accepted · **Date:** 2026-08-17 · **Session:** 2
 
+> **Superseded in part by ADR-0018 (session 6): MultiWOZ 2.2 is rejected.** The PII
+> risk scored below as "fictional booking details" was wrong about the numbers — the
+> dialogues are grounded in a scrape of real Cambridge venue listings and the wizard
+> reads those values aloud, so real landlines and postcodes reach the published
+> utterance text (`demo/registry.yaml`, `rejected:`). `support_conversations` is now
+> rendered from Bitext's own `instruction`/`response` columns as transcript turns.
+> Bitext, MASSIVE and the rejection of the Kaggle Twitter corpus stand as written —
+> and so does the retrieval mechanism question, answered in ADR-0017.
+
 ## Context
 
 `docs/02_PUBLIC_DATA_STRATEGY.md` sets the policy (public-safe text + deterministic

@@ -358,6 +358,36 @@ row_count
 language_distribution
 ```
 
+## As built (session 6, Increment D)
+
+This document is the policy; what implements it:
+
+| requirement above | where it lives |
+|---|---|
+| registry entry per dataset | `demo/registry.yaml`, loaded and validated by `pii_reduction.synthetic.registry` |
+| "do not commit the raw dataset" | `data/downloads/` and `demo/packs/` are gitignored; packs are rebuilt |
+| "document the source and expected checksum/version" | the `retrieval:` block — repository, full commit revision, per-file SHA-256 and byte count (ADR-0017) |
+| injection pipeline and manifest | `pii_reduction.synthetic.injection`, spans recorded as the text is assembled |
+| transformation performed before use | recorded per pack in its `meta.json`, and in the registry notes |
+
+Three packs are built (`pii_reduction.synthetic.packs`): `support_tickets` and
+`support_conversations` from Bitext, `multilingual_utterances` from MASSIVE de/el.
+`incident_notes`, the third family named above, is not built yet.
+
+Two decisions worth reading before extending this:
+
+- **ADR-0017** — files are fetched directly at a pinned revision and checked against a
+  recorded digest, rather than through the `datasets` library. A checksum is what makes
+  "reproducible from documented commands" something the code asserts on every run.
+- **ADR-0018** — MultiWOZ 2.2 was rejected after its published utterance text turned out
+  to carry real Cambridge landlines and postcodes. `contains_real_pii: false` had been
+  recorded for it and was wrong, which is the case this whole document exists for: a
+  provenance record is a claim someone made, and a green test suite checks only that the
+  registry agrees with itself.
+
+The registry keeps rejected datasets with their reasons, so a later session finds a
+decision rather than a gap.
+
 ## Privacy rule
 
 The fact that a dataset is publicly downloadable does not automatically make it appropriate to republish. The repository should prefer public-safe, licensed, synthetic, or explicitly de-identified sources and document the decision.

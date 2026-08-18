@@ -37,6 +37,13 @@ rule above. The adapters raise an actionable `SourceError`/`OutputError` naming 
 extra when it is absent; CSV works without it. `pyarrow` is included in `dev` so the
 default test run covers those adapters.
 
+**Amended (session 6, Increment D):** **no `demo` extra was added.** Retrieving the
+public datasets was the open question ADR-0017 answers, and the answer needs nothing
+new: the fetcher is `urllib` from the standard library, and reading MASSIVE's parquet
+uses the `parquet` extra already listed above. So the extras list is unchanged, and
+the documented command for building a public pack is `pip install -e ".[parquet]"`
+(or `".[dev]"`, which includes it). Bitext ships a CSV and needs core only.
+
 ## Consequences
 
 - CI's default job is fast and model-free; integration jobs opt into extras

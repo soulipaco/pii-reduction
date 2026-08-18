@@ -1,0 +1,129 @@
+# Regression gates for the `support_conversations` demo pack — the same Bitext
+# exchanges as `support_tickets`, rendered as Customer/Agent transcript turns.
+#
+# **Not an independent corpus.** Same source rows, same document ids, same injected
+# values; only the rendering and the parser differ (ADR-0018). A difference between
+# these numbers and the ticket pack's is a difference in *parsing*, which is the point.
+# Two packs agreeing is one measurement, not two.
+#
+# A NEW gate set on its own corpus. The synthetic floors in
+# `configs/benchmark_gates.yaml` are untouched by these numbers.
+#
+# Run on demand — building the pack needs a download (ADR-0017) and CI is offline:
+#
+#   python demo/build_pack.py support_conversations
+#   pii-reduction benchmark --corpus demo/packs/support_conversations \
+#       --gates configs/pack_gates/support_conversations.yaml
+#   pii-reduction benchmark --corpus demo/packs/support_conversations \
+#       --chain deterministic_presidio --gates configs/pack_gates/support_conversations.yaml
+
+version: 1
+
+measured:
+  pack: support_conversations (200 documents, 600 entities, 56 protected tokens, en, tier 4)
+  source: bitext/Bitext-customer-support-llm-chatbot-training-dataset
+  source_revision: 430d1a89bd93bd1fa23c16f29dd53e73f0087443
+  seed: 42
+  splits: all (dev + calibration + test)
+  strategy: redact
+  date: 2026-08-18
+  session: 6
+  # What this pack is actually for: the transcript parser's speaker heuristic on text
+  # nobody wrote for it. 7,104 of Bitext's 26,872 responses contain newlines, so
+  # continuation lines with no speaker prefix exercise the `no_speaker_prefix` fallback
+  # rather than only the happy path.
+  versions:
+    presidio-analyzer: 2.2.364
+    spacy: 3.8.15
+    en_core_web_md: 3.8.0
+    xx_ent_wiki_sm: 3.8.0
+
+gate_sets:
+
+  deterministic_only:
+    description: >
+      The model-free chain over the transcript parser. Identical to the ticket pack's
+      numbers, which is itself the finding: the parser reconstructs the turns without
+      losing or shifting a single span.
+    gates:
+      - name: email_strict_recall
+        metric: strict_recall
+        entity_type: EMAIL
+        min: 1.000
+        support: 200
+      - name: phone_strict_recall
+        metric: strict_recall
+        entity_type: PHONE
+        min: 1.000
+        support: 200
+      - name: overall_strict_precision
+        metric: strict_precision
+        min: 1.000
+        support: 600
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.800
+        support: 600
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.333
+        support: 600
+      - name: over_redaction_rate
+        metric: over_redaction_rate
+        max: 0.000
+        support: 56
+      # Speaker prefixes are structure, not content (AGENTS.md rule 5). A parser that
+      # started rewriting them would show up here as a document-type F1 drop before
+      # anyone read the reconstructed text.
+      - name: transcript_document_type_f1
+        metric: strict_f1
+        document_type: transcript
+        min: 0.800
+        support: 600
+
+  deterministic_presidio:
+    description: >
+      The hybrid chain. PERSON precision is 0.995 here against 0.985 on the same
+      sentences parsed as free text — line-scoped segments give the model less room to
+      invent a name, the mirror image of ADR-0016's finding that line-scoping costs
+      context where a name genuinely spans one.
+    gates:
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.999
+        support: 600
+      - name: overall_relaxed_f1
+        metric: relaxed_f1
+        min: 0.999
+        support: 600
+      - name: overall_strict_recall
+        metric: strict_recall
+        min: 1.000
+        support: 600
+      - name: person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        min: 1.000
+        support: 200
+      - name: person_strict_precision
+        metric: strict_precision
+        entity_type: PERSON
+        min: 0.995
+        support: 200
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.000
+        support: 600
+      - name: document_clean_rate
+        metric: document_clean_rate
+        min: 1.000
+        support: 200
+      - name: over_redaction_rate
+        metric: over_redaction_rate
+        max: 0.000
+        support: 56
+      - name: transcript_document_type_f1
+        metric: strict_f1
+        document_type: transcript
+        min: 0.999
+        support: 600

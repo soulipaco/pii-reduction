@@ -274,42 +274,106 @@ providers fresh against the contracts. No probe output was committed.
 
 ## Session 3 — 2026-08-17/18 — Increments A1–A6, B and C
 
-### Start here (session 5)
+### Start here (session 6) — superseded, see session 6's own block at the end
 
 Everything below this block is evidence — read it when you need the reasoning behind
-something, not as a prerequisite. To pick up work:
+something, not as a prerequisite.
 
-1. Read `docs/14_IMPLEMENTATION_PLAN.md` **§8**. It holds the status table, the
-   measured baseline, and the queue with exit criteria.
-2. **Q1 is complete.** Remote is `soulipaco/pii-reduction` (private); both workflows
-   are green on GitHub.
-3. **Q2 is COMPLETE.** English tier-3 PERSON recall 0.333 → 1.000, whole-corpus strict
-   F1 0.886 → 0.915, no slice regressed, gate floors raised. The fix was to **repair
-   the span, not re-cut the input**: a PERSON span crossing a line break is trimmed
-   back to the line at the provider boundary (ADR-0016). Start at **Increment D**.
+**State:** working tree clean, all work pushed to `soulipaco/pii-reduction` (private),
+CI green, nightly integration workflow green on its own schedule. `ruff` and
+`mypy src tests` clean. **730 default-tier tests, 73 integration.** `.venv` has core +
+`dev` + `presidio` + `language`, with `en_core_web_md`, `de_core_news_md` and
+`xx_ent_wiki_sm` (all 3.8.0).
 
-   Superseded detail, kept because the reasoning matters:
-   Presidio finds every name; the *span* crosses the line break. `split_lines`, the
-   `key_value` parser and the identifier guard all exist. **Only the guard ships** —
-   it is a verified no-op on the shipped config and removes the over-redaction that
-   blocked `key_value`. Neither parser is enabled: both leak one more entity (the
-   Greek `Ελένη Παππά`, found with block context and missed on its own line), and a
-   leakage regression is not a fair trade for a detection gain here.
-   **Q2's remaining problem is narrow: recover Greek detection under line-scoped
-   segmentation.** Two candidates in ADR-0016 (provider context words; two-granularity
-   detection with a reconciler ordering rule), plus an architectural one — segmentation
-   is per column while detection routing is per language. Then Increment D.
-   **Do not enable a remedy on dev/calibration evidence alone**: those splits reported
-   over-redaction 0.000 and no regression; the whole-corpus gates caught it.
-4. **Work Q2 against `--split dev` / `--split calibration`, not the whole corpus.**
-   The gates are whole-corpus numbers that CI re-reads on every push, so iterating
-   against them is tuning on a set that is 60% test split (ADR-0011). Read the
-   whole-corpus number once when done, then raise the floor. `--gates` refuses
-   `--split` so the two cannot be mixed by accident.
-5. Before each commit: `/qa`, then `/gate`. Report which test tier you ran — the
-   default `pytest` excludes `integration`, `slow` and `databricks` (ADR-0009).
-6. When you finish an increment, update §8 of the plan and append a session section
+**Q1 and Q2 are complete.** The queue is down to **Increment D — public datasets**,
+which is half built. Pick up there.
+
+#### What Increment D still needs
+
+Landed already (`pii_reduction.synthetic`):
+
+- `injection.py` — inserts synthetic PII into text this project did not write, and
+  records exact spans. This is the piece A6 could not do: the template generator knows
+  where entities are because it placed them, while a public corpus already exists.
+- `registry.py` + `demo/registry.yaml` — the licence gate. `require_publishable()`
+  refuses an unregistered dataset, a non-permissive licence, or any source whose
+  `contains_real_pii` is not `False` (including `possible`).
+
+**Open items the session-5 audits raised and did not close** — read before writing the
+pack builder, because two of them are its job:
+
+- **The licence gate is not on the path.** `require_publishable()` refuses correctly,
+  but nothing forces a build to call it: `inject()` takes raw `text` and has no dataset
+  parameter, so at the moment public text enters an artifact nothing knows where it
+  came from. Thread a `dataset_key` through the builder into the gate, or make the gate
+  the only way to obtain text.
+- **ADR-0010 needs superseding twice.** MultiWOZ was its MIT fallback and is now
+  rejected (below); and it decided Bitext injection would substitute at the corpus's
+  `{{placeholder}}` markers, while `injection.py` inserts at sentence and line
+  boundaries instead. Marker substitution would also sidestep the structure problem
+  entirely for Bitext — worth reconsidering, and either way it needs an ADR.
+- **Provenance fields are incomplete.** `AGENTS.md` and ADR-0010 both require a
+  recorded *transformation* and a *checksum*; `_REQUIRED_FIELDS` has neither. Bitext
+  ships ~443 `{{...}}` placeholders per sample that must be transformed before use, and
+  that transformation is unrecorded. Without a checksum, "reproducible from documented
+  commands" is not yet true.
+- **Licence obligations are recorded but never travel.** A Bitext-derived pack must
+  itself carry CDLA-Sharing-1.0, and MASSIVE (CC BY 4.0) requires attribution *and* an
+  indication that the material was modified — injection is a modification. Add
+  `attribution_required` / `derived_license` and have the pack writer emit a NOTICE.
+- **Shape, if it still bites:** `inject()` carries pack-level arguments (language,
+  document_type, difficulty_tier, seed) that will repeat at every call site. A frozen
+  `InjectionSpec` was recommended. Also `tier` is caller-asserted rather than derived,
+  so the pack's tier column is decorative unless the builder sets it honestly.
+
+Not built yet, in order:
+
+1. **Download scripts.** All three sources are HuggingFace datasets. The open decision
+   is the retrieval mechanism: the `datasets` library as a new `demo` extra, versus
+   direct file fetches. Whichever wins, **no raw data may be committed** — the pack is
+   rebuilt from source, which is what `version` and `retrieval_method` in the registry
+   are for. Record the choice as an ADR; ADR-0008's extras list needs the amendment.
+2. **The pack builder** — the first real caller of `inject()`. Its shape is an open
+   design question flagged in review: `inject()` currently takes document_id, language,
+   document_type, difficulty_tier, split, seed and provider, several of which are
+   per-pack rather than per-document.
+3. **Benchmark the packs and publish the numbers beside the synthetic ones**, not
+   instead of them. Increment D's exit criterion is in plan §8 Q3.
+
+Two things the injector already knows that the builder must respect:
+
+- **Share one `ValueProvider` across the whole pack.** Constructing one per document
+  restarts the value sequence, and Bitext and MASSIVE both repeat their templates
+  heavily, so every row would receive the same name.
+- **Injection inserts, never edits.** A pack whose base text was altered is no longer a
+  test against the public corpus.
+
+#### Working rules that cost time to relearn
+
+1. Read `docs/14_IMPLEMENTATION_PLAN.md` **§8** first. It holds the status table, the
+   measured baseline and the queue with exit criteria.
+2. **A green local run does not prove CI is green.** `mypy` resolves optional imports
+   differently when the extras are installed, and this machine has them. When touching
+   anything `presidio` or `lingua` reach, check a clean `uv venv` with `.[dev]` only —
+   that is what the push tier installs. This has already broken one push.
+3. **Do not enable a change on dev/calibration evidence alone.** Develop against
+   `--split dev` / `--split calibration` so you are not iterating on the test split
+   (ADR-0011), but run the whole-corpus gates before claiming anything works: a
+   remedy that looked clean on 45 documents took over-redaction from 0.000 to 0.020 on
+   the full corpus.
+4. **Benchmark numbers are enforced, not merely published.** `configs/benchmark_gates.yaml`
+   gates them. Raise a floor from your own run after a real improvement; lowering one
+   needs the reason in the commit message (`CONTRIBUTING.md`), and there is a worked
+   example of a justified lowering in that file's `relaxed_f1` comment.
+5. Before each commit: `/qa`, then `/gate`. Say which test tier you ran — the default
+   `pytest` excludes `integration`, `slow` and `databricks` (ADR-0009).
+6. **Run the auditors and take them seriously.** In session 5 they found a defect in
+   every single change, including two that would have leaked names into output — both
+   in code that passed my own tests and the benchmark gates. Neither was reachable
+   from the committed corpus.
+7. When you finish an increment, update §8 of the plan and append a session section
    here. Numbers in documentation must come from a run you actually did.
+
 
 State at the end of session 4: thirteen commits on `main`, working tree clean, pushed
 to `soulipaco/pii-reduction` (private), both workflows green. `ruff`, `mypy src tests`
@@ -1092,3 +1156,216 @@ New, from this session:
   tests; it is the obvious next gate once a metric backs it.
 
 ---
+
+---
+
+## Session 5 — 2026-08-18 — Q1 closed, Q2 solved, Increment D started
+
+Six commits: `913118d` (Q1 closed on GitHub), `0590f0f` (mypy in a core install),
+`14ec056` (Q2 diagnosis + split-scoring bug), `55335fe` (key_value parser),
+`ed09e83` (identifier guard), `d9b01d6` + `f351c74` (span repair, gate floors).
+
+### The headline: Q2 was a span-boundary bug, not a detection failure
+
+English tier-3 PERSON recall sat at 0.333. The plan assumed a detection problem and
+listed remedies accordingly. Presidio was in fact finding **every** name; handed a
+multi-line key/value block it ran the entity boundary through the line break and
+returned the name plus the next line's first word. Strict matching scored that as a
+miss *and* a false positive — the whole of the 0.333 — and reduction destroyed the
+next line's label, a structure-preservation failure the over-redaction metric cannot
+see because field labels are not protected tokens.
+
+Confirming evidence was already in the baseline: tier-4 transcripts scored 1.000 with
+the same model and the same names, because the transcript parser is line-oriented and
+no span can cross a break.
+
+**The general lesson, now in ADR-0016:** a remedy that changes the model's *input*
+trades one error for another; one that changes its *output* cannot. Three remedies
+re-cut the input — `split_lines`, the `key_value` parser, and label-stripping — and
+each lost context and leaked a Greek name. Span repair leaves detection untouched.
+
+Final published numbers (whole corpus, hybrid chain):
+
+| | before Q2 | after |
+|---|---|---|
+| en tier-3 PERSON | 0.333 | **1.000** |
+| el tier-3 PERSON | 0.000 | **0.167** |
+| strict F1 | 0.886 | **0.902** |
+| PERSON precision / recall | 0.820 / 0.641 | **0.833 / 0.705** |
+| leakage / over-redaction / clean rate | 0.117 / 0.000 / 0.774 | **unchanged** |
+| relaxed F1 | 0.921 | 0.914 *(gate deliberately lowered)* |
+
+### What shipped, and what deliberately did not
+
+**Shipped:** span repair (`providers/base.py::_bound_to_line`), the identifier guard
+(`patterns.is_identifier_shaped`, PERSON-scoped, rejected by the reconciler as
+`identifier_shaped`), and `surface_may_span_lines` on `EntityDefinition` so the fact
+is declared once rather than per layer.
+
+**Built but enabled nowhere:** `split_lines` on `PlainTextParser`, and the `key_value`
+parser. Both are correct and tested; both fix the span by re-cutting the input and
+both leak a Greek name doing it. They remain available per column for data that is
+genuinely key/value shaped. `key_value` also turns one provider call per document into
+one per line — roughly an order of magnitude slower on the whole corpus, which matters
+under ADR-0015.
+
+### Three bugs worth remembering
+
+1. **`run_benchmark(splits=…)` scored a subset against the whole corpus's ground
+   truth.** A dev+calibration run reported over-redaction 0.627 against a true 0.000.
+   Fixed on both axes — `splits` and a narrowed `datasets` mapping — and results now
+   record which splits they cover.
+2. **The identifier guard's first rule leaked names.** Counting a token as name-like
+   only when it carried no digit rejected `Mueller2024`, `jmueller01`,
+   `grace.okafor2` — and a rejected PERSON span means the name is not redacted.
+   Letter/digit counts do not separate the cases that matter (`DEMO-PC-6963` is 6/4,
+   `Mueller2024` is 7/4); a lowercase run of three or more does. Known remaining gap,
+   pinned by a test: a lone token whose lowercase run is under three (`MUELLER2024`,
+   `Wei2`), and the rule assumes a cased script.
+3. **Span repair leaked names twice before it was right.** Version one kept the head
+   fragment, version two kept the longest — both leak when the name falls on the other
+   side of the break, or when a hard-wrapped name is *split by* it (`Jürgen` + break +
+   `Müller`). The shipped rule keeps **every** fragment, which sometimes over-redacts a
+   neighbouring label. That was a deliberate choice of the visible error over the
+   invisible one, and it cost relaxed F1.
+
+**`leakage_rate` cannot see a partial-name leak.** It matches only the exact *full*
+surface, so a half-redacted name scores as clean. The gate holding at 0.117 was never
+evidence that bugs 2 and 3 were absent. Any future rule that drops or narrows a span
+needs a test built from a constructed input, not from the corpus.
+
+### On the auditors
+
+They found a real defect in **every** change this session, including both leaks above,
+and each time in code that passed the full test suite and all benchmark gates. Both
+leaks were unreachable from the committed corpus — one needed a username with a digit,
+the other a hard-wrapped name. Neither shape exists in 102 template-generated
+documents.
+
+The architecture reviews were equally productive: repair running before validation
+(turning a `ProviderError` into a bare `IndexError`), separator arithmetic that assumed
+one character and misaligned every span after a CRLF, silent drops where this repo had
+already legislated for counted ones, the same entity fact declared in two layers, and
+an ADR header that contradicted its own Consequences section — which would have led a
+later session to re-arm the bug the privacy audit had just removed.
+
+### Increment D, started
+
+`synthetic/injection.py` and `synthetic/registry.py` + `demo/registry.yaml`. See the
+"Start here" block for what remains and the two constraints the pack builder must
+respect. Nothing yet calls either module outside tests — the download scripts and pack
+builder are the next work, and the retrieval mechanism is an open decision needing an
+ADR.
+
+---
+
+## Session 6 — 2026-08-18 — Increment D closed: public-dataset packs
+
+### Start here (session 7)
+
+**State:** Increment D is complete. **799 default-tier tests, 73 integration**, `ruff`
+and `mypy src tests` clean in both the dev environment and a throwaway core-only one.
+The committed corpus still rebuilds byte-identically. Three demo packs build from two
+public sources and all 49 of their gates pass on both chains.
+
+**Pick up Q4** in `docs/14_IMPLEMENTATION_PLAN.md` §8: *why does Greek PERSON score
+0.606 on public text and 0.111-0.222 on ours?* Same model, same eight names, German
+1.000 on both. Since ADR-0007 that gap has been booked as a licensing limit; this says
+part of it may be the corpus. It is the cheapest open question in the repository, and
+§8 lists the confounds to eliminate first — the packs are all tier 2, their names sit in
+well-formed injected sentences, and they reuse the same name pool.
+
+**Read the numbers before touching them:** plan §8's "Public-dataset packs" section,
+including its limitations list. The one that matters most: the two English packs are the
+same source rows under two parsers, so they are **one** measurement, not two agreeing.
+
+### What Increment D actually shipped
+
+Retrieval (**ADR-0017**): files fetched at a pinned commit revision, verified against a
+SHA-256 recorded in `demo/registry.yaml`, cached under `data/downloads/`. Stdlib
+`urllib` — **no `datasets` extra, no new dependency at all**. The alternative would have
+added roughly ten transitive packages to fetch three files, and for MASSIVE it would
+have resolved the identical parquet URL anyway, since `datasets>=3` no longer runs
+loading scripts.
+
+**MultiWOZ is gone (ADR-0018).** The session-5 privacy audit's finding — real Cambridge
+landlines and postcodes in its published utterance text — moved it to `rejected:`, which
+removed the transcript pack's source. Bitext now renders both English packs: its columns
+are literally `instruction` and `response`, so `Customer:`/`Agent:` turns restate the
+source rather than inventing structure. That turned out *better* than MultiWOZ would
+have been: 7,104 of its 26,872 responses contain newlines, so continuation lines with no
+speaker prefix exercise the parser's fallback rather than only its happy path.
+
+New modules: `synthetic/fetch.py`, `synthetic/public.py` (readers), `synthetic/packs.py`
+(specs + `build_pack`). New commands: `pii-reduction fetch-dataset` and `build-pack`,
+with `demo/download_datasets.py` and `demo/build_pack.py` as front doors.
+
+### Three changes to code that already existed, each with a reason
+
+1. **`inject()` gained `protected=`.** Spans the caller recorded against the base text
+   are shifted by the same arithmetic as the injected entities and verified the same
+   way. Without it the pack's substituted order numbers could not stay aligned, and
+   over-redaction — the metric guarding AGENTS.md rule 5 — would be unmeasurable on
+   public text. A second implementation of offset arithmetic is a second chance to
+   drift.
+2. **`eligible_offsets` now offers each processable region's start.** Restricted to
+   sentence breaks alone, a transcript's entities all landed in whichever turn was
+   longest, and nine of 200 documents received nothing at all. One existing test
+   asserted the parser could only ever *narrow* the offset set; that is no longer true
+   by design, and the test now asserts the property that matters — every offset lies
+   inside a processable region.
+3. **`write_corpus` writes headers for an empty table.** MASSIVE carries no identifiers,
+   so that pack has zero protected tokens, and a headerless empty CSV cannot be read
+   back — `load_corpus` would have failed on a perfectly valid pack.
+
+Also moved: `document_seed` now lives in `corpus.py` beside `split_for`, because the
+readers need the same derivation. The first version of the reader used `hash()`, which
+Python randomises per process — a pack that differed between two runs on the same
+machine. Caught before it shipped; worth remembering as a shape of bug.
+
+### The session-5 constraint that is now wrong
+
+That handoff said to **share one `ValueProvider` across a pack** or a repetitive corpus
+would give every row the same name. The injector solved it the other way instead: values
+derive from `(seed, document_id)`. Sharing a provider would now *break* reproducibility,
+because a document's values would depend on where its row sat in the run. A test pins
+the property that mattered.
+
+### What the packs measured
+
+Full tables are in plan §8. The four findings worth carrying:
+
+1. **The deterministic recognizers did not merely fit the corpus they were built
+   against** — EMAIL and PHONE at 1.000 precision and recall over 1,600 entities in
+   public prose, three languages, two scripts, including lower-case Greek.
+2. **Greek PERSON 0.606** against 0.111-0.222 synthetic — Q4.
+3. **Precision, not recall, is where public text is hard.** Recall is 1.000 on both
+   English packs; the only detection errors are names in prose nobody wrote for us
+   (PERSON precision 0.985 and 0.995). A template corpus cannot show this, because its
+   non-PII text was written by the same hand as its entities.
+4. **The transcript parser holds.** Same sentences under two parsers: 0.999 against
+   0.998, every speaker prefix reconstructed, and PERSON precision *higher* under
+   line-scoped segments — the mirror image of ADR-0016.
+
+### Working rules, unchanged and still expensive to relearn
+
+1. Read plan §8 first; it is the status, the baseline and the queue.
+2. **A green local run does not prove CI is green.** Verified this session in a
+   throwaway `uv venv` with `.[dev]` only, which is what the push tier installs.
+3. Develop against `--split dev`/`--split calibration`, but run whole-corpus gates
+   before claiming anything works.
+4. Gates are enforced. Raise a floor from your own run; lowering one needs the reason in
+   the commit message.
+5. `/qa` then `/gate` before committing. Say which tier you ran.
+6. **Take the auditors seriously.** Session 5 found a defect in every change.
+7. Update plan §8 and append here when an increment closes.
+
+### Two things a later session must not undo
+
+- **Pack gates are separate from the synthetic gates and must stay that way.** A pack is
+  a new gate set on its own corpus (`configs/pack_gates/`), never a reason to loosen
+  `configs/benchmark_gates.yaml`. A test asserts no workflow gates on a pack — which
+  also keeps CI offline, since building a pack needs a download.
+- **No pack and no raw data is committed.** `.gitignore` covers `demo/packs/` and
+  `data/downloads/`. The registry's `retrieval:` pin is what makes a pack reproducible
+  instead of stored.

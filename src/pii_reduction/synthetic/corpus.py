@@ -14,8 +14,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import asdict, dataclass
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -34,7 +36,9 @@ __all__ = [
     "SyntheticDocument",
     "TruthEntity",
     "build_corpus",
+    "document_seed",
     "load_corpus",
+    "split_for",
     "write_corpus",
 ]
 
@@ -125,8 +129,29 @@ class Corpus:
         return pd.DataFrame([asdict(document) for document in self.documents])
 
 
-def _split_for(document_id: str, seed: int) -> str:
-    """Deterministic 20/20/60 dev/calibration/test assignment (ADR-0011)."""
+def document_seed(document_id: str, seed: int) -> int:
+    """A stable per-document seed, so a document regenerates without its pack.
+
+    Derived rather than positional: a value provider shared across a pack advances with
+    every document, so the same document would produce different values depending on
+    where it sat in the run — which is not what ADR-0011 means by reproducible. It lives
+    here beside :func:`split_for` because both are per-document derivations that the
+    corpus generator, the injector and the public-dataset readers must all agree on.
+
+    Not :func:`hash`: Python randomises string hashing per process, so a pack built with
+    it would differ between two runs on the same machine.
+    """
+    digest = hashlib.sha256(f"{seed}:{document_id}".encode()).hexdigest()
+    return int(digest[:8], 16)
+
+
+def split_for(document_id: str, seed: int) -> str:
+    """Deterministic 20/20/60 dev/calibration/test assignment (ADR-0011).
+
+    Public — a public-dataset pack must use the *same* rule as the synthetic corpus, or
+    `--split` means two different things depending on which corpus is loaded and
+    Increment E's calibration discipline cannot be applied to packs at all.
+    """
     digest = hashlib.sha256(f"{seed}:{document_id}".encode()).hexdigest()
     bucket = int(digest[:8], 16) % 100
     for name, upper in SPLITS:
@@ -225,7 +250,7 @@ def _render(
         language=language,
         document_type=spec.document_type,
         tier=spec.tier,
-        split=_split_for(document_id, seed),
+        split=split_for(document_id, seed),
         text=text,
     )
     return document, entities, protected
@@ -296,20 +321,30 @@ def _validate(corpus: Corpus) -> None:
             )
 
 
+def _frame_of(records: Sequence[Any], record_type: type) -> pd.DataFrame:
+    """Rows plus the column names, so an empty table still writes its header.
+
+    A pack whose source carries no identifiers has no protected tokens (MASSIVE is
+    exactly that), and a headerless empty CSV cannot be read back — ``load_corpus``
+    would fail on a corpus that is perfectly valid. Naming the columns from the
+    dataclass keeps the file readable and the schema in one place.
+    """
+    return pd.DataFrame(
+        [asdict(record) for record in records],
+        columns=[field.name for field in fields(record_type)],
+    )
+
+
 def write_corpus(corpus: Corpus, directory: str | Path) -> dict[str, str]:
     """Write corpus, manifest, protected tokens and metadata as UTF-8 CSV/JSON."""
     target = Path(directory)
     target.mkdir(parents=True, exist_ok=True)
 
     written = {
-        "corpus": _write_csv(corpus.to_frame(), target / CORPUS_FILE),
-        "manifest": _write_csv(
-            pd.DataFrame([asdict(entity) for entity in corpus.entities]),
-            target / MANIFEST_FILE,
-        ),
+        "corpus": _write_csv(_frame_of(corpus.documents, SyntheticDocument), target / CORPUS_FILE),
+        "manifest": _write_csv(_frame_of(corpus.entities, TruthEntity), target / MANIFEST_FILE),
         "protected": _write_csv(
-            pd.DataFrame([asdict(token) for token in corpus.protected]),
-            target / PROTECTED_FILE,
+            _frame_of(corpus.protected, ProtectedToken), target / PROTECTED_FILE
         ),
     }
     meta_path = target / META_FILE

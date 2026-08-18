@@ -37,6 +37,10 @@ data/interim/
 data/external/
 data/downloads/
 data/output/
+# Demo packs are derived from public corpora and rebuilt from source, never
+# committed (ADR-0017). `*.csv` below already covers the tables; this covers
+# meta.json too, so a pack directory is excluded whole.
+demo/packs/
 *.parquet
 *.xlsx
 *.csv
