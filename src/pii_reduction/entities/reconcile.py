@@ -5,16 +5,19 @@ is one EMAIL to a pattern matcher and two PERSON fragments to an NER model. Muta
 text from unresolved candidates would corrupt it, so every candidate passes through
 here first.
 
-The algorithm is the documented seven steps: drop invalid spans, apply per-provider
-per-entity minimum scores, order the survivors, accept greedily while non-overlapping,
-and record what was rejected and why.
+The algorithm is the documented eight steps: drop invalid spans, apply per-provider
+per-entity minimum scores, reject candidates whose surface is a machine identifier,
+order the survivors, accept greedily while non-overlapping, and record what was
+rejected and why. The identifier step is step 3b of ``docs/04_PII_ENGINE.md`` and is
+deliberately placed before ordering: an identifier-shaped candidate that won an
+overlap first could evict a legitimate span and *then* be dropped, losing both.
 
 The ordering is entity priority, then **chain order**, then score, then span length.
 Scores are never compared across providers (ADR-0005): they are recognizer constants
 rather than calibrated probabilities, so score only breaks ties within one provider.
-This is the single place where `docs/04_PII_ENGINE.md` step 4's literal wording
-("priority, confidence, span length, provider priority") is not followed; see
-:func:`_sort_key` for why, and the amendment note in that document.
+`docs/04_PII_ENGINE.md` step 4's literal wording ("priority, confidence, span length,
+provider priority") is not followed; see :func:`_sort_key` for why, and the amendment
+note in that document. The identifier step is the other documented divergence.
 """
 
 from __future__ import annotations
@@ -23,7 +26,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from pii_reduction.contracts.entities import EntityMatch, ResolvedEntity
-from pii_reduction.entities.taxonomy import TAXONOMY, default_priority
+from pii_reduction.contracts.errors import SpanContractError
+from pii_reduction.entities.taxonomy import PERSON, TAXONOMY, default_priority
+from pii_reduction.patterns import is_identifier_shaped
 
 __all__ = [
     "DEFAULT_POLICY_NAME",
@@ -38,6 +43,18 @@ DEFAULT_POLICY_NAME = "priority_score_length"
 REASON_BELOW_THRESHOLD = "below_threshold"
 REASON_OVERLAP = "overlap"
 REASON_OUT_OF_SCOPE = "out_of_scope"
+REASON_IDENTIFIER_SHAPED = "identifier_shaped"
+
+#: Entity types the identifier guard applies to by default.
+#:
+#: PERSON only, and the omissions are deliberate. EMAIL and PHONE surfaces are
+#: *supposed* to be full of digits; guarding them would reject every phone number in
+#: the corpus. ADDRESS is left out for the opposite reason to the one you might
+#: expect: it is the one guarded-looking type whose surface is legitimately all
+#: digits — a postcode or house number alone — and no shipped provider emits ADDRESS
+#: (ADR-0002), so there is no measurement behind guarding it. Add it when a provider
+#: emits it and the benchmark can show what the guard does to it.
+DEFAULT_IDENTIFIER_GUARD: frozenset[str] = frozenset({PERSON})
 
 
 @dataclass(frozen=True)
@@ -65,6 +82,9 @@ class ReconciliationPolicy:
     provider_order: tuple[str, ...] = ()
     thresholds: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
     entities: frozenset[str] | None = None
+    #: Entity types whose surface is checked against :func:`is_identifier_shaped`.
+    #: Set to an empty frozenset to disable the guard entirely.
+    identifier_guard: frozenset[str] = DEFAULT_IDENTIFIER_GUARD
     name: str = DEFAULT_POLICY_NAME
 
     def priority_of(self, entity_type: str) -> int:
@@ -100,8 +120,15 @@ def reconcile(
     matches: Iterable[EntityMatch],
     *,
     policy: ReconciliationPolicy | None = None,
+    text: str | None = None,
 ) -> ReconciliationResult:
-    """Resolve candidate matches into non-overlapping approved spans."""
+    """Resolve candidate matches into non-overlapping approved spans.
+
+    ``text`` is the string the spans index into. It is optional because most callers
+    of this function reason about spans alone, but without it the identifier guard
+    cannot run — it is the one rule here that needs to see a surface rather than an
+    offset. The pipeline always passes it.
+    """
     active = policy or ReconciliationPolicy()
 
     survivors: list[EntityMatch] = []
@@ -113,6 +140,9 @@ def reconcile(
         threshold = active.threshold_for(match.provider, match.entity_type)
         if threshold is not None and match.score is not None and match.score < threshold:
             rejected.append(_reject(match, REASON_BELOW_THRESHOLD))
+            continue
+        if _is_identifier(match, active, text):
+            rejected.append(_reject(match, REASON_IDENTIFIER_SHAPED))
             continue
         survivors.append(match)
 
@@ -185,6 +215,33 @@ def _find_identical(
         ):
             return supporting
     return None
+
+
+def _is_identifier(match: EntityMatch, policy: ReconciliationPolicy, text: str | None) -> bool:
+    """Is this candidate a machine identifier a model mistook for a name?
+
+    Costs one string slice per candidate of a guarded type, and only when the caller
+    supplied the text. The surface never leaves this function: the rejection it
+    produces carries offsets and a reason code, like every other rejection here.
+
+    A span that runs past the end of its own text means the caller passed the wrong
+    string — field text against segment-relative offsets, most likely. Silently
+    skipping the guard there would hide the mismatch and produce three different
+    behaviours across one document, none of them loud, so it raises instead. A
+    degenerate ``start >= end`` span is a different case: there is no surface to
+    judge, and the span filter upstream already owns it.
+    """
+    if text is None or match.entity_type not in policy.identifier_guard:
+        return False
+    if match.end > len(text):
+        raise SpanContractError(
+            f"span [{match.start}, {match.end}) from provider {match.provider!r} runs past "
+            f"the end of the text it was matched against (length {len(text)}); the "
+            "reconciler was given a different string than the provider saw"
+        )
+    if match.start >= match.end:
+        return False
+    return is_identifier_shaped(text[match.start : match.end])
 
 
 def _reject(match: EntityMatch, reason: str) -> RejectedMatch:

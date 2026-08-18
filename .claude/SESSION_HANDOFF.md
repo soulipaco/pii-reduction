@@ -283,15 +283,19 @@ something, not as a prerequisite. To pick up work:
    measured baseline, and the queue with exit criteria.
 2. **Q1 is complete.** Remote is `soulipaco/pii-reduction` (private); both workflows
    are green on GitHub.
-3. **Q2 is diagnosed, with two remedies built and neither shipped.** The cause was not
-   a detection failure — Presidio finds every name and the *span* crosses the line
-   break. `split_lines` and the `key_value` parser both fix it; both introduce false
-   positives, and `key_value` takes over-redaction from 0.000 to 0.020 by redacting
-   `KB000002739` and `DEMO-PC-6963` once their labels stop giving the model context.
-   The remaining work is **identifier false-positive suppression** in the reconciler
-   or a provider guard — not a third parser. See plan §8 Q2 and ADR-0016. Then D.
-   **Do not enable either remedy on dev/calibration evidence alone**: those splits
-   reported over-redaction 0.000 and no regression; the whole-corpus gates caught it.
+3. **Q2: diagnosed, three components built, none of the segmentation remedies shipped.**
+   Presidio finds every name; the *span* crosses the line break. `split_lines`, the
+   `key_value` parser and the identifier guard all exist. **Only the guard ships** —
+   it is a verified no-op on the shipped config and removes the over-redaction that
+   blocked `key_value`. Neither parser is enabled: both leak one more entity (the
+   Greek `Ελένη Παππά`, found with block context and missed on its own line), and a
+   leakage regression is not a fair trade for a detection gain here.
+   **Q2's remaining problem is narrow: recover Greek detection under line-scoped
+   segmentation.** Two candidates in ADR-0016 (provider context words; two-granularity
+   detection with a reconciler ordering rule), plus an architectural one — segmentation
+   is per column while detection routing is per language. Then Increment D.
+   **Do not enable a remedy on dev/calibration evidence alone**: those splits reported
+   over-redaction 0.000 and no regression; the whole-corpus gates caught it.
 4. **Work Q2 against `--split dev` / `--split calibration`, not the whole corpus.**
    The gates are whole-corpus numbers that CI re-reads on every push, so iterating
    against them is tuning on a set that is 60% test split (ADR-0011). Read the
@@ -1015,6 +1019,53 @@ Unactioned by choice: `actions/*` are pinned to `@v4` rather than commit SHAs. R
 supply-chain improvement, but it needs Dependabot to stay maintainable — an owner
 decision, not a session's. GitHub also warns that Node 20 actions now run on Node 24;
 harmless today, and it resolves itself when those actions publish a v5/v6.
+
+### Q2 continued — the identifier guard (session 5, later)
+
+`patterns.is_identifier_shaped` + `_is_name_like`, applied by the reconciler as
+rejection reason `identifier_shaped`, default scope **PERSON only**. Ships enabled and
+is a **verified no-op on the shipped configuration**: all twelve hybrid gates returned
+identical values before and after.
+
+Measured whole-corpus, hybrid chain, with the guard active:
+
+| | shipped | `split_lines` | `key_value` |
+|---|---|---|---|
+| strict F1 | 0.886 | 0.902 | **0.915** |
+| relaxed F1 | 0.921 | 0.913 | **0.927** |
+| en tier-3 PERSON recall | 0.333 | 1.000 | **1.000** |
+| over-redaction | 0.000 | 0.000 | 0.000 |
+| leakage | **0.117** | 0.122 | 0.122 |
+| document clean rate | **0.774** | 0.763 | 0.763 |
+
+`key_value` is the better remedy and the over-redaction regression is gone. **Neither
+parser ships**, by the owner's decision: both leak one more entity — the Greek
+`Ελένη Παππά` in `Από: Ελένη Παππά`, found with block context and missed on its own
+line. Its slice recall is 0.000 before *and* after, because the old detection produced
+an over-long span that failed strict matching **while still redacting the name**. A
+span can be wrong for scoring and right for privacy at once; only the leakage metric
+saw it.
+
+Three things worth carrying forward:
+
+1. **The first version of the guard leaked names**, and the privacy audit caught it.
+   Counting a token as name-like only when it carried no digit rejected `Mueller2024`,
+   `jmueller01`, `grace.okafor2` and `Παππά2026` — a rejected PERSON span means the
+   name is *not* redacted, and usernames with numeric suffixes are routine in real
+   support data. Letter-versus-digit counts do not separate the cases that matter
+   (`DEMO-PC-6963` is 6/4, `Mueller2024` is 7/4); a lowercase run of three or more
+   does. A lone all-caps token with digits (`MUELLER2024`) is a known remaining gap,
+   pinned by a test.
+2. **ADDRESS was removed from the default guard scope.** It had shipped guarded on no
+   evidence — no provider emits it, the corpus has no ADDRESS truth — and it is the
+   one guarded-looking type whose surface is legitimately all digits. A postcode would
+   have been dropped silently the moment an ADDRESS provider landed.
+3. **`key_value` costs roughly an order of magnitude in runtime**: provider calls go
+   from one per document to one per line. Under ADR-0015 (CPU-only) that is a
+   selection criterion, not a footnote.
+
+The guard scope is a `ReconciliationPolicy` field, adjustable from Python but **not
+reachable from YAML** — `ChainSettings` exposes only `providers` and `overlap_policy`.
 
 ### Known gaps carried forward
 

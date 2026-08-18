@@ -426,11 +426,14 @@ parser is line-oriented. It is not merely a scoring artifact: reduction currentl
 destroys the field label (`Customer: <PERSON> number: …`), a structure-preservation
 failure the over-redaction metric cannot see because labels are not protected tokens.
 
-Two remedies are built and tested (ADR-0016): `split_lines` on `PlainTextParser`, and
-the `key_value` parser, now registered. **Neither is enabled in any shipped config, and
-Q2 is not complete.** Both fix the span and both fail the exit criterion:
+Three components are built and tested (ADR-0016): `split_lines` on `PlainTextParser`,
+the `key_value` parser, and the identifier guard. **Only the guard is enabled, and Q2
+is not complete.**
 
-| whole corpus, hybrid chain | shipped | `split_lines` | `key_value` |
+*First measurement, before the guard existed* — both remedies fixed the span and both
+failed the exit criterion:
+
+| whole corpus, hybrid chain (pre-guard) | shipped | `split_lines` | `key_value` |
 |---|---|---|---|
 | en tier-3 PERSON recall | 0.333 | 1.000 | 1.000 |
 | strict F1 | 0.886 | — | 0.910 |
@@ -452,12 +455,42 @@ identifiers are in the test split, and the development splits reported over-reda
 is what stops iterating on the test split — but it is not sufficient evidence to
 enable a change. Run the whole-corpus gates before claiming a remedy works.
 
-**Remaining work is not a third parser.** Both remedies need identifier
-false-positive suppression: a way to refuse a PERSON span whose surface is ticket-,
-KB-, machine-, version- or order-shaped. That belongs with the reconciler or a
-provider-level guard, applies to both segmentation forms, and is useful independently
-— the same false positives can occur in prose. Then re-measure, enable whichever
-remedy wins, and raise the floors.
+**The identifier guard now ships** (`patterns.is_identifier_shaped`, applied by the
+reconciler as rejection reason `identifier_shaped`, default scope PERSON).
+It is a structural rule — no token in the surface is name-like — rather than a list of
+identifier formats, so it does not fit the fixture. It is a **verified no-op on the
+shipped configuration**: all twelve hybrid gates returned identical values.
+
+*Second measurement, with the guard active* — this is the current picture:
+
+| whole corpus, hybrid chain (with guard) | shipped | `split_lines` | `key_value` |
+|---|---|---|---|
+| strict F1 | 0.886 | 0.902 | **0.915** |
+| relaxed F1 | 0.921 | 0.913 | **0.927** |
+| en tier-3 PERSON recall | 0.333 | 1.000 | **1.000** |
+| over-redaction | 0.000 | 0.000 | 0.000 |
+| leakage | **0.117** | 0.122 | 0.122 |
+| document clean rate | **0.774** | 0.763 | 0.763 |
+
+The over-redaction regression is gone and `key_value` is the better remedy. **Neither
+ships**, by the repository owner's decision: both leak one more entity — the Greek
+`Ελένη Παππά` in `Από: Ελένη Παππά`, which `xx_ent_wiki_sm` finds with block context
+and misses on the isolated line. Its slice recall is 0.000 before and after, because
+the old detection produced an over-long span that failed strict matching *while still
+redacting the name*. A leakage regression is not a fair trade for a detection gain in
+a PII reduction tool, and `leakage_rate` is gated at 0.117.
+
+**Q2 remains open on a narrower problem: recover Greek detection under line-scoped
+segmentation.** Candidates, in ADR-0016: pass the label to the provider as context
+words without making it processable; or detect at two granularities and let the
+reconciler choose (the overlap ordering is the open question — today's "longer span
+wins" would re-select the over-long span and undo the English fix). A third is
+architectural: segmentation is per column while detection routing is per language, so
+"line-scope English, block-scope Greek" cannot currently be expressed.
+
+Note also that `key_value` turns one provider call per document into one per line and
+slowed the whole-corpus run by roughly an order of magnitude here. Under ADR-0015
+(CPU-only) that is a selection criterion, not a footnote.
 
 Also fixed here, because Q2 depends on it: `run_benchmark` scored a subset against the
 **whole** corpus's ground truth, so a dev+calibration run reported over-redaction 0.627

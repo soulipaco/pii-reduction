@@ -5,13 +5,16 @@ from __future__ import annotations
 import pytest
 
 from pii_reduction.contracts.entities import EntityMatch
+from pii_reduction.contracts.errors import SpanContractError
 from pii_reduction.entities import ReconciliationPolicy, reconcile
 from pii_reduction.entities.reconcile import (
+    DEFAULT_IDENTIFIER_GUARD,
     REASON_BELOW_THRESHOLD,
+    REASON_IDENTIFIER_SHAPED,
     REASON_OUT_OF_SCOPE,
     REASON_OVERLAP,
 )
-from pii_reduction.entities.taxonomy import EMAIL, PERSON, PHONE
+from pii_reduction.entities.taxonomy import ADDRESS, EMAIL, PERSON, PHONE
 
 pytestmark = pytest.mark.unit
 
@@ -179,3 +182,147 @@ class TestRejectionRecords:
         assert (rejected.entity_type, rejected.start, rejected.end) == (PERSON, 0, 10)
         assert rejected.reason == REASON_OVERLAP
         assert not hasattr(rejected, "text")
+
+
+class TestIdentifierGuard:
+    """A PERSON span whose surface is a machine identifier is a model error.
+
+    Measured cause (ADR-0016, session 5): once a key/value label stops giving the
+    model context, ``KB Article: KB000002739`` and ``Rechnername: DEMO-PC-6963`` are
+    tagged PERSON and redacted, taking benchmark over-redaction from 0.000 to 0.020.
+    The guard is what lets line-scoped segmentation ship at all.
+    """
+
+    def test_an_identifier_tagged_as_a_person_is_rejected(self) -> None:
+        text = "KB000002739"
+        result = reconcile([match(PERSON, 0, len(text))], text=text)
+        assert result.entities == ()
+        assert [r.reason for r in result.rejected] == [REASON_IDENTIFIER_SHAPED]
+
+    @pytest.mark.parametrize(
+        "surface", ["INC00100000", "KB000002739", "DEMO-PC-6963", "v4.12.3", "12345"]
+    )
+    def test_every_protected_identifier_shape_is_rejected(self, surface: str) -> None:
+        result = reconcile([match(PERSON, 0, len(surface))], text=surface)
+        assert result.entities == ()
+
+    @pytest.mark.parametrize(
+        "surface", ["Grace Okafor", "Jürgen Müller", "Μαρία Παπαδοπούλου", "O'Brien", "Anne-Marie"]
+    )
+    def test_names_are_untouched_in_every_language(self, surface: str) -> None:
+        result = reconcile([match(PERSON, 0, len(surface))], text=surface)
+        assert len(result.entities) == 1
+
+    def test_a_name_beside_a_number_is_kept(self) -> None:
+        # Rejecting this would leave the name unredacted. Leaking a name is worse
+        # than over-redacting a year, so the guard demands that *no* token be
+        # name-like before it rejects.
+        text = "Maria Rossi 2026"
+        result = reconcile([match(PERSON, 0, len(text))], text=text)
+        assert len(result.entities) == 1
+
+    def test_phone_numbers_are_never_guarded(self) -> None:
+        # PHONE surfaces are supposed to be all digits. Guarding them would reject
+        # every phone number in the corpus.
+        text = "+1 202 555 0140"
+        result = reconcile([match(PHONE, 0, len(text))], text=text)
+        assert len(result.entities) == 1
+
+    def test_emails_are_never_guarded(self) -> None:
+        text = "grace.okafor2@example.net"
+        result = reconcile([match(EMAIL, 0, len(text))], text=text)
+        assert len(result.entities) == 1
+
+    def test_without_text_the_guard_cannot_and_does_not_run(self) -> None:
+        # Callers that reason about spans alone keep working; the guard is the one
+        # rule here that needs a surface rather than an offset.
+        result = reconcile([match(PERSON, 0, 11)])
+        assert len(result.entities) == 1
+
+    def test_the_guard_can_be_disabled(self) -> None:
+        policy = ReconciliationPolicy(identifier_guard=frozenset())
+        result = reconcile([match(PERSON, 0, 11)], policy=policy, text="KB000002739")
+        assert len(result.entities) == 1
+
+    def test_a_rejection_carries_offsets_and_no_text(self) -> None:
+        # AGENTS.md rule 8: rejections are debug metadata and must never quote a value.
+        text = "Customer: KB000002739"
+        result = reconcile([match(PERSON, 10, len(text))], text=text)
+        rejected = result.rejected[0]
+        assert (rejected.start, rejected.end) == (10, len(text))
+        assert "KB000002739" not in repr(rejected)
+
+    def test_a_span_beyond_its_text_is_a_loud_error(self) -> None:
+        # A span that overruns its own text means the caller passed the wrong string —
+        # field text against segment-relative offsets, most likely. Skipping the guard
+        # silently would hide that and produce three different behaviours across one
+        # document, none of them visible in review.
+        with pytest.raises(SpanContractError, match="runs past the end"):
+            reconcile([match(PERSON, 0, 50)], text="short")
+
+    def test_the_mismatch_error_names_offsets_and_not_the_text(self) -> None:
+        with pytest.raises(SpanContractError) as exc_info:
+            reconcile([match(PERSON, 0, 50)], text="secret surface")
+        assert "secret surface" not in str(exc_info.value)
+        assert "[0, 50)" in str(exc_info.value)
+
+    def test_the_guard_is_counted_in_rejection_metrics(self) -> None:
+        result = reconcile([match(PERSON, 0, 5)], text="12345")
+        assert result.rejection_counts() == {REASON_IDENTIFIER_SHAPED: 1}
+
+
+class TestIdentifierGuardEdges:
+    """The boundary between a code and a name, pinned.
+
+    The first version of the guard classified a token as name-like only when it held
+    no digit at all, which rejected ``Mueller2024``, ``jmueller01`` and
+    ``grace.okafor2`` — and a rejected PERSON span means the name survives into the
+    output. Counting letters against digits does not separate the cases that matter
+    (``DEMO-PC-6963`` is 6/4, ``Mueller2024`` is 7/4); lowercase runs do.
+    """
+
+    @pytest.mark.parametrize(
+        "surface", ["Mueller2024", "jmueller01", "grace.okafor2", "Παππά2026", "O2 Arena"]
+    )
+    def test_a_name_carrying_digits_is_still_a_name(self, surface: str) -> None:
+        # Usernames, handles and login ids are routine in real support data, and this
+        # is the failure that leaks rather than over-redacts.
+        result = reconcile([match(PERSON, 0, len(surface))], text=surface)
+        assert len(result.entities) == 1, f"{surface!r} would not be redacted"
+
+    def test_an_all_caps_name_beside_another_token_is_kept(self) -> None:
+        text = "MARIA MUELLER2024"
+        result = reconcile([match(PERSON, 0, len(text))], text=text)
+        assert len(result.entities) == 1
+
+    def test_a_lone_all_caps_name_with_digits_is_a_known_gap(self) -> None:
+        # Documented in `patterns.is_identifier_shaped`: a single all-caps token with
+        # digits is indistinguishable from an asset code without more context, so it
+        # is rejected and the name is not redacted. Pinned so the gap stays visible
+        # rather than latent; Increment D's real data is where to re-test it.
+        result = reconcile([match(PERSON, 0, 11)], text="MUELLER2024")
+        assert result.entities == ()
+
+    def test_address_is_not_guarded_by_default(self) -> None:
+        # A postcode or house number alone is legitimately all digits, and no shipped
+        # provider emits ADDRESS, so there is no measurement behind guarding it.
+        assert ADDRESS not in DEFAULT_IDENTIFIER_GUARD
+        result = reconcile([match(ADDRESS, 0, 5)], text="10115")
+        assert len(result.entities) == 1
+
+    def test_the_default_scope_is_person_only(self) -> None:
+        assert frozenset({PERSON}) == DEFAULT_IDENTIFIER_GUARD
+
+    @pytest.mark.parametrize("surface", ["Wei2", "Li3", "Bo2"])
+    def test_a_short_name_with_a_digit_is_the_same_known_gap(self, surface: str) -> None:
+        # Documented in `patterns.is_identifier_shaped`: the gap is "lowercase run
+        # shorter than three", not "all caps". Pinned so the real boundary is visible.
+        result = reconcile([match(PERSON, 0, len(surface))], text=surface)
+        assert result.entities == ()
+
+    def test_cyrillic_names_with_digits_are_kept(self) -> None:
+        # Cyrillic is cased, so the rule works there; caseless scripts are the
+        # documented exposure, not this one.
+        text = "Иванов2024"
+        result = reconcile([match(PERSON, 0, len(text))], text=text)
+        assert len(result.entities) == 1

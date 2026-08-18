@@ -58,7 +58,9 @@ def process(
     transformed: dict[str, str] = {}
     for segment in parsed.processable_segments:
         matches = provider.detect(segment.text, language="en", entities=entities)
-        resolved = list(reconcile(matches).entities)
+        # text= matters: this hand-composed chain is the production path in miniature,
+        # and omitting it would quietly run without the identifier guard.
+        resolved = list(reconcile(matches, text=segment.text).entities)
         resolved.extend((extra or {}).get(segment.segment_id, []))
         resolved.sort(key=lambda entity: entity.start)
         if resolved:

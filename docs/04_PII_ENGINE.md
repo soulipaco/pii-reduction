@@ -219,12 +219,23 @@ but this should be configurable and validated.
 > providers is false precision. Confidence still decides between candidates from the
 > same provider. See `src/pii_reduction/entities/reconcile.py::_sort_key`.
 
+> Amended by ADR-0016: step 3b rejects a candidate whose *surface* is a machine
+> identifier rather than a name — `KB000002739`, `DEMO-PC-6963`, `v4.12.3`. It applies
+> to `PERSON` by default (`ReconciliationPolicy.identifier_guard`; set it to an empty
+> set to disable) and deliberately **not** to `EMAIL` or `PHONE`, whose surfaces are
+> supposed to be digits, nor to `ADDRESS`, whose surface may legitimately be a bare
+> postcode. It runs before ordering on purpose: a candidate that won an overlap first
+> and was dropped afterwards would take a legitimate overlapping span down with it.
+> See `src/pii_reduction/entities/reconcile.py::_is_identifier` and
+> `pii_reduction.patterns.is_identifier_shaped`.
+
 1. filter invalid spans,
 2. normalize entity labels,
 3. apply entity-specific minimum confidence,
+3b. reject identifier-shaped surfaces for entity types in the guard scope,
 4. sort candidates by priority, confidence, span length, provider priority,
 5. accept non-overlapping spans,
-6. record rejected overlaps for debug metrics,
+6. record rejected overlaps and guard rejections for debug metrics,
 7. return accepted spans ordered by start position.
 
 ## Reduction strategies

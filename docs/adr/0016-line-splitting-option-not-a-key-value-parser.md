@@ -2,13 +2,21 @@
 
 **Status:** accepted · **Date:** 2026-08-18 · **Session:** 5
 
-> **Amended the same session.** This ADR was written when `split_lines` was the only
-> remedy and the `key_value` parser was still deferred. Both now exist, `key_value` is
-> registered, and a whole-corpus measurement changed the conclusion: **neither is
-> enabled in any shipped configuration**, for a reason worth reading — see
-> *Consequences*. The original decision (a segmentation option rather than a new
-> document contract) stands for `split_lines`; the reasoning about `key_value` being
-> "the next step" has been overtaken by measurement.
+> **Amended twice in the same session; read this before the Decision section.**
+> Final state:
+>
+> - `split_lines` and the `key_value` parser both exist and are tested. **Neither is
+>   enabled in any shipped configuration**, so no published number changed.
+> - The **identifier guard ships enabled**, scoped to **PERSON only** — ADDRESS was
+>   removed by the privacy audit, see *Consequences*. It is a verified no-op
+>   on the shipped configuration — all twelve hybrid gates returned identical values —
+>   and it removes the over-redaction regression that blocked `key_value`.
+> - What still blocks both remedies is **not** over-redaction any more. It is a single
+>   leaked Greek name caused by context loss, which the detection metrics do not show.
+>
+> The Decision section below records the reasoning as it stood when only `split_lines`
+> existed: its conclusion "do not add a `key_value` parser for this" was overtaken by
+> measurement, and the parser was built. Consequences is the current record.
 
 ## Context
 
@@ -97,7 +105,8 @@ Reasoning:
 
   The label was not only noise — it was *context that suppressed false positives on
   bare identifiers*. Removing it cuts both ways. Q2's exit criterion requires
-  over-redaction to stay 0.000, so `key_value` does not ship enabled either.
+  over-redaction to stay 0.000, so at this point `key_value` could not ship either —
+  which is what motivated the identifier guard below.
 
 - **The development splits did not reveal this.** Both destroyed identifiers are in
   the test split, and dev+calibration (45 documents) reported over-redaction 0.000.
@@ -105,23 +114,64 @@ Reasoning:
   test split — but it is not sufficient evidence to enable a change. The whole-corpus
   gate run is, and it is the reason the gates exist.
 
-- **What both remedies actually need is identifier-false-positive suppression**, not a
-  third parser: a way for the pipeline to refuse a PERSON span whose surface is
-  ticket-, KB-, machine-, version- or order-shaped. That belongs with the reconciler or
-  a provider-level guard, applies to both segmentation forms, and is independently
-  useful — the same false positives can occur in prose. Recorded as Q2's remaining
-  work in plan §8.
-- Two parsers now split lines with duplicated logic. They are deliberately **not**
-  refactored onto a shared line splitter: they do not agree on line *semantics* (the
-  transcript parser splits a line into speaker prefix and body; this one does not), so
-  a shared module would advertise an agreement that does not exist. Revisit when a
-  third line-oriented parser lands, or when `key_value` needs the transcript parser's
-  prefix heuristic.
-- `parser_options` are validated at pipeline construction rather than at config load,
-  so a typo (`split_line: true`) surfaces as a `ParserError` mid-build rather than a
-  `ConfigurationError` during validation. This is pre-existing behavior shared with the
-  transcript parser, and it is the acknowledged cost of choosing an option over a
-  registry name.
+- **The identifier guard was built and it works.** `patterns.is_identifier_shaped`,
+  applied by the reconciler as rejection reason `identifier_shaped`. It is a
+  *structural* rule — no token in the surface is name-like — not a list of known
+  identifier formats: a list tuned to the committed corpus would fit the fixture and
+  stop working on Increment D's public data. The verdict is "no token is name-like"
+  rather than "some token looks like an identifier", so `Maria Rossi 2026` stays a
+  name — rejecting it would leave the name unredacted, and leaking a name is worse
+  than over-redacting a year.
+
+  Two corrections came out of the privacy audit, both of which would have leaked:
+
+  - The first rule counted a token as name-like only if it carried **no** digit, which
+    rejected `Mueller2024`, `jmueller01`, `grace.okafor2` and `Παππά2026` — usernames
+    and handles are routine in real support data, and a rejected PERSON span means the
+    name is not redacted. Letter-versus-digit counts do not separate the cases that
+    matter (`DEMO-PC-6963` is 6/4, `Mueller2024` is 7/4); a lowercase run of three or
+    more does, because machine identifiers are conventionally upper case. A lone
+    all-caps token with digits (`MUELLER2024` by itself) remains a known gap, pinned
+    by a test rather than left latent.
+  - **Default scope is PERSON only, not PERSON + ADDRESS.** ADDRESS is the one
+    guarded-looking type whose surface is legitimately all digits — a postcode or
+    house number alone — and no shipped provider emits it (ADR-0002), so there was no
+    measurement behind guarding it. Add it when a provider emits it and the benchmark
+    can show what the guard does to it.
+
+  The scope is a `ReconciliationPolicy` field, so it is adjustable from the Python API
+  but **not yet reachable from YAML**: `ChainSettings` exposes only `providers` and
+  `overlap_policy`. A config key is the natural next step if the guard ever needs
+  turning off per dataset.
+
+- **Measured whole-corpus, hybrid chain, with the guard active:**
+
+  | | shipped | `split_lines` | `key_value` |
+  |---|---|---|---|
+  | strict F1 | 0.886 | 0.902 | **0.915** |
+  | relaxed F1 | 0.921 | 0.913 | **0.927** |
+  | en tier-3 PERSON recall | 0.333 | 1.000 | **1.000** |
+  | over-redaction | 0.000 | 0.000 | **0.000** |
+  | leakage | **0.117** | 0.122 | 0.122 |
+  | document clean rate | **0.774** | 0.763 | 0.763 |
+
+  `key_value` is the better remedy on every axis where they differ, and the
+  over-redaction regression that blocked it is gone.
+
+- **One privacy regression survives, and the detection metrics cannot see it.**
+  Both remedies leak one more entity: the Greek `Ελένη Παππά` in `Από: Ελένη Παππά`.
+  With block context `xx_ent_wiki_sm` finds it; on the isolated line it does not. Its
+  slice recall was 0.000 before and is 0.000 after — the old detection produced an
+  over-long span that failed strict matching *while still redacting the name*. So the
+  detection table records no change while a value starts surviving. This is exactly
+  why ADR-0011 reports leakage beside detection, and a reminder that a span can be
+  wrong for scoring and right for privacy at once.
+
+- **Line-scoped segmentation helps English and hurts Greek**, and the pipeline cannot
+  express that: segmentation is chosen per column, detection is routed per language.
+  Recovering the Greek detection needs either provider-level context words or a
+  two-granularity detection pass whose overlap ordering is a design question in its
+  own right. Both are larger than Q2.
 
 ## Alternatives rejected
 
@@ -137,3 +187,32 @@ Reasoning:
 - **Making line-splitting the default.** Would silently change behaviour for every
   existing plain-text column, including wrapped prose, to fix a structured-text
   problem.
+
+
+## Where this leaves Q2
+
+The identifier guard ships. Neither segmentation remedy does, by the repository
+owner's decision: `key_value` buys strict F1 0.886 → 0.915 and English tier-3 PERSON
+0.333 → 1.000, and costs one leaked Greek name. In a tool whose purpose is reducing
+PII, a leakage regression is not a fair trade for a detection gain, and the gates say
+so — `leakage_rate` is pinned at 0.117.
+
+Q2 therefore stays open on a narrower and better-understood problem than it started
+with: **recover Greek detection under line-scoped segmentation.** Two candidates, both
+larger than a config change:
+
+1. Pass the label to the provider as *context* without making it processable. Presidio
+   supports context words; the label would inform detection while staying immutable.
+2. Detect at two granularities — whole field and per line — and let the reconciler
+   choose. The overlap ordering is the open question: both candidates are PERSON from
+   the same provider at the same constant score, so today's "longer span wins" rule
+   would re-select the over-long span and undo the English fix.
+
+A third possibility is architectural: segmentation is chosen per column while
+detection is routed per language, so "line-scope English, block-scope Greek" cannot
+currently be expressed. That is a pipeline design change, not a parser one.
+
+Also worth carrying forward: `key_value` turns one provider call per document into one
+per line, and the whole-corpus benchmark run slowed by roughly an order of magnitude on
+the development machine. Under ADR-0015 (CPU-only deployment) that cost is a selection
+criterion, not a footnote.

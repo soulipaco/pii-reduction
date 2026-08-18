@@ -150,7 +150,7 @@ class FieldProcessor:
                 )
             detected += len(matches)
 
-            resolution = reconcile(matches, policy=chain.policy)
+            resolution = reconcile(matches, policy=chain.policy, text=segment.text)
             for reason, count in resolution.rejection_counts().items():
                 rejections[reason] = rejections.get(reason, 0) + count
             if not resolution.entities:
