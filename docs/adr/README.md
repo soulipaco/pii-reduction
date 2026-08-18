@@ -22,3 +22,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0013](0013-mask-and-pseudonymization-in-a4.md) | Mask + deterministic pseudonymization pulled forward into Increment A4 |
 | [0014](0014-synthetic-phone-number-ranges.md) | Synthetic phone numbers from published permanently-unassigned ranges |
 | [0015](0015-cpu-only-deployment-target.md) | CPU-only is a hard constraint; no component may require a GPU |
+| [0016](0016-line-splitting-option-not-a-key-value-parser.md) | `split_lines` option on the plain-text parser instead of the planned `key_value` parser |

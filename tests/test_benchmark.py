@@ -146,6 +146,87 @@ class TestSplits:
         assert outcome.documents == expected
         assert outcome.documents < len(full.documents)
 
+    def test_a_split_is_scored_against_its_own_ground_truth(self) -> None:
+        """Regression: metrics were computed against the whole corpus's truth.
+
+        A split run only processes its own documents, so scoring it against every
+        document's ground truth counted the unprocessed ones as missed and their
+        protected tokens as destroyed. A dev+calibration run reported over-redaction
+        0.627 against a true 0.000, which would have made the split discipline
+        Increment E depends on unusable — and would quietly mislead anyone developing
+        against dev, which is what plan §8 now tells Q2 to do.
+        """
+        outcome = run_benchmark(
+            corpus_dir=CORPUS_DIR,
+            configs_dir=CONFIGS_DIR,
+            splits=["calibration"],
+            benchmark_run_id="benchmark_split_truth",
+        )
+        corpus = load_corpus(CORPUS_DIR)
+        in_split = {d.document_id for d in corpus.documents if d.split == "calibration"}
+        expected_support = sum(1 for e in corpus.entities if e.document_id in in_split)
+
+        assert outcome.strict.support == expected_support
+        assert outcome.strict.support < len(corpus.entities)
+        # The deterministic chain touches no protected token in any split.
+        assert outcome.over_redaction.total == sum(
+            1 for t in corpus.protected if t.document_id in in_split
+        )
+        assert outcome.over_redaction.rate == 0.0
+
+    def test_a_narrowed_dataset_selection_is_also_scored_against_its_own_truth(self) -> None:
+        # `splits` is not the only way to process a subset: a narrowed `datasets`
+        # mapping skips whole document types. Deriving the scored set from the split
+        # filter alone would reintroduce the bug above through that door.
+        outcome = run_benchmark(
+            corpus_dir=CORPUS_DIR,
+            configs_dir=CONFIGS_DIR,
+            datasets={"transcript": "benchmark_transcript"},
+            benchmark_run_id="benchmark_one_type",
+        )
+        corpus = load_corpus(CORPUS_DIR)
+        transcripts = {d.document_id for d in corpus.documents if d.document_type == "transcript"}
+        assert outcome.strict.support == sum(
+            1 for e in corpus.entities if e.document_id in transcripts
+        )
+        assert outcome.strict.support < len(corpus.entities)
+        assert outcome.over_redaction.rate == 0.0
+        # Coverage must report what ran, not what was selected.
+        assert outcome.documents == len(transcripts)
+
+    def test_a_result_records_the_splits_it_covers(self) -> None:
+        # AGENTS.md rule 9: a benchmark result must carry enough to reproduce it. A
+        # --split table is otherwise indistinguishable from a whole-corpus one except
+        # by its support counts, which is how a partial number ends up quoted as the
+        # headline.
+        partial = run_benchmark(
+            corpus_dir=CORPUS_DIR,
+            configs_dir=CONFIGS_DIR,
+            splits=["dev"],
+            benchmark_run_id="benchmark_splits_recorded",
+        )
+        assert partial.splits == ("dev",)
+        assert "splits=dev" in summarise(partial)
+
+        whole = run_benchmark(
+            corpus_dir=CORPUS_DIR, configs_dir=CONFIGS_DIR, benchmark_run_id="benchmark_whole"
+        )
+        assert whole.splits == ()
+        assert "splits=all" in summarise(whole)
+
+    def test_split_supports_partition_the_corpus(self) -> None:
+        # Every entity belongs to exactly one split, so the parts must sum to the whole.
+        total = 0
+        for split in ("dev", "calibration", "test"):
+            outcome = run_benchmark(
+                corpus_dir=CORPUS_DIR,
+                configs_dir=CONFIGS_DIR,
+                splits=[split],
+                benchmark_run_id=f"benchmark_partition_{split}",
+            )
+            total += outcome.strict.support
+        assert total == len(load_corpus(CORPUS_DIR).entities)
+
 
 class TestCli:
     def test_benchmark_command_prints_the_table(self, capsys: pytest.CaptureFixture[str]) -> None:

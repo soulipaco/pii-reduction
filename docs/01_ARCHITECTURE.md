@@ -149,7 +149,11 @@ Each segment should include at least:
 
 ### Plain-text parser
 
-One field becomes one processable segment.
+One field becomes one processable segment — or one segment per line, with each line
+break preserved as its own non-processable segment, when `split_lines` is set
+(ADR-0016). The option exists because an NER model handed a multi-line key/value block
+as a single segment runs entity boundaries across the line break; it is off by default
+because splitting is wrong for prose that wraps mid-sentence.
 
 ### Transcript parser
 

@@ -186,6 +186,22 @@ columns:
     reducer: redact
 ```
 
+## Plain-text parser options
+
+```yaml
+parser_options:
+  split_lines: false
+```
+
+`split_lines` makes each line its own processable segment, with the line break kept as
+non-processable structure. Set it for columns holding line-structured text — key/value
+blocks, exported form fields, anything where a line is a record rather than a sentence.
+
+It defaults to `false`, and that default is deliberate: splitting is wrong for prose
+that wraps mid-sentence, where a name broken across the wrap would become undetectable.
+Turn it on per column, never globally. See ADR-0016 for the measurement that motivated
+it and for how it relates to the deferred `key_value` parser.
+
 ## Transcript parser options
 
 ```yaml

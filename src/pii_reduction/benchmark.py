@@ -64,6 +64,12 @@ class BenchmarkOutcome:
     predictions: tuple[Prediction, ...] = field(default=(), repr=False)
     reduced_texts: dict[str, str] = field(default_factory=dict, repr=False)
     documents: int = 0
+    #: Splits this result covers; empty means the whole corpus. Recorded because
+    #: ``AGENTS.md`` rule 9 requires it to reproduce a result, and because a
+    #: ``--split dev`` table is otherwise indistinguishable from a whole-corpus one
+    #: except by its support counts — which is how a partial number gets pasted into
+    #: documentation as if it were the headline.
+    splits: tuple[str, ...] = ()
 
     def table(self, *, title: str = "PII reduction benchmark") -> str:
         return render_table(self.rows, title=title)
@@ -134,6 +140,11 @@ def run_benchmark(
     reduced_texts: dict[str, str] = {}
     chains: set[str] = set()
     strategies: set[str] = set()
+    #: Documents that actually ran. Accumulated here rather than derived from the
+    #: split-filtered frame, because a narrowed ``datasets`` mapping skips whole
+    #: document types (below) — deriving it from the frame would score those skipped
+    #: documents as missed, which is the bug this exists to prevent.
+    scored: set[str] = set()
 
     for document_type, dataset_name in selected.items():
         subset = frame[frame["document_type"] == document_type]
@@ -149,6 +160,7 @@ def run_benchmark(
         pipeline = build_pipeline(config, run_id=f"{run_id}_{document_type}")
         outcome = pipeline.process(PandasSource(subset, name=config.dataset.name).load())
 
+        scored.update(str(document_id) for document_id in subset["document_id"])
         predictions.extend(
             Prediction(
                 document_id=str(row["row_id"]),
@@ -168,7 +180,13 @@ def run_benchmark(
             }
         )
 
-    truths = _truth_spans(corpus)
+    # Ground truth is restricted to the documents that actually ran. Scoring a subset
+    # against the whole corpus's truth counts every unprocessed document's entities as
+    # missed and every unprocessed protected token as destroyed, which understates
+    # recall and invents over-redaction — measured, not theoretical: a dev+calibration
+    # run reported over-redaction 0.627 against a true 0.000. Increment E's split
+    # discipline depends on these numbers being right.
+    truths = [truth for truth in _truth_spans(corpus) if truth.document_id in scored]
     surfaces = {entity.entity_id: entity.surface for entity in corpus.entities}
     strategy = ", ".join(sorted(strategies))
     chain = ", ".join(sorted(chains))
@@ -177,7 +195,11 @@ def run_benchmark(
     relaxed = detection_metrics(truths, predictions, mode=RELAXED)
     leakage = leakage_metrics(truths, reduced_texts, surfaces, strategy=strategy)
     over_redaction = over_redaction_metrics(
-        ((token.document_id, token.token, token.kind) for token in corpus.protected),
+        (
+            (token.document_id, token.token, token.kind)
+            for token in corpus.protected
+            if token.document_id in scored
+        ),
         reduced_texts,
     )
 
@@ -202,7 +224,10 @@ def run_benchmark(
         rows=tuple(rows),
         predictions=tuple(predictions),
         reduced_texts=reduced_texts,
-        documents=len(frame),
+        # What ran, not what was selected: a narrowed `datasets` mapping skips whole
+        # document types, and reporting the frame size would overstate coverage.
+        documents=len(scored),
+        splits=tuple(splits) if splits else (),
     )
 
 
@@ -328,9 +353,10 @@ def _build_rows(
 
 def summarise(outcome: BenchmarkOutcome) -> str:
     """One-paragraph summary printed under the table."""
+    splits = ", ".join(outcome.splits) if outcome.splits else "all"
     return (
         f"documents={outcome.documents} entities={outcome.strict.support} "
-        f"chain={outcome.provider_chain} strategy={outcome.strategy}\n"
+        f"splits={splits} chain={outcome.provider_chain} strategy={outcome.strategy}\n"
         f"strict f1={outcome.strict.f1:.3f} relaxed f1={outcome.relaxed.f1:.3f} "
         f"leakage={outcome.leakage.rate:.3f} "
         f"document clean rate={outcome.leakage.document_clean_rate:.3f} "

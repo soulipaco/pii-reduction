@@ -282,16 +282,20 @@ something, not as a prerequisite. To pick up work:
 1. Read `docs/14_IMPLEMENTATION_PLAN.md` **§8**. It holds the status table, the
    measured baseline, and the queue with exit criteria.
 2. **Q1 is complete.** Remote is `soulipaco/pii-reduction` (private); both workflows
-   are green on GitHub. Start at **Q2**: English tier-3 PERSON recall (0.333), then
-   Increment D (public datasets). Both are required; neither is optional.
-3. **Work Q2 against `--split dev` / `--split calibration`, not the whole corpus.**
+   are green on GitHub.
+3. **Q2 is diagnosed and half-built.** The cause was not a detection failure — Presidio
+   finds every name and the *span* crosses the line break. `split_lines` on
+   `PlainTextParser` (ADR-0016) fixes it but adds one German false positive, so it is
+   enabled in no config and Q2 is open. The next step is the `key_value` parser, and
+   the deciding probe is already done — see plan §8 Q2. Then Increment D.
+4. **Work Q2 against `--split dev` / `--split calibration`, not the whole corpus.**
    The gates are whole-corpus numbers that CI re-reads on every push, so iterating
    against them is tuning on a set that is 60% test split (ADR-0011). Read the
    whole-corpus number once when done, then raise the floor. `--gates` refuses
    `--split` so the two cannot be mixed by accident.
-4. Before each commit: `/qa`, then `/gate`. Report which test tier you ran — the
+5. Before each commit: `/qa`, then `/gate`. Report which test tier you ran — the
    default `pytest` excludes `integration`, `slow` and `databricks` (ADR-0009).
-5. When you finish an increment, update §8 of the plan and append a session section
+6. When you finish an increment, update §8 of the plan and append a session section
    here. Numbers in documentation must come from a run you actually did.
 
 State at the end of session 4: thirteen commits on `main`, working tree clean, pushed

@@ -89,6 +89,13 @@ class TestRoundTrip:
         assert parser.reconstruct(parser.parse(source)) == source
 
     @pytest.mark.parametrize("key", sorted(TRANSCRIPTS))
+    def test_plain_text_parser_round_trip_when_splitting_lines(self, key: str) -> None:
+        # The same invariant, on the same fixtures, including CRLF and mixed breaks.
+        source = TRANSCRIPTS[key]
+        parser = PlainTextParser({"split_lines": True})
+        assert parser.reconstruct(parser.parse(source)) == source
+
+    @pytest.mark.parametrize("key", sorted(TRANSCRIPTS))
     def test_segments_tile_the_source_exactly(self, key: str) -> None:
         source = TRANSCRIPTS[key]
         result = transcript_parser().parse(source)
@@ -279,9 +286,105 @@ class TestParserOptions:
         assert "speaker_delimiter" in str(exc_info.value)
         assert "speaker_delimiters" in str(exc_info.value)
 
-    def test_plain_text_parser_takes_no_options(self) -> None:
-        with pytest.raises(ParserError):
+    def test_plain_text_parser_rejects_unknown_options(self) -> None:
+        with pytest.raises(ParserError) as exc_info:
             PlainTextParser({"line_mode": "auto"})
+        assert "line_mode" in str(exc_info.value)
+        assert "split_lines" in str(exc_info.value)
+
+    def test_split_lines_must_be_a_boolean(self) -> None:
+        with pytest.raises(ParserError, match="must be true or false"):
+            PlainTextParser({"split_lines": "yes"})
+
+
+class TestPlainTextLineSplitting:
+    """``split_lines`` exists to stop NER spans running across a line break.
+
+    Handed a key/value block as one segment, spaCy returns ``Grace Okafor\\nMobile``
+    for the PERSON — the name is found but the span swallows the next line's first
+    word, which strict matching scores as both a miss and a false positive. Splitting
+    lines makes the boundary exact.
+
+    Measured in session 5 on the ``deterministic_presidio`` chain: English tier-3
+    PERSON strict recall 0.000 -> 1.000 on the dev+calibration splits (support 3).
+    The whole-corpus figure for the same slice is 0.333 (support 6) — two of the six
+    happen to sit on a line whose following word the model does not absorb. The two
+    numbers describe different scopes, not different behaviour.
+    """
+
+    def test_off_by_default_so_prose_is_unaffected(self) -> None:
+        # Wrapped prose must not be split: a name broken across the wrap would then
+        # be undetectable. Free text is what this parser is named for.
+        result = PlainTextParser().parse("Maria\nRossi called.")
+        assert len(result.segments) == 1
+        assert result.segments[0].processable
+
+    def test_each_line_becomes_its_own_processable_segment(self) -> None:
+        result = PlainTextParser({"split_lines": True}).parse(
+            "Customer: Grace Okafor\nMobile number: 000\nDepartment: Support"
+        )
+        bodies = [s.text for s in result.segments if s.processable]
+        assert bodies == [
+            "Customer: Grace Okafor",
+            "Mobile number: 000",
+            "Department: Support",
+        ]
+
+    def test_line_breaks_are_non_processable_and_survive_byte_exact(self) -> None:
+        source = "a\r\nb\rc\nd"
+        result = PlainTextParser({"split_lines": True}).parse(source)
+        breaks = [s.text for s in result.segments if not s.processable]
+        assert breaks == ["\r\n", "\r", "\n"]
+        assert result.source_text() == source
+
+    def test_empty_lines_are_kept(self) -> None:
+        # Dropping them would break the tiling the round-trip depends on.
+        result = PlainTextParser({"split_lines": True}).parse("one\n\nthree")
+        assert [s.text for s in result.segments] == ["one", "\n", "", "\n", "three"]
+
+    @pytest.mark.parametrize("source", ["", "x", "\n", "\r\n", "a\nb\n"])
+    def test_offsets_slice_true_against_the_source(self, source: str) -> None:
+        result = PlainTextParser({"split_lines": True}).parse(source)
+        for segment in result.segments:
+            assert source[segment.source_start : segment.source_end] == segment.text
+
+    @pytest.mark.parametrize("key", sorted(TRANSCRIPTS))
+    def test_segments_tile_every_fixture_exactly(self, key: str) -> None:
+        # The same tiling assertion the transcript parser gets, over the same fixtures
+        # — CRLF, mixed breaks and NFD Greek included, where ad-hoc strings would not
+        # exercise the offsets that actually go wrong.
+        source = TRANSCRIPTS[key]
+        result = PlainTextParser({"split_lines": True}).parse(source)
+        for segment in result.segments:
+            assert source[segment.source_start : segment.source_end] == segment.text
+        assert result.source_text() == source
+
+    def test_crlf_survives_a_substitution_byte_for_byte(self) -> None:
+        # The CRLF round trip only proves the *untransformed* path. Reduction is the
+        # path that matters, and a break rebuilt as a bare \n would be a silent
+        # corruption of every Windows-authored document.
+        parser = PlainTextParser({"split_lines": True})
+        source = "Customer: Grace Okafor\r\nDepartment: Support\r\n"
+        result = parser.parse(source)
+        first = result.processable_segments[0]
+        rebuilt = parser.reconstruct(result, {first.segment_id: "Customer: <PERSON>"})
+        assert rebuilt == "Customer: <PERSON>\r\nDepartment: Support\r\n"
+        assert rebuilt.count("\r\n") == source.count("\r\n")
+        assert "\n" not in rebuilt.replace("\r\n", "")
+
+    def test_break_segments_are_named_as_breaks(self) -> None:
+        # segment_id reaches the audit table; a break numbered as a line would make
+        # the audit disagree with the transcript parser about what the number means.
+        result = PlainTextParser({"split_lines": True}).parse("a\nb")
+        assert [s.segment_id for s in result.segments] == ["line_0000", "break_0000", "line_0001"]
+
+    def test_a_line_can_be_transformed_without_touching_the_others(self) -> None:
+        parser = PlainTextParser({"split_lines": True})
+        result = parser.parse("Customer: Grace Okafor\nDepartment: Support")
+        first = result.processable_segments[0]
+        assert parser.reconstruct(result, {first.segment_id: "Customer: <PERSON>"}) == (
+            "Customer: <PERSON>\nDepartment: Support"
+        )
 
     def test_alternative_delimiter(self) -> None:
         parser = transcript_parser(speaker_delimiters=[">"])

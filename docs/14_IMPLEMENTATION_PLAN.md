@@ -415,7 +415,36 @@ Every hybrid gate value reproduced **exactly** on GitHub's runner (strict F1 0.8
 PERSON 0.820/0.641, en tier 3 0.333, el tier 1 0.222). The published baseline is
 therefore machine-independent, not an artifact of one laptop.
 
-#### Q2. English tier-3 PERSON recall (currently 0.333)
+#### Q2. English tier-3 PERSON recall (currently 0.333) — **diagnosed, remedy partial**
+
+**The cause is not what this section assumed.** Presidio detects every name in the
+failing documents; the *span* is wrong. Given a multi-line key/value block as one
+segment, spaCy runs the entity boundary through the line break — `Peter Novak\nMobile`
+where truth is `Peter Novak` — which strict matching counts as a miss and a false
+positive. Tier 4 scores 1.000 with the same model and names because the transcript
+parser is line-oriented. It is not merely a scoring artifact: reduction currently
+destroys the field label (`Customer: <PERSON> number: …`), a structure-preservation
+failure the over-redaction metric cannot see because labels are not protected tokens.
+
+Landed (ADR-0016): `split_lines` on `PlainTextParser`, default off. Measured on
+**dev+calibration**, `deterministic_presidio`: en tier-3 PERSON recall 0.000 → 1.000
+(support 3), PERSON overall 0.595 → 0.676, strict F1 0.857 → 0.890, over-redaction
+unchanged at 0.000.
+
+**It is not enabled in any shipped config, and Q2 is not complete**, because it
+introduces one German false positive: on its own line `Rechnername:` ("computer name")
+is tagged PERSON where whole-block context suppressed it. Net strict F1 rises, but
+"no drop in any other slice" below is not satisfied.
+
+**Next step, with the probe already done:** the deferred `key_value` parser. Marking
+the label non-processable removes that false positive without costing detection —
+`'Grace Okafor'` alone still yields an exact span, `'Rechnername: DEMO-PC-6949'` yields
+the false positive while `'DEMO-PC-6949'` alone yields nothing.
+
+Also fixed here, because Q2 depends on it: `run_benchmark` scored a subset against the
+**whole** corpus's ground truth, so a dev+calibration run reported over-redaction 0.627
+against a true 0.000. Any split-scoped number measured before this fix is not
+comparable with one measured after.
 
 The weakest slice that is **not** licence-bound, so the cheapest real quality win.
 Structured key/value text (`Customer: Maria Rossi` on its own line) gives the NER
