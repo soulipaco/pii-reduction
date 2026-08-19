@@ -239,10 +239,20 @@ class ParquetSource(ConfigModel):
 SourceConfig = Annotated[CsvSource | ParquetSource, Field(discriminator="type")]
 
 
+#: What the dataset artifact contains (ADR-0024). ``full`` keeps the source
+#: columns beside the reduced ones (non-destructive, AGENTS.md rule 4);
+#: ``reduced_only`` drops exactly the columns configured for reduction, so the
+#: written artifact can be granted to consumers who must not see the raw text of
+#: the configured columns. Whether any other column carries PII is the
+#: operator's scope declaration, which the projection does not override.
+ProjectionMode = Literal["full", "reduced_only"]
+
+
 class CsvDestination(ConfigModel):
     type: Literal["csv"]
     path: str = Field(min_length=1)
     mode: Literal["overwrite", "error"] = "overwrite"
+    projection: ProjectionMode = "full"
     options: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -250,6 +260,7 @@ class ParquetDestination(ConfigModel):
     type: Literal["parquet"]
     path: str = Field(min_length=1)
     mode: Literal["overwrite", "error"] = "overwrite"
+    projection: ProjectionMode = "full"
     options: dict[str, Any] = Field(default_factory=dict)
 
 

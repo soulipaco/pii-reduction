@@ -435,3 +435,88 @@ class TestRunFromConfiguration:
         with pytest.raises(ConfigurationError) as exc_info:
             build_pipeline(make_config(tmp_path, project_yaml=project))
         assert "fasttext" in str(exc_info.value)
+
+
+class TestReducedOnlyProjection:
+    """ADR-0024: the written artifact can drop the configured raw text columns."""
+
+    def _reduced_only_config(self, tmp_path: Path):  # type: ignore[no-untyped-def]
+        source_path = tmp_path / "input" / "demo.csv"
+        write_dataset_csv(source_path)
+        marker = "destination:\n  type: csv\n"
+        assert marker in DATASET_YAML
+        dataset_yaml = DATASET_YAML.replace(
+            marker, "destination:\n  type: csv\n  projection: reduced_only\n"
+        ).format(
+            source_path=source_path.as_posix(),
+            destination_path=(tmp_path / "output").as_posix(),
+        )
+        configs = write_configs(tmp_path, project_yaml=PROJECT_YAML, dataset_yaml=dataset_yaml)
+        return load_resolved_dataset(configs, "demo_smoke")
+
+    def test_the_projection_drops_exactly_the_configured_columns(
+        self, pipeline: Pipeline, dataset: SourceDataset
+    ) -> None:
+        outcome = pipeline.process(dataset)
+        projected = pipeline.reduced_only_projection(outcome.frame)
+
+        assert "body" not in projected.columns
+        # Everything else survives: unconfigured source columns are the
+        # operator's scope decision, not the projection's (ADR-0024).
+        assert {"row_id", "language", "kind", "body_pii_redacted"} <= set(projected.columns)
+        assert STATUS_COLUMN in projected.columns
+        assert len(projected) == len(outcome.frame)
+
+    def test_in_memory_processing_stays_non_destructive(
+        self, pipeline: Pipeline, dataset: SourceDataset
+    ) -> None:
+        # The projection is a written-artifact shape; process() still returns and
+        # validates the full frame (AGENTS.md rule 4).
+        outcome = pipeline.process(dataset)
+        assert "body" in outcome.frame.columns
+
+    def test_a_reduced_only_destination_writes_no_raw_column(self, tmp_path: Path) -> None:
+        config = self._reduced_only_config(tmp_path)
+        assert config.destination.projection == "reduced_only"
+
+        outcome = build_pipeline(config, run_id="run_projection").run()
+        written = pd.read_csv(Path(outcome.written["dataset"]))
+
+        assert "body" not in written.columns
+        assert "body_pii_redacted" in written.columns
+        assert len(written) == 20
+        # The artifact carries no raw text column, and reduction removed the
+        # detected values from what it does carry.
+        rendered = written.to_csv(index=False)
+        for value in KNOWN_EMAILS + KNOWN_PHONES:
+            assert value not in rendered
+
+    def test_the_default_projection_is_the_full_frame(self, tmp_path: Path) -> None:
+        outcome = build_pipeline(make_config(tmp_path), run_id="run_full").run()
+        written = pd.read_csv(Path(outcome.written["dataset"]))
+        assert "body" in written.columns and "body_pii_redacted" in written.columns
+
+    def test_reduced_only_is_refused_with_in_place_replacement(self, tmp_path: Path) -> None:
+        """The confused combination: replacement mode's source column IS the reduced
+        column, so the projection would drop the reduction output itself (ADR-0024)."""
+        source_path = tmp_path / "input" / "demo.csv"
+        write_dataset_csv(source_path)
+        destination_marker = "destination:\n  type: csv\n"
+        column_marker = "  body:\n    parser: plain_text\n"
+        assert destination_marker in DATASET_YAML and column_marker in DATASET_YAML
+        dataset_yaml = (
+            DATASET_YAML.replace(
+                destination_marker, "destination:\n  type: csv\n  projection: reduced_only\n"
+            )
+            .replace(column_marker, f"{column_marker}    output_column: body\n")
+            .format(
+                source_path=source_path.as_posix(),
+                destination_path=(tmp_path / "output").as_posix(),
+            )
+            + "\nprocessing:\n  preserve_original: false\n"
+        )
+        configs = write_configs(tmp_path, project_yaml=PROJECT_YAML, dataset_yaml=dataset_yaml)
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_resolved_dataset(configs, "demo_smoke")
+        assert "reduced_only" in str(exc_info.value)
+        assert "projection" in str(exc_info.value)

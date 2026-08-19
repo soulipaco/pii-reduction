@@ -371,12 +371,33 @@ class Pipeline:
         )
         return outcome
 
+    def reduced_only_projection(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """The frame without the columns configured for reduction (ADR-0024).
+
+        In-memory processing stays non-destructive (AGENTS.md rule 4:
+        ``_validate_output`` still asserts the originals unchanged); this is a
+        *written-artifact* shape, so the reduced dataset can be granted to
+        consumers who must not see the raw text. Only the configured source
+        columns are dropped — whether any *other* column carries PII is the
+        operator's scope decision, which this projection neither knows nor
+        overrides.
+        """
+        configured = [
+            processor.column for processor in self._processors if processor.column in frame.columns
+        ]
+        return frame.drop(columns=configured)
+
     def write(self, outcome: ProcessingOutcome) -> ProcessingOutcome:
         """Persist the reduced dataset, the run metrics, and optionally the audit rows."""
         destination = self.config.destination
         adapter = build_output(destination.type, path=destination.path, mode=destination.mode)
         name = self.config.dataset.name
-        written = {"dataset": adapter.write(outcome.frame, name=name)}
+        dataset_frame = (
+            self.reduced_only_projection(outcome.frame)
+            if destination.projection == "reduced_only"
+            else outcome.frame
+        )
+        written = {"dataset": adapter.write(dataset_frame, name=name)}
 
         base = Path(destination.path)
         directory = base.parent if base.suffix else base

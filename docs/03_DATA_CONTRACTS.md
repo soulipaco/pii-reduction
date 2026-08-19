@@ -383,6 +383,10 @@ pii_status
 
 Optional technical metadata can be excluded from business-facing views.
 
+With `destination.projection: reduced_only` (ADR-0024, opt-in) the written
+artifact omits the configured source columns (`transcript` above); in-memory
+processing and the default artifact keep the full shape.
+
 ## 17. Parser reconstruction invariant
 
 For every parser, define a round-trip invariant:
@@ -401,7 +405,8 @@ Unless configuration explicitly changes the grain:
 
 - input row count equals output row count,
 - business key values remain unchanged,
-- original target fields remain unchanged,
+- original target fields remain unchanged (present in the written artifact only
+  under the default `projection: full`, ADR-0024),
 - reduced fields exist,
 - null input produces null output,
 - empty string handling is deterministic,

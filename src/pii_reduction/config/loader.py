@@ -432,6 +432,21 @@ def resolve_dataset(dataset: DatasetConfig, project: ProjectConfig) -> ResolvedD
             )
         seen_outputs[policy.output_column] = policy.column
 
+    if getattr(dataset.destination, "projection", "full") == "reduced_only":
+        # ADR-0024: the projection drops the configured source columns. Under the
+        # rule-4 replacement workflow the source column IS the reduced column, so
+        # the projection would silently drop the reduction output itself — refuse
+        # the confused combination (replacement mode already yields a raw-free
+        # artifact and needs no projection).
+        replaced = [policy.column for policy in policies if policy.output_column == policy.column]
+        if replaced:
+            raise ConfigurationError(
+                f"{dataset_context}destination.projection 'reduced_only' cannot be combined "
+                f"with in-place replacement (column {replaced[0]!r} writes to itself): the "
+                "projection would drop the reduced text. Replacement mode already produces "
+                "an artifact without raw text (ADR-0024)"
+            )
+
     return ResolvedDataset(
         project=project.project,
         dataset=dataset.dataset,

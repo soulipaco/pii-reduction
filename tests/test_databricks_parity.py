@@ -87,9 +87,19 @@ class TestDriverPathParity:
             config,
             source_table=f"{SCHEMA}.corpus",
             destination_prefix=SCHEMA,
+            # Same schema deliberately — the parity fixture owns exactly one; what
+            # matters is that the projection table exists and drops the raw column.
+            reduced_only_prefix=SCHEMA,
             mode="overwrite",
         )
         assert result.rows == len(corpus_frame)
+
+        # ADR-0024: the projection carries the reduced column, never the raw one.
+        assert result.reduced_only_table is not None
+        projected = spark.read.table(result.reduced_only_table).toPandas()
+        assert "text" not in projected.columns
+        assert "text_pii_redacted" in projected.columns
+        assert len(projected) == len(corpus_frame)
 
         remote = SparkTableSource(spark, result.reduced_table).load().frame
         local_pipeline = build_pipeline(config)

@@ -162,6 +162,13 @@ benchmark schema -> engineering / ML teams
 
 The repository must not hard-code group names.
 
+This arrangement is realisable with shipped code as of ADR-0024: the "reduced
+schema" artifact is the reduced-only projection — locally via
+`destination.projection: reduced_only`, on Databricks via `run_driver`'s
+`reduced_only_prefix` pointing at a separately-granted `catalog.schema`. The
+default full-frame output retains the source columns (AGENTS.md rule 4) and must
+be governed like the raw schema, not like this one.
+
 ## Provider data boundaries
 
 Every provider documentation entry should state where text is processed:

@@ -280,7 +280,16 @@ class _FakeRead:
         return self
 
     def toPandas(self) -> pd.DataFrame:  # noqa: N802 - Spark's casing
-        return pd.DataFrame({"row_id": ["r1"], "body": ["synthetic text"]})
+        # Shaped like the benchmark_plain contract so `run_driver` fakes can
+        # process it; the source-version tests only count rows. Synthetic values,
+        # RFC 2606 domain (ADR-0003).
+        return pd.DataFrame(
+            {
+                "document_id": ["doc_0001"],
+                "language": ["en"],
+                "text": ["Contact maria.rossi@example.com about the ticket."],
+            }
+        )
 
 
 class _FakeSpark:
@@ -292,6 +301,79 @@ class _FakeSpark:
     def sql(self, query: str) -> _FakeQuery:
         self.queries.append(query)
         return self._history
+
+
+class _FakeWriter:
+    """`createDataFrame(f).write.format("delta").mode(m).saveAsTable(t)` — capture."""
+
+    def __init__(self, sink: dict[str, pd.DataFrame], frame: pd.DataFrame) -> None:
+        self._sink = sink
+        self._frame = frame
+
+    def format(self, _fmt: str) -> _FakeWriter:
+        return self
+
+    def mode(self, _mode: str) -> _FakeWriter:
+        return self
+
+    def saveAsTable(self, table: str) -> None:  # noqa: N802 - Spark's casing
+        self._sink[table] = self._frame
+
+
+class _FakeSessionFrame:
+    def __init__(self, sink: dict[str, pd.DataFrame], frame: pd.DataFrame) -> None:
+        self.write = _FakeWriter(sink, frame)
+
+
+class _FakeWritableSpark(_FakeSpark):
+    """A fake session that can also write, for driving `run_driver` end to end."""
+
+    def __init__(self, history: _FakeQuery) -> None:
+        super().__init__(history)
+        self.tables: dict[str, pd.DataFrame] = {}
+
+    def createDataFrame(self, frame: pd.DataFrame) -> _FakeSessionFrame:  # noqa: N802
+        return _FakeSessionFrame(self.tables, frame)
+
+
+class TestRunDriverProjection:
+    """ADR-0024: `reduced_only_prefix` writes the projection to its own prefix.
+
+    Fake-session unit tests, like the runner's init-once semantics; the parity
+    test asserts the projection against the real workspace on its next run.
+    """
+
+    def _run(self, reduced_only_prefix: str | None):  # type: ignore[no-untyped-def]
+        from pii_reduction.databricks.runner import run_driver
+
+        spark = _FakeWritableSpark(_FakeQuery([_HistoryRow(3)]))
+        result = run_driver(
+            spark,
+            resolved_config(),
+            source_table="cat.raw.src",
+            destination_prefix="cat.operator",
+            reduced_only_prefix=reduced_only_prefix,
+        )
+        return spark, result
+
+    def test_without_the_prefix_no_projection_table_is_written(self) -> None:
+        spark, result = self._run(None)
+        assert result.reduced_only_table is None
+        assert not any(name.endswith("_reduced_only") for name in spark.tables)
+
+    def test_the_projection_lands_at_its_own_prefix_without_the_raw_column(self) -> None:
+        spark, result = self._run("cat.consumers")
+        assert result.reduced_only_table is not None
+        assert result.reduced_only_table.startswith("cat.consumers.")
+
+        projected = spark.tables[result.reduced_only_table]
+        full = spark.tables[result.reduced_table]
+        configured = [policy.column for policy in resolved_config().columns]
+        assert configured, "fixture must configure at least one column"
+        for column in configured:
+            assert column in full.columns
+            assert column not in projected.columns
+        assert len(projected) == len(full)
 
 
 class TestSourceVersionCapture:

@@ -152,6 +152,8 @@ Local:
 destination:
   type: parquet
   path: data/output/
+  # projection: reduced_only   # write the artifact without the configured raw
+  #                            # text columns (ADR-0024); default is full
 ```
 
 Databricks — same caveat as the Databricks source above: `delta_table` *is* the shipped

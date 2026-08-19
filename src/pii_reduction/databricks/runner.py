@@ -61,6 +61,9 @@ class DriverRunResult:
     reduced_table: str
     audit_table: str
     metrics_table: str
+    #: The reduced-only projection (ADR-0024), written only when the caller gave
+    #: `reduced_only_prefix` — the artifact meant for a different grant boundary.
+    reduced_only_table: str | None = None
 
 
 def run_driver(
@@ -69,6 +72,7 @@ def run_driver(
     *,
     source_table: str,
     destination_prefix: str,
+    reduced_only_prefix: str | None = None,
     run_id: str | None = None,
     mode: str = "errorifexists",
 ) -> DriverRunResult:
@@ -77,6 +81,13 @@ def run_driver(
     The pipeline call is byte-for-byte the local one — that is the parity claim, and
     the parity test holds an output-hash equality over it. Table names are built from
     the caller's configuration; nothing here knows a workspace.
+
+    ``reduced_only_prefix`` (ADR-0024) additionally writes the reduced-only
+    projection — the frame without the configured raw text columns — to a
+    *separate* ``catalog.schema``, which is what makes `docs/09`'s
+    "reduced schema → broader analytics consumers" grant model realisable: the
+    projection can live in a schema those consumers can read while the full
+    frame, audit and metrics stay behind the operator boundary.
     """
     dataset = SparkTableSource(spark, source_table, name=config.dataset.name).load()
     pipeline = build_pipeline(config, run_id=run_id)
@@ -85,6 +96,11 @@ def run_driver(
     output = DeltaTableOutput(spark, destination_prefix, mode=mode)
     base = config.dataset.name
     reduced = output.write(outcome.frame, name=f"{base}_reduced")
+    reduced_only: str | None = None
+    if reduced_only_prefix is not None:
+        reduced_only = DeltaTableOutput(spark, reduced_only_prefix, mode=mode).write(
+            pipeline.reduced_only_projection(outcome.frame), name=f"{base}_reduced_only"
+        )
     audit = output.write(
         # Column set pinned whether or not anything was detected: an audit table
         # whose schema depends on the detection outcome breaks `append` reruns and
@@ -106,6 +122,7 @@ def run_driver(
         reduced_table=reduced,
         audit_table=audit,
         metrics_table=metrics,
+        reduced_only_table=reduced_only,
     )
 
 
