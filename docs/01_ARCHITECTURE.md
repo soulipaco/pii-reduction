@@ -101,10 +101,13 @@ sources/
 ├── pandas_source.py
 ├── excel_source.py
 ├── csv_source.py
-├── parquet_source.py
-├── spark_source.py
-└── databricks_table_source.py
+└── parquet_source.py
 ```
+
+The Spark/Delta adapter implements this layer's protocol but **ships under
+`databricks/`**, not here (`databricks/source.py::SparkTableSource`). A module under
+`sources/` that needs a Spark session would put a Databricks dependency on the runtime
+path; see *Package dependency direction* below.
 
 ## Layer 2: dataset contract
 
@@ -365,6 +368,10 @@ pipeline_run_metrics     run-level metrics
 benchmark_results        evaluation outputs
 ```
 
+The Spark/Delta writer implements this layer's protocol but **ships under
+`databricks/`** (`databricks/output.py::DeltaTableOutput`), for the same reason as the
+Spark source adapter; see *Package dependency direction* below.
+
 ## Package dependency direction
 
 Dependencies should flow inward toward shared contracts.
@@ -389,6 +396,9 @@ contracts
   └── evaluation
 
 processing/orchestrator depends on those interfaces.
+
+execution surfaces (cli.py, benchmark.py, databricks/) depend on processing/;
+nothing on the runtime path depends on them.
 ```
 
 `synthetic/` sits **beside** `processing/`, not under it: it is a build-time package
@@ -402,9 +412,40 @@ deliberately not a source adapter: `sources/` is on the runtime path and returns
 `SourceDataset`, while `fetch()` returns a file path and is never reachable from
 `pipeline.process`.
 
+`databricks/` sits at the **outermost** edge, beside `cli.py` and `benchmark.py`
+rather than beside `sources/` or `outputs/`. It is an *execution surface*: it decides
+where a run happens, not what a run does. It may import `processing/`, `config/`,
+`sources/` and `contracts/`; the bad example above names it for the opposite reason,
+the forbidden `parsers -> databricks` edge. **Nothing else in `src/` imports it** —
+only its own tests do — so removing it removes a way to run the pipeline and no
+behaviour. It is also the only package permitted to import
+`pyspark` or `databricks.connect`. Three tests hold that boundary, and each holds a
+part the others cannot:
+
+- `test_core_layers_import_without_any_provider_extra` imports the core packages in a
+  fresh subprocess and fails if an optional runtime was pulled in *eagerly*. It
+  imports `databricks/` among them, which is what proves the surface stays importable
+  with no `pyspark` installed at all — the property the lazy-session design rests on.
+- `test_only_the_databricks_surface_names_spark` parses every module under `src/` and
+  fails on a **static** Spark import outside `databricks/`, at any nesting depth.
+- `test_nothing_outside_the_databricks_surface_imports_it` pins the direction, over
+  every import form that can name a submodule (`from pii_reduction import databricks`
+  included — reading only the module of a `from ... import ...` would miss it).
+
+Neither AST scan can see `importlib.import_module("pyspark")`, and the subprocess
+check cannot see a function-local import; that is why all three exist rather than one.
+
+Its Spark-facing pieces (`SparkTableSource`, `DeltaTableOutput`) implement the
+`sources/` and `outputs/` protocols but live here rather than there, because a
+`sources/` module that needs a Spark session would put a Databricks dependency on the
+runtime path — the inversion this section exists to forbid. Neither imports the
+protocol it satisfies; conformance is structural, and asserted by
+`TestProtocolConformance` so that a protocol gaining a member cannot break it
+silently.
+
 ## Local and Databricks parity
 
-The local runner and Databricks runner should both construct the same processing pipeline.
+The local runner and Databricks runner both construct the same processing pipeline.
 
 Example:
 
@@ -414,6 +455,22 @@ result = pipeline.process(dataset)
 ```
 
 The difference is the source/output adapter and execution strategy, not the entity logic.
+
+As shipped (Increment F), `databricks/` offers two execution strategies over that one
+pipeline:
+
+- `run_driver` — read a table through Spark, run `pipeline.process` on the driver,
+  write the reduced rows, the privacy-safe audit spans and the run metrics back as
+  Delta. Works on any compute that can run SQL, including serverless-only workspaces.
+- `distributed_frame` — the `mapInPandas` strategy, with the pipeline built once per
+  worker from a cache keyed on the driver-generated run id *plus* the config hash. The
+  run-id half is load-bearing: keyed on config alone, a warm worker would stamp a
+  previous job's `pii_run_id` onto a new run. It produces the reduced frame only; audit
+  rows and run metrics are a second output channel and are out of scope for v1.
+
+Both call the byte-identical `pipeline.process`, which is what makes parity an
+assertion rather than an aspiration: the reduced column hashes from a Databricks run
+equal a local run's on the same fixture.
 
 ## Scalability considerations
 

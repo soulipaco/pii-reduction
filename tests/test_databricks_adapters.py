@@ -27,7 +27,9 @@ from pii_reduction.databricks import (
     partition_processor,
 )
 from pii_reduction.databricks.source import require_table_name
+from pii_reduction.outputs.base import OutputAdapter
 from pii_reduction.processing.pipeline import RUN_ID_COLUMN, STATUS_COLUMN
+from pii_reduction.sources.base import SourceAdapter
 from pii_reduction.synthetic.corpus import load_corpus
 
 pytestmark = pytest.mark.unit
@@ -37,6 +39,31 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def resolved_config() -> ResolvedDataset:
     return load_resolved_dataset(REPO_ROOT / "configs", "benchmark_plain")
+
+
+class TestProtocolConformance:
+    """The Spark adapters satisfy `sources/` and `outputs/` without declaring it.
+
+    Neither declares conformance — these are `Protocol`s, not base classes, so
+    nothing type-checks the adapters against them. (The reason is *not* that an
+    import would be illegal: `databricks/ -> sources/` is the permitted inward
+    direction and `source.py` already imports `SourceDataset` from the very module
+    that defines `SourceAdapter`. What keeps Spark off the runtime path is where
+    these adapters *live*, not what they import — `docs/01_ARCHITECTURE.md`.)
+
+    Structural conformance is exactly what drifts silently when a protocol gains a
+    member, so without these two assertions the only thing holding the claim up is
+    the prose that makes it. Their reach stops there: `isinstance` on a
+    `runtime_checkable` Protocol checks that members are *present*, never that their
+    signatures match, and since neither adapter declares conformance no type checker
+    covers that gap either.
+    """
+
+    def test_spark_table_source_is_a_source_adapter(self) -> None:
+        assert isinstance(SparkTableSource(None, "cat.sch.tbl"), SourceAdapter)
+
+    def test_delta_table_output_is_an_output_adapter(self) -> None:
+        assert isinstance(DeltaTableOutput(None, "cat.sch"), OutputAdapter)
 
 
 class TestTableNames:

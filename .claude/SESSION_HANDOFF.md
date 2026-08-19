@@ -1559,3 +1559,110 @@ through Phase 6.** Remaining, unsequenced: the Greek promotion design call (plan
 Q4 follow-ups), the sandbox-incident recheck, docs/01+plan §3 naming `databricks/`
 as an execution surface (architecture review Q3 — docs lag, code is right), and the
 parked ideas.
+
+## Session 8 — 2026-08-19 — Docs reconciled with Increment F; sandbox re-checked; Greek call still open
+
+**Start here:** the queue is still empty and the Greek promotion decision is still
+yours to make — it was brought to you with a concrete proposal, not built. Nothing
+about detection, reduction or any published number changed this session.
+
+**What landed:** the documentation half of Increment F. `databricks/` is now named as
+an *execution surface* in `docs/01_ARCHITECTURE.md` and plan §3 — outermost edge,
+beside `cli.py`/`benchmark.py`, not beside `sources/`/`outputs/`. It may import
+`processing/`; nothing on the runtime path imports it. Layer 1 and Layer 10 both point
+at the real modules, and the "Suggested adapters" tree no longer lists a
+`sources/spark_source.py` or `sources/databricks_table_source.py` — neither ever
+existed, and neither can without dragging Spark onto the runtime path.
+
+**Two pre-existing contradictions went with it**, both found by the architecture
+review rather than by the brief: `docs/06_CONFIGURATION_CONTRACT.md` advertised
+`source: type: databricks_table` and `destination: type: delta_table` as if they were
+config-buildable — neither is registered, `run_driver` constructs both directly, and
+the shipped `source_type` is `spark_table`. The block is kept and labelled intended-
+not-shipped, with the structural reason (`build_source` takes a path;
+`SparkTableSource` needs a session). And `docs/11_ROADMAP.md`'s Phase 6 now records
+which deliverables shipped and that the third exit criterion — "at least one
+meaningful distributed benchmark executed" — is **not met, infra-blocked**, rather
+than leaving a roadmap that reads as fully green.
+
+**The auditors earned their keep again, on a docs-only diff.** Both independently
+caught the same defect: the new prose credited
+`test_core_layers_import_without_any_provider_extra` with asserting that `databricks/`
+is the *only* package allowed to import `pyspark`. It does not. It is a
+no-eager-import guard over eight named packages; a module-level Spark import in
+`evaluation/`, `synthetic/`, `cli.py` or `benchmark.py` would never be loaded by it,
+and a function-local import anywhere would pass. The privacy auditor named the cost
+exactly: that paragraph is what a reviewer would cite when waving through a Spark
+import somewhere new.
+
+**Fixed by making the claim true rather than by weakening it** — two AST scans in
+`tests/test_package.py`:
+
+- `test_only_the_databricks_surface_names_spark` — walks every module under `src/`,
+  fails on a `pyspark`/`databricks.connect` import outside `databricks/` at any
+  nesting depth.
+- `test_nothing_outside_the_databricks_surface_imports_it` — pins the direction.
+
+Both were verified to **fail** on injected violations (a function-local
+`from pyspark.sql import ...` in `evaluation/`, and an `outputs/` module importing the
+surface) before being trusted — the function-local case is precisely the hole the
+subprocess check cannot see.
+
+**That verification was not enough, and the second audit pass proved it.** Both
+auditors independently found the direction guard still passed on
+`from pii_reduction import databricks` — the *shape* `cli.py:15` already uses, with a
+different name after `import` — because an `ast.ImportFrom` node was read for its
+module and never its aliases. `from . import databricks` was dropped entirely.
+
+A third pass then found the first fix had its own defect: emitting the bare prefix
+`X` alongside `X.y` forced the contracts guard to exempt a bare `pii_reduction`,
+which silently masked `import pii_reduction` from inside the hub — a
+partially-initialized cycle, and precisely what that guard advertises it catches.
+Emitting **only** `X.y` removes the exemption and the hole together, because it is
+what lets a caller reject `import X` while allowing `from X import y`.
+
+The final helper is checked by a 27-case matrix across all three guards at two package
+depths, covering every form the auditors named plus the ones they did not: `import X
+as p`, `from X import *`, `from .. import y`, and four legitimate imports that must
+stay clean. **The lesson is the general one, and it cost three passes: a guard verified
+against the violation you imagined is only tested for imagination.** Also added `TestProtocolConformance`: `SparkTableSource`
+and `DeltaTableOutput` satisfy their protocols without declaring conformance, so
+nothing type-checked them; two `isinstance` assertions now hold it. (The first draft
+of that docstring justified the non-declaration as "an import would put Databricks on
+the runtime path" — **wrong**, and both auditors said so: `databricks/ -> sources/` is
+the permitted inward direction and `source.py` already imports from the very module
+that defines `SourceAdapter`. What keeps Spark off the runtime path is where these
+adapters live, not what they import. A false architectural justification is worse than
+none, because it is what gets cited later to refuse a legitimate import.)
+
+Two further prose defects, both caught by both auditors: "nothing depends on them" was
+false for `cli.py`/`benchmark.py` (the `demo/` front doors import `cli`), and plan §3's
+compressed "Nothing imports it" was false of the tests. One factual slip of mine: the
+worker cache is keyed on **run id + config hash**, not the config hash alone, and the
+run-id half is the part that stops a warm worker restamping a previous job's id.
+
+**Sandbox re-check (item 3): still broken.** Same command, unchanged code —
+driver-path parity 2 passed against the real workspace, distributed test still skipped
+on `ISOLATION_STARTUP_FAILURE`. Logged as a dated row in plan §8 F so the re-checks
+accumulate instead of being re-derived. Re-run occasionally:
+
+```
+DATABRICKS_CONFIG_PROFILE=<profile> .venv-dbx17/Scripts/python.exe -m pytest tests/test_databricks_parity.py -m databricks -o addopts=""
+```
+
+**858 default-tier tests** (854 + 4 new guards), 90 deselected. Unchanged: every
+published number, every gate, the corpus, and all detection behaviour.
+
+**Recorded rather than fixed:** `README.md`'s repository tree is session-0
+aspirational — it marks `configs/`, `src/` and `tests/` "to be implemented" though all
+three shipped, lists a `notebooks/` directory that does not exist, and its docs list
+stops at 13 while 14-16 exist. Fixing the one `notebooks/` line would imply the
+surrounding lines are current, which is worse than a visibly dated block. It wants a
+whole-README refresh, not a patch — noted here so the deferral does not become
+permanent by silence.
+
+**Still open, none started:** the Greek promotion design call (plan §8 Q4
+follow-ups — the one item that needs a human decision before any code), the
+distributed-path re-verification whenever Databricks fixes the channel, and the parked
+ideas (`incident_notes` pack, a public transcript corpus to replace MultiWOZ, NOTICE
+emission if a pack is ever published, MLflow trace redaction, GLiNER under ADR-0015).

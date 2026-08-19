@@ -56,6 +56,8 @@ NLP provider.
 a `contracts/` package is added as the dependency hub (`docs/01_ARCHITECTURE.md`
 already requires "dependencies flow inward toward shared contracts"), and
 `databricks/` is **not created** until Phase 6 work starts (no placeholder modules).
+Phase 6 has since started and finished: `databricks/` exists as of Increment F and is
+listed below.
 
 ```text
 src/pii_reduction/
@@ -85,12 +87,21 @@ src/pii_reduction/
 │                     # manifest-driven ground truth loading. Never imported by
 │                     # processing/.
 ├── observability/    # run metrics accumulation, privacy-safe logging helpers.
-└── synthetic/        # build-time: corpus generation, injection, the public-dataset
-                      # registry, retrieval and the demo pack builder. Added in A6 and
-                      # extended in D; §3 originally put this under `demo/`, which
-                      # AGENTS.md rule 3 correctly overrode — `demo/` holds runnable
-                      # front doors only. Depends on the interface layers; nothing on
-                      # the runtime path depends on it (docs/01_ARCHITECTURE.md).
+├── synthetic/        # build-time: corpus generation, injection, the public-dataset
+│                     # registry, retrieval and the demo pack builder. Added in A6 and
+│                     # extended in D; §3 originally put this under `demo/`, which
+│                     # AGENTS.md rule 3 correctly overrode — `demo/` holds runnable
+│                     # front doors only. Depends on the interface layers; nothing on
+│                     # the runtime path depends on it (docs/01_ARCHITECTURE.md).
+└── databricks/       # the Databricks *execution surface* (Increment F): session,
+                      # SparkTableSource, DeltaTableOutput, run_driver and the
+                      # mapInPandas distributed_frame. Sits at the outermost edge
+                      # beside cli.py/benchmark.py, not beside sources/outputs — it
+                      # decides where a run happens, not what a run does. The only
+                      # package allowed to import pyspark/databricks.connect, asserted
+                      # by an AST scan over src/ (test_package.py), which a subprocess
+                      # import check cannot do. Nothing in src/ imports it; only its
+                      # own tests do.
 ```
 
 Repo level, created only when their first content lands: `configs/` (YAML shipped
@@ -105,7 +116,9 @@ sources/parsers/language/providers/reducers/outputs; nothing imports `processing
 except entry points; `evaluation/` is imported by benchmark entry points only.
 Entry points (the A6 demo/benchmark runner CLI) live under `demo/` and a thin
 `pii_reduction.cli` module — never inside `processing/`, which keeps `processing/`
-free of any `evaluation/` import.
+free of any `evaluation/` import. `databricks/` joins them as an execution
+surface: like the CLI it may import `processing/`, and like the CLI nothing on the
+runtime path imports it, so the dependency direction is unchanged by its arrival.
 
 ## 4. The first vertical slice
 
@@ -343,7 +356,8 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 6 (2026-08-18), after Increment D (Q3) and the Greek diagnosis (Q4).
+Last updated: session 8 (2026-08-19) — Increment F recorded, `databricks/` named as an
+execution surface in §3 and `docs/01_ARCHITECTURE.md`, sandbox incident re-checked.
 
 ### Complete
 
@@ -363,8 +377,8 @@ Last updated: session 6 (2026-08-18), after Increment D (Q3) and the Greek diagn
 | D | `synthetic/fetch.py`, `synthetic/public.py`, `synthetic/packs.py`, `fetch-dataset` + `build-pack`, three demo packs and their gate sets (ADR-0017, ADR-0018) | 807 default / 73 integration (799 when D first landed; the audit-fix commit added 8) |
 | Q4 | Greek PERSON diagnosed: span absorption, label confusion, άνω τελεία (ADR-0019). No number moved — the corpus is deliberately not made easier | 809 default / 87 integration |
 | E (part) | ADR-0013 §5's two leakage variants: `fragment_leakage_rate` beside `leakage_rate` (now gated: 0.433 det / 0.117 hybrid), `strategy` in the metric-row grain, `--strategy` on the CLI, `with_reducer`; gates compare the run's strategy to the file's recorded one at the data level | 828 default / 87 integration |
-| F | `databricks/` package (see the F section below) — parity met on the workspace, distributed path shipped and infra-blocked, audits applied (run identity across warm workers, exact-set audit-schema assertion, schema-drift test, Spark-free guard extended) | 854 default / 90 deselected incl. 3 databricks |
 | E | Run provenance (`RunMetadata` + `RuntimeMetric` on the outcome, config hash + rows/s in the summary), threshold calibration reviewed on the calibration split and locked (constants — nothing to tune), the one-time test-split read, and the 10k-document two-chain comparison with its own gate set (`docs/16_BENCHMARK_REPORT_10K.md`, `configs/pack_gates/support_tickets_10k.yaml`) | 838 default / 87 integration |
+| F | `databricks/` package (see the F section below) — parity met on the workspace, distributed path shipped and infra-blocked, audits applied (run identity across warm workers, exact-set audit-schema assertion, schema-drift test, Spark-free guard extended) | 854 default / 90 deselected incl. 3 databricks |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -821,7 +835,8 @@ metadata-only (no surface, no text — AGENTS.md rule 8). The parity tests creat
 throwaway schema and drop it afterwards. `databricks`-marked tests never run in CI.
 
 **No per-row model loading:** the `mapInPandas` partition processor builds the
-pipeline once per worker via a config-hash-keyed cache, and that init-once property
+pipeline once per worker via a cache keyed on the driver-generated run id plus the
+config hash, and that init-once property
 is asserted by default-tier unit tests driving the function with plain iterators —
 no Spark required, so the Databricks path's logic is regression-guarded on every
 push even though the workspace itself never is.
@@ -839,6 +854,14 @@ aarch64 image cannot exec its own Python; reproduced across client generations 1
 and 16.4, so it is Databricks infrastructure, not client skew). A `databricks`-marked
 test watches it: it skips today naming the incident, and asserts real distributed
 parity with no code change the day the sandbox works.
+
+**Sandbox re-checks** (same command, unchanged code — a bare re-run of the marked
+tier against the workspace):
+
+| date | driver-path parity | distributed path |
+|---|---|---|
+| 2026-08-19 (session 7, Increment F) | 2 passed | skipped — ISOLATION_STARTUP_FAILURE |
+| 2026-08-19 (session 8) | 2 passed | skipped — incident still open |
 
 Environment facts recorded for reuse: dedicated venv (`.venv-dbx17`, Python 3.12,
 `databricks-connect` 16.4) per ADR-0006's isolation; profile via

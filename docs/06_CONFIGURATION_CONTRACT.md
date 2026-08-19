@@ -126,6 +126,16 @@ source:
 
 ### Databricks table
 
+**Not yet config-buildable — this block is the intended shape, not a shipped one.**
+As of Increment F the Spark adapters are constructed directly by
+`databricks.runner.run_driver`, never through `sources.registry.build_source`, whose
+registered types are `csv` and `parquet` only. The reason is structural rather than an
+omission: `build_source` takes a `path`, while `SparkTableSource` needs a live Spark
+session, and giving the registry one would put a Databricks dependency on the runtime
+path (`docs/01_ARCHITECTURE.md`, *Package dependency direction*). The shipped adapter's
+`source_type` is **`spark_table`**, not `databricks_table`. Wiring it to configuration
+needs a session-injection design that has not been taken.
+
 ```yaml
 source:
   type: databricks_table
@@ -144,7 +154,10 @@ destination:
   path: data/output/
 ```
 
-Databricks:
+Databricks — same caveat as the Databricks source above: `delta_table` *is* the shipped
+`DeltaTableOutput.destination_type`, but it is not registered in
+`outputs.registry.build_output` (`csv` and `parquet` only) and `run_driver` constructs
+it directly:
 
 ```yaml
 destination:
@@ -167,7 +180,7 @@ dataset:
   row_id: conversation_id
 
 source:
-  type: databricks_table
+  type: databricks_table          # not config-buildable yet - see the caveat above
   table: pii_demo.raw.support_transcripts
 
 columns:

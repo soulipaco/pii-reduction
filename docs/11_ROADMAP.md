@@ -194,21 +194,36 @@ Turn the repository into a measurable comparison platform.
 
 Run the same pipeline against Spark DataFrames and Delta tables.
 
+> **Status lives in `docs/14_IMPLEMENTATION_PLAN.md` §8, not here.** Phases 0-5 are
+> complete too; only this phase is annotated below, because it is the one whose exit
+> criteria are *partly* met and a roadmap that reads as fully green would be wrong.
+
 ## Deliverables
 
-- Spark source adapter
-- Databricks table source adapter
-- Delta output adapter
-- batch NLP execution strategy
-- worker/model lifecycle handling
-- run metrics Delta table
-- detection audit Delta table
+Shipped as Increment F (`src/pii_reduction/databricks/`); see plan §8 F for evidence.
+
+- ~~Spark source adapter~~ / ~~Databricks table source adapter~~ — **one adapter, not
+  two**: `SparkTableSource` reads a Unity Catalog table through a Spark session, which
+  is what both bullets described.
+- ~~Delta output adapter~~ — `DeltaTableOutput`.
+- ~~batch NLP execution strategy~~ — `distributed_frame` (`mapInPandas`).
+- ~~worker/model lifecycle handling~~ — pipeline built once per worker, cache keyed on
+  run id + config hash.
+- ~~run metrics Delta table~~ / ~~detection audit Delta table~~ — written by
+  `run_driver`, verified metadata-only.
 
 ## Exit criteria
 
-- local and Databricks results match on shared fixture,
-- model is not loaded once per row,
-- at least one meaningful distributed benchmark executed.
+- ~~local and Databricks results match on shared fixture~~ — **met** on the real
+  workspace: reduced-column hashes equal between a Databricks run and a local one.
+- ~~model is not loaded once per row~~ — **met**, and regression-guarded in the default
+  tier without Spark.
+- at least one meaningful distributed benchmark executed — **not met, infra-blocked.**
+  The `mapInPandas` path is shipped and unit-tested, but this workspace's serverless
+  Python-UDF sandbox fails server-side (`ISOLATION_STARTUP_FAILURE`), so no distributed
+  run has executed. A `databricks`-marked test skips today and asserts distributed
+  parity the day the sandbox works. Recorded rather than quietly dropped — plan §8 F
+  carries the re-check log.
 
 ---
 
