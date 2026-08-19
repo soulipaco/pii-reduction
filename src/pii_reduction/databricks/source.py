@@ -11,13 +11,17 @@ import re
 from typing import Any
 
 from pii_reduction.databricks.errors import DatabricksError
+from pii_reduction.observability.logging import get_logger, safe_fields
 from pii_reduction.sources.base import SourceDataset
 
 __all__ = ["SparkTableSource", "require_table_name"]
 
+logger = get_logger("databricks")
+
 #: Three dot-separated identifiers, each a plain name. Backtick-quoted or injected
 #: SQL never gets through, because the table name is interpolated into queries.
-_TABLE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){2}$")
+#: ``\Z`` rather than ``$``: the dollar anchor tolerates one trailing newline.
+_TABLE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){2}\Z")
 
 
 def require_table_name(table: str) -> str:
@@ -70,4 +74,30 @@ class SparkTableSource:
             frame=frame,
             source_type=self.source_type,
             source_reference=self._table,
+            source_version=self._table_version(),
         )
+
+    def _table_version(self) -> str | None:
+        """The table's Delta version, as ``delta_v<N>``, when it has one.
+
+        ``RunMetadata.source_version`` is optional provenance, not a gate, so this
+        is best-effort by design: a non-Delta table, a permissions gap, or a
+        session that cannot run the query yields ``None`` rather than failing a
+        read that already succeeded. The table name was validated by
+        :func:`require_table_name`, so interpolating it into SQL is safe.
+        """
+        try:
+            rows = self._spark.sql(f"DESCRIBE HISTORY {self._table} LIMIT 1").collect()
+        except Exception as error:
+            # Category only (AGENTS.md rule 8): a Connect message can carry the
+            # workspace URL, and this path must never fail or leak on its way to
+            # returning "no version".
+            logger.info(
+                "table version unavailable %s",
+                safe_fields(dataset=self._name, error_category=type(error).__name__),
+            )
+            return None
+        if not rows:
+            return None
+        version = getattr(rows[0], "version", None)
+        return None if version is None else f"delta_v{version}"

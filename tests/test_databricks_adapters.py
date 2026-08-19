@@ -255,3 +255,72 @@ class TestSourceWithoutASession:
     def test_a_bad_table_name_fails_before_any_connection(self) -> None:
         with pytest.raises(DatabricksError, match="fully qualified"):
             SparkTableSource(object(), "just_a_table")
+
+
+class _HistoryRow:
+    def __init__(self, version: object) -> None:
+        self.version = version
+
+
+class _FakeQuery:
+    def __init__(self, rows: list[object] | None, error: Exception | None = None) -> None:
+        self._rows = rows or []
+        self._error = error
+
+    def collect(self) -> list[object]:
+        if self._error is not None:
+            raise self._error
+        return self._rows
+
+
+class _FakeRead:
+    """`spark.read.table(name).toPandas()` — the read half of the source."""
+
+    def table(self, _name: str) -> _FakeRead:
+        return self
+
+    def toPandas(self) -> pd.DataFrame:  # noqa: N802 - Spark's casing
+        return pd.DataFrame({"row_id": ["r1"], "body": ["synthetic text"]})
+
+
+class _FakeSpark:
+    def __init__(self, history: _FakeQuery) -> None:
+        self.read = _FakeRead()
+        self._history = history
+        self.queries: list[str] = []
+
+    def sql(self, query: str) -> _FakeQuery:
+        self.queries.append(query)
+        return self._history
+
+
+class TestSourceVersionCapture:
+    """`source_version` provenance (docs/17 D2): best-effort, never load-breaking.
+
+    Unit-tested against a fake session like the runner's init-once semantics; the
+    databricks-marked parity test exercises it against a real Delta table the next
+    time it runs against the workspace.
+    """
+
+    def test_a_delta_table_version_is_recorded(self) -> None:
+        spark = _FakeSpark(_FakeQuery([_HistoryRow(12)]))
+        dataset = SparkTableSource(spark, "cat.sch.tbl").load()
+        assert dataset.source_version == "delta_v12"
+        assert any("DESCRIBE HISTORY cat.sch.tbl" in query for query in spark.queries)
+
+    def test_a_failing_history_query_does_not_fail_the_read(self) -> None:
+        # A non-Delta table or a permissions gap must cost the provenance field,
+        # never the read that already succeeded.
+        spark = _FakeSpark(_FakeQuery(None, error=RuntimeError("not a Delta table")))
+        dataset = SparkTableSource(spark, "cat.sch.tbl").load()
+        assert dataset.source_version is None
+        assert len(dataset.frame) == 1
+
+    def test_empty_history_yields_no_version(self) -> None:
+        dataset = SparkTableSource(_FakeSpark(_FakeQuery([])), "cat.sch.tbl").load()
+        assert dataset.source_version is None
+
+    def test_a_history_row_without_a_version_yields_none(self) -> None:
+        spark = _FakeSpark(_FakeQuery([object()]))
+        dataset = SparkTableSource(spark, "cat.sch.tbl").load()
+        assert dataset.source_version is None

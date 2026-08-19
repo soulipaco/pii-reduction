@@ -385,6 +385,7 @@ the session-9 rows in the Complete table and the queue below.
 | F | `databricks/` package (see the F section below) — parity met on the workspace, distributed path shipped and infra-blocked, audits applied (run identity across warm workers, exact-set audit-schema assertion, schema-drift test, Spark-free guard extended) | 854 default / 90 deselected incl. 3 databricks |
 | Review | `docs/17_EXTERNAL_REVIEW_RECONCILIATION.md` — two external assessments reconciled against the code; both factually reliable, three claims disputed with evidence, five findings both missed surfaced from inside | no code changed by the reconciliation itself |
 | R1 | Fail-closed default: `failure_mode` defaults to `quarantine_row` in the model and the shipped config (ADR-0023); pass-through is an explicit opt-in; fixture runs the true default; fail-closed property pinned by test | 919 default (917 before), 41/41 gates re-run before and after — no published number moved |
+| R2 | Run provenance: `provider_versions` carries real library **and model** versions (importlib.metadata — nothing imported, no model loaded, degrades to the bare type without the extra), `language_detector_version` populated for detect-mode columns, `SparkTableSource` records `delta_v<N>` best-effort (fake-session unit tests; the parity test asserts it on the next workspace run), and `pseudonymization_key_id` — a non-secret HMAC-derived key digest, so rotation is a visible provenance change. `provider_distributions` lives in `providers/registry.py` (provider knowledge stays with providers); `key_id` is a `BaseReducer` contract attribute | 937 default (+18), 41/41 gates — no published number moved |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -907,9 +908,7 @@ Environment facts recorded for reuse: dedicated venv (`.venv-dbx17`, Python 3.12
 One increment at a time, measure before and after, own commit each:
 
 - **R1 — fail-closed default (ADR-0023)** — **complete**, see the Complete table.
-- **R2 — run provenance**: real provider/library/model versions,
-  `language_detector_version`, `source_version` where available, non-secret
-  pseudonymization key id in `RunMetadata`.
+- **R2 — run provenance** — **complete**, see the Complete table.
 - **R3 — reduced-only projection (ADR-0024)**: opt-in reduced-only artifact locally
   + separate destination prefix in `run_driver`, so `docs/09`'s grant model becomes
   realisable.

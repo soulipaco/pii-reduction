@@ -91,8 +91,18 @@ class RunMetadata(FrozenModel):
     started_at: datetime
     completed_at: datetime | None = None
     status: ProcessingStatus = ProcessingStatus.SUCCESS
+    #: Per configured provider name: the provider type plus the installed versions
+    #: of the libraries and models behind it, e.g.
+    #: ``"presidio (presidio-analyzer 2.2.364, spacy 3.8.15, en_core_web_md 3.8.0)"``.
+    #: Degrades to the bare type string on a machine without the extra installed.
     provider_versions: dict[str, str] = Field(default_factory=dict)
     language_detector_version: str | None = None
+    #: Non-secret identifier of the pseudonymization key (a truncated,
+    #: domain-separated digest computed by the reducer) — present only when a
+    #: pseudonymizing reducer was configured, so a run is attributable to a key
+    #: and a rotation is visible in provenance. Never the key itself. Comma-joined
+    #: when columns are configured with different keys.
+    pseudonymization_key_id: str | None = None
     rows_read: int = Field(default=0, ge=0)
     rows_written: int = Field(default=0, ge=0)
     fields_processed: int = Field(default=0, ge=0)

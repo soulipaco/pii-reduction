@@ -12,7 +12,15 @@ from pii_reduction.language.errors import LanguageError
 from pii_reduction.language.gate import ShortTextGate
 from pii_reduction.language.lingua_detector import DETECTOR_NAME, LinguaDetector
 
-__all__ = ["available_detectors", "build_resolver"]
+__all__ = ["DETECTOR_DISTRIBUTIONS", "available_detectors", "build_resolver"]
+
+#: Distributions whose installed versions describe a detector, for run provenance
+#: (``RunMetadata.language_detector_version``). Lives with the language package
+#: for the same reason ``providers.registry.PROVIDER_DISTRIBUTIONS`` lives with
+#: the providers: the pipeline must not know which library backs a detector.
+DETECTOR_DISTRIBUTIONS: dict[str, tuple[str, ...]] = {
+    DETECTOR_NAME: ("lingua-language-detector",),
+}
 
 MODE_DETECT = "detect"
 MODE_STATIC = "static"

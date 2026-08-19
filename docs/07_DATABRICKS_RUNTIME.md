@@ -108,6 +108,10 @@ run_id STRING
 config_hash STRING
 pipeline_version STRING
 source_table STRING
+source_version STRING            -- delta_v<N> when the source is a Delta table
+provider_versions ...            -- per provider: type + library/model versions (docs/03 §11)
+language_detector_version STRING -- when a detect-mode column ran
+pseudonymization_key_id STRING   -- non-secret key digest; null unless pseudonymizing
 rows_read BIGINT
 rows_written BIGINT
 fields_processed BIGINT
@@ -118,6 +122,11 @@ failure_count BIGINT
 started_at TIMESTAMP
 completed_at TIMESTAMP
 ```
+
+The provenance columns were added in session 9 (docs/17 D2). A rerun in `append`
+mode onto a metrics table written before then is a deliberate schema change: enable
+schema evolution for that write or start a new table — the default `errorifexists`
+mode is unaffected.
 
 ## Spark processing design
 

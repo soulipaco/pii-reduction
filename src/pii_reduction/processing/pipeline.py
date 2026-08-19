@@ -22,7 +22,7 @@ import pandas as pd
 
 from pii_reduction import __version__
 from pii_reduction.config.fingerprint import config_fingerprint
-from pii_reduction.config.models import FailureMode
+from pii_reduction.config.models import FailureMode, LanguageMode
 from pii_reduction.config.resolved import ResolvedColumnPolicy, ResolvedDataset
 from pii_reduction.contracts.errors import PiiReductionError
 from pii_reduction.contracts.results import (
@@ -34,16 +34,17 @@ from pii_reduction.contracts.results import (
 from pii_reduction.entities.reconcile import ReconciliationPolicy
 from pii_reduction.language.base import LanguageResolver
 from pii_reduction.language.gate import ShortTextGate
-from pii_reduction.language.registry import build_resolver
+from pii_reduction.language.registry import DETECTOR_DISTRIBUTIONS, build_resolver
 from pii_reduction.observability.logging import get_logger, safe_fields
 from pii_reduction.observability.metrics import RunMetricsAccumulator
+from pii_reduction.observability.versions import describe_versions
 from pii_reduction.outputs.local import write_json
 from pii_reduction.outputs.registry import build_output
 from pii_reduction.parsers.registry import build_parser
 from pii_reduction.processing.errors import ProcessingError
 from pii_reduction.processing.field_processor import FieldProcessor, ProviderChain
 from pii_reduction.providers.base import BaseProvider
-from pii_reduction.providers.registry import build_provider
+from pii_reduction.providers.registry import build_provider, provider_distributions
 from pii_reduction.reducers.registry import build_reducer
 from pii_reduction.sources.base import SourceDataset
 from pii_reduction.sources.registry import build_source
@@ -201,9 +202,46 @@ class Pipeline:
             source_version=dataset.source_version or self.config.dataset.source_version,
         )
         metrics.rows_read = len(frame)
+        # Each value is the provider type plus the installed versions of the
+        # libraries and models behind it (importlib.metadata only — nothing is
+        # imported and no model is loaded). Like `threshold_calibration` below,
+        # this describes the CONFIGURED providers, not which ones this run's
+        # chain reached; the name prefix keeps that honest. On a machine without
+        # an extra installed the value degrades to the bare type string, which is
+        # exactly what this field carried before session 9.
         metrics.provider_versions = {
-            name: settings.type for name, settings in self.config.providers.items()
+            name: describe_versions(
+                settings.type, provider_distributions(settings.type, settings.options)
+            )
+            for name, settings in self.config.providers.items()
         }
+        detector_names = sorted(
+            {
+                policy.language.detector
+                for policy in self.config.columns
+                if policy.language.mode is LanguageMode.DETECT
+                and policy.language.detector != "none"
+            }
+        )
+        if detector_names:
+            metrics.language_detector_version = "; ".join(
+                describe_versions(name, DETECTOR_DISTRIBUTIONS.get(name, ()))
+                for name in detector_names
+            )
+        # A run is attributable to the pseudonymization key that produced its
+        # tokens. `key_id` is a contract attribute on `BaseReducer` (a non-secret
+        # truncated digest, never the key), read through getattr because the
+        # field processor types its reducer as the structural protocol.
+        # Comma-joined when columns are configured with different keys.
+        key_ids = sorted(
+            {
+                key_id
+                for processor in self._processors
+                if (key_id := getattr(processor.reducer, "key_id", None)) is not None
+            }
+        )
+        if key_ids:
+            metrics.pseudonymization_key_id = ",".join(key_ids)
         # Calibration state of the CONFIGURED providers, each note attributed to its
         # provider by name — like `provider_versions` above, this describes the
         # configuration, not which providers this particular run's chain reached. A

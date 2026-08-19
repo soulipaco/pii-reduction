@@ -166,8 +166,7 @@ source_dataset_version
 truth_version
 pipeline_version
 config_hash
-provider_versions
-model_versions
+provider_versions   # carries library AND model versions per provider since session 9 (docs/03 §11)
 language_detector_version
 execution_environment
 started_at

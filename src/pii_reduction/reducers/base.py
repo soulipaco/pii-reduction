@@ -57,6 +57,14 @@ class BaseReducer(ABC):
     #: Registry name, matching ``config.registries.KNOWN_REDUCERS``.
     name: str = ""
 
+    #: Non-secret identifier of the key a keyed reducer derives its output from,
+    #: for run provenance (``RunMetadata.pseudonymization_key_id``). ``None`` for
+    #: unkeyed reducers. Declared on the base so the pipeline reads a contract
+    #: attribute rather than duck-typing one reducer's internals — a future keyed
+    #: reducer that skips it loses provenance visibly (the field stays null), not
+    #: by attribute-name accident.
+    key_id: str | None = None
+
     @abstractmethod
     def _replacement(self, entity: ResolvedEntity, surface: str) -> str:
         """Rendering for one approved span. ``surface`` is the matched text."""

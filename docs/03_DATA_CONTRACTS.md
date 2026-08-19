@@ -253,6 +253,7 @@ completed_at
 status
 provider_versions
 language_detector_version
+pseudonymization_key_id
 rows_read
 rows_written
 fields_processed
@@ -260,6 +261,16 @@ fields_failed
 entities_detected
 entities_reduced
 ```
+
+`provider_versions` values carry the provider type plus the installed versions of
+the libraries and models behind it (resolved via `importlib.metadata`, so nothing
+is imported and no model is loaded), e.g.
+`presidio (presidio-analyzer 2.2.364, spacy 3.8.15, en_core_web_md 3.8.0)`; on a
+machine without the extra the value degrades to the bare type string.
+`pseudonymization_key_id` is a non-secret truncated digest identifying the key a
+pseudonymizing run used — never the key itself — so a rotation is visible in
+provenance; it is null for runs without a pseudonymizing reducer, and comma-joined
+when columns are configured with different keys.
 
 ## 12. Detection audit table
 

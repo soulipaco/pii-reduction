@@ -117,6 +117,9 @@ class TestDriverPathParity:
         metrics = spark.read.table(f"{SCHEMA}.{config.dataset.name}_run_metrics").toPandas()
         assert metrics.loc[0, "run_rows_read"] == len(corpus_frame)
         assert str(metrics.loc[0, "run_config_hash"])
+        # Session-9 provenance (docs/17 D2): the driver path reads a real Delta
+        # table this test created, so the source version must resolve.
+        assert str(metrics.loc[0, "run_source_version"]).startswith("delta_v")
 
 
 class TestDistributedPath:

@@ -117,6 +117,16 @@ class PseudonymizeReducer(BaseReducer):
 
         self.options = merged
         self._key = key.encode("utf-8")
+        #: Non-secret key identifier: 8 hex chars of HMAC-SHA256 over a fixed
+        #: domain label, keyed with the key itself. It attributes a run to a key
+        #: in ``RunMetadata`` — a rotation becomes a visible provenance change
+        #: instead of a silent break in referential consistency — while revealing
+        #: nothing usable: HMAC's ipad/opad construction shares no computable
+        #: structure with the token digests, and 8 hex chars of a keyed digest
+        #: cannot be inverted. (Like any truncated key digest it can confirm a
+        #: fully-guessed key offline — but so can any token paired with a known
+        #: plaintext, so it adds no capability an output holder lacks.)
+        self.key_id = hmac.new(self._key, b"pii-reduction-key-id", hashlib.sha256).hexdigest()[:8]
         self._scope = scope
         self._scope_value = "" if scope == "global" else str(scope_value)
         self._token_length = token_length

@@ -50,6 +50,7 @@ class RunMetricsAccumulator:
 
     provider_versions: dict[str, str] = field(default_factory=dict)
     language_detector_version: str | None = None
+    pseudonymization_key_id: str | None = None
     threshold_calibration: str = "default_uncalibrated"
     reduction_strategies: Counter[str] = field(default_factory=Counter)
 
@@ -87,6 +88,7 @@ class RunMetricsAccumulator:
             status=self.status(),
             provider_versions=dict(self.provider_versions),
             language_detector_version=self.language_detector_version,
+            pseudonymization_key_id=self.pseudonymization_key_id,
             rows_read=self.rows_read,
             rows_written=self.rows_written,
             fields_processed=self.fields_processed,
