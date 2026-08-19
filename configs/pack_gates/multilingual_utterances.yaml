@@ -38,8 +38,9 @@ measured:
   # reproduce the floors below.
   # ADR-0021 changed the Greek provider configuration under these floors and was
   # re-run against this pack: every gated value is unchanged, so the floors below
-  # stand. `pending` is replaced with its hash in the commit that follows.
-  commit: pending  # ADR-0020 measured them at 4f3716c; deterministic_only at 96eae02
+  # stand. This is its commit, recorded by the commit that follows it. ADR-0020
+  # measured them at 4f3716c; the deterministic_only set at 96eae02.
+  commit: 421634d
   versions:
     presidio-analyzer: 2.2.364
     spacy: 3.8.15

@@ -51,7 +51,7 @@ measured:
   # `pending` is replaced with the ADR-0021 hash in the commit that follows this one,
   # per the convention above. The deterministic_only floors are older and still
   # reproduce at d9b01d6.
-  commit: pending
+  commit: 421634d
   # The Presidio numbers move with the model version, by design (ADR-0009 pins the md
   # tier for CI). If a model bump moves them, the nightly job fails loudly and the fix
   # is to re-measure and re-commit this file with the new versions recorded here —

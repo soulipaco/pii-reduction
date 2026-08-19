@@ -12,6 +12,7 @@ chain's gate set is checked in ``test_benchmark_presidio.py`` (integration).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -391,6 +392,22 @@ class TestTheShippedGateFile:
         }
         assert expected <= set(measured)
         assert {"en_core_web_md", "de_core_news_md", "xx_ent_wiki_sm"} <= set(measured["versions"])
+
+    def test_the_measuring_commit_is_a_hash_and_not_a_placeholder(self) -> None:
+        """The file promises "check out this hash and re-run reproduces the floors".
+
+        A commit cannot name its own hash, so the convention is to write it in the
+        commit that follows. That leaves a window where the field says `pending`, and
+        nothing used to notice if the follow-up never came — which would quietly
+        turn the reproduction promise into a lie. Checked for every gate file, because
+        the pack sets carry the same header.
+        """
+        for path in sorted(GATE_FILE.parent.rglob("*gates*.yaml")):
+            commit = str(read_yaml(path)["measured"]["commit"])
+            assert re.fullmatch(r"[0-9a-f]{7,40}", commit), (
+                f"{path.name}: commit is {commit!r}; record the hash of the commit that "
+                "measured these floors"
+            )
 
     def test_the_recorded_corpus_parameters_are_the_ones_that_built_it(self) -> None:
         # Provenance that does not match the CLI defaults would send a reader
