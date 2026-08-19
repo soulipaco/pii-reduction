@@ -126,6 +126,15 @@ jobs:
             --chain deterministic_presidio \
             --gates configs/benchmark_gates.yaml
 
+      - name: Incident-notes gates (hybrid chain)
+        # The over-redaction stress corpus (ADR-0022). Its deterministic gates run on
+        # every push; this set needs the models. It is the only gate set where
+        # over_redaction_rate is not 0.000 — 0.024, a recorded cost of ADR-0020's
+        # label promotion, gated so it cannot grow.
+        run: >
+          pii-reduction benchmark --corpus tests/fixtures/incidents
+          --chain deterministic_presidio --gates configs/incident_gates.yaml
+
       - name: Publish the benchmark table to the run summary
         # Synthetic corpus only: every value in this table is generated data, so the
         # table is safe to publish (AGENTS.md rule 8).

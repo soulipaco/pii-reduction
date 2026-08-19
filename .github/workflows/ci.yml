@@ -95,6 +95,16 @@ jobs:
         # baseline and live in one reviewed file (ADR-0009).
         run: pii-reduction benchmark --gates configs/benchmark_gates.yaml
 
+      - name: Incident-notes gates (deterministic chain)
+        # The over-redaction stress corpus (ADR-0022). Its deterministic gates are
+        # model-free, so unlike the demo packs they belong on every push: this is the
+        # corpus that carries 585 protected tokens against the benchmark corpus's 102,
+        # and over-redaction is the metric it exists to hold down. Its hybrid gates
+        # need models and run in the integration workflow.
+        run: >
+          pii-reduction benchmark --corpus tests/fixtures/incidents
+          --gates configs/incident_gates.yaml
+
       - name: Corpora are reproducible from their seeds
         # The committed corpora are the ground truth every metric above is scored
         # against. If regenerating one from the same seed does not reproduce it byte
