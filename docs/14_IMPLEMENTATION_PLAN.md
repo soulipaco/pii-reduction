@@ -353,6 +353,7 @@ Last updated: session 6 (2026-08-18), after Increment D (Q3) and the Greek diagn
 | D (part) | `synthetic/injection.py`, `synthetic/registry.py`, `demo/registry.yaml` | 730 default / 73 integration |
 | D | `synthetic/fetch.py`, `synthetic/public.py`, `synthetic/packs.py`, `fetch-dataset` + `build-pack`, three demo packs and their gate sets (ADR-0017, ADR-0018) | 807 default / 73 integration (799 when D first landed; the audit-fix commit added 8) |
 | Q4 | Greek PERSON diagnosed: span absorption, label confusion, άνω τελεία (ADR-0019). No number moved — the corpus is deliberately not made easier | 809 default / 87 integration |
+| E (part) | ADR-0013 §5's two leakage variants: `fragment_leakage_rate` beside `leakage_rate` (now gated: 0.433 det / 0.117 hybrid), `strategy` in the metric-row grain, `--strategy` on the CLI, `with_reducer`; gates compare the run's strategy to the file's recorded one at the data level | 828 default / 87 integration |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -464,6 +465,39 @@ Limitations, stated so the numbers are not read as more than they are:
 - **No pack runs in CI.** Building one needs a download, and the default tier is
   deliberately offline as well as model-free (ADR-0009, ADR-0017). The pack gate files
   are checked for validity by the test suite; their *numbers* are run on demand.
+
+### Reduction strategies, measured (Increment E, ADR-0013 §5)
+
+Whole corpus, both chains, all three strategies from one configuration via
+`--strategy`. Full-value leakage cannot tell the strategies apart — every strategy
+covers the exact surface — which is precisely why ADR-0013 required the second
+variant. `fragment_leakage_rate` counts any surviving whitespace-free 4-character
+window of the value, minus windows that occur in the source text outside entity spans
+(ambient prose is not evidence: `…schneider@…` shares `chne` with *Rechnername*).
+
+| chain | strategy | leakage | fragment leakage | over-redaction |
+|---|---|---|---|---|
+| deterministic | redact | 0.433 | 0.433 | 0.000 |
+| deterministic | mask | 0.433 | **0.922** | 0.000 |
+| deterministic | pseudonymize | 0.433 | 0.433 | 0.000 |
+| hybrid | redact | 0.117 | 0.117 | 0.000 |
+| hybrid | mask | 0.117 | **0.606** | 0.000 |
+| hybrid | pseudonymize | 0.117 | 0.117 | 0.000 |
+
+Three readings, stated so the table is not misused:
+
+1. **Mask's fragment rate is configured behaviour, not a defect** — `last4` keeps four
+   digits and `partial_email` keeps the domain, and this metric is where that retention
+   becomes visible instead of invisible. Comparing it to redact's rate as one number is
+   forbidden (ADR-0013 §5); the gate runner refuses `--gates` with `--strategy` for the
+   same reason.
+2. **Redact's fragment rate equalling its full rate is a finding, not a tautology.** A
+   boundary error that leaves half a name would push the fragment rate above the full
+   rate while the full-surface metric held still — the exact blind spot session 5
+   found. A test pins the equality; if they ever diverge, investigate the leak before
+   touching the metric.
+3. **Pseudonymize retains nothing** at this window length: tokens are digests, so both
+   its rates equal redact's. Its leakage still reflects only *undetected* entities.
 
 ### Queue
 

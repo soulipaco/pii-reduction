@@ -326,10 +326,16 @@ language
 entity_type
 document_type
 difficulty_tier
+strategy
 metric_name
 metric_value
 support
 ```
+
+`strategy` is in the grain because leakage is defined per reduction strategy
+(ADR-0013 §5): a persisted mask row must never be indistinguishable from a redact
+row, or the forbidden cross-strategy comparison happens the moment rows leave the
+process.
 
 Example metric rows:
 

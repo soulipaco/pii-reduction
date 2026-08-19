@@ -107,6 +107,14 @@ gate_sets:
         metric: leakage_rate
         max: 0.433
         support: 180
+      # ADR-0013 §5's second variant (session 6). Equal to the full-value rate on this
+      # corpus under redact: nothing partially survives a full redaction of a correct
+      # span. If this floor ever fails while leakage_rate holds, a PARTIAL leak has
+      # appeared — the failure mode the full-surface match cannot see.
+      - name: fragment_leakage_rate
+        metric: fragment_leakage_rate
+        max: 0.433
+        support: 180
       - name: document_clean_rate
         metric: document_clean_rate
         min: 0.161
@@ -166,6 +174,11 @@ gate_sets:
         support: 78
       - name: leakage_rate
         metric: leakage_rate
+        max: 0.117
+        support: 180
+      # Same reasoning as the deterministic set's fragment gate (ADR-0013 §5).
+      - name: fragment_leakage_rate
+        metric: fragment_leakage_rate
         max: 0.117
         support: 180
       - name: document_clean_rate

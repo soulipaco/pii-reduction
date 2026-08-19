@@ -20,6 +20,7 @@ from pii_reduction.evaluation.gates import (
     GateReport,
     evaluate_gates,
     load_gate_file,
+    load_measured_strategy,
 )
 from pii_reduction.evaluation.report import render_markdown
 from pii_reduction.synthetic.corpus import build_corpus, write_corpus
@@ -104,6 +105,15 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="provider_chain",
         help="override the configured provider chain (e.g. deterministic_presidio)",
     )
+    benchmark.add_argument(
+        "--strategy",
+        dest="reducer",
+        choices=["redact", "mask", "pseudonymize"],
+        help=(
+            "override the configured reduction strategy (ADR-0013). Leakage numbers are "
+            "per strategy and must not be compared across strategies"
+        ),
+    )
     benchmark.add_argument("--markdown", action="store_true", help="render as a markdown table")
     benchmark.add_argument(
         "--gates",
@@ -159,6 +169,7 @@ def _run(argv: Sequence[str] | None) -> int:
         configs_dir=args.configs,
         splits=args.splits,
         provider_chain=args.provider_chain,
+        reducer=args.reducer,
         benchmark_run_id="benchmark_local",
     )
     render = render_markdown if args.markdown else lambda rows, title: outcome.table(title=title)
@@ -221,7 +232,10 @@ def _build_pack(args: argparse.Namespace) -> int:
 
 
 def _check_gates(
-    outcome: BenchmarkOutcome, path: Path, *, splits: Sequence[str] | None
+    outcome: BenchmarkOutcome,
+    path: Path,
+    *,
+    splits: Sequence[str] | None,
 ) -> GateReport:
     """Check the run against the gate set named after the chain that produced it.
 
@@ -233,6 +247,19 @@ def _check_gates(
     that quietly answers a different question than the one asked is the failure this
     module exists to prevent.
     """
+    measured_strategy = load_measured_strategy(path)
+    if outcome.strategy != measured_strategy:
+        # Data-level like the chain guard, not flag-level: a dataset config that sets
+        # `reducer: mask` reaches here with no --strategy flag at all, and a mask run
+        # would PASS redact leakage floors — masking covers the exact surface just as
+        # redaction does, so the full-value metric cannot tell them apart. Leakage is
+        # per strategy (ADR-0013 §5); a gate that measures a different question than it
+        # asks is the failure this module exists to stop.
+        raise GateConfigurationError(
+            f"these gates were measured under strategy {measured_strategy!r} but the run "
+            f"used {outcome.strategy!r}. Run the gates under the measured strategy, or "
+            "add a gate set measured on this one"
+        )
     if splits:
         raise GateConfigurationError(
             f"--gates cannot be combined with --split ({', '.join(splits)}): the shipped "

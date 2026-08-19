@@ -66,6 +66,7 @@ def row(
         entity_type=entity_type,
         document_type=document_type,
         difficulty_tier=difficulty_tier,
+        strategy="redact",
         metric_name=metric,
         metric_value=value,
         support=support,
@@ -489,6 +490,7 @@ class TestCliIntegration:
             yaml.safe_dump(
                 {
                     "version": SUPPORTED_VERSION,
+                    "measured": {"strategy": "redact"},
                     "gate_sets": {
                         "deterministic_only": {
                             "gates": [{"name": "impossible", "metric": "strict_f1", "min": 0.99}]
@@ -554,3 +556,81 @@ class TestCliIntegration:
         )
         assert exit_code == 2
         assert "cannot be combined with --split" in capsys.readouterr().err
+
+    def test_gates_refuse_a_strategy_they_were_not_measured_on(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # Every shipped gate file records `measured.strategy: redact`, and leakage is
+        # defined per strategy (ADR-0013 §5): a mask run's leakage_rate judged against
+        # redact floors would compare two different metrics under one name — and PASS,
+        # since masking covers the full surface just as redaction does. The guard is
+        # data-level like the chain guard: it compares the run's actual strategy to the
+        # file's recorded one, so a config-level `reducer: mask` cannot slip past a
+        # flag-only check.
+        exit_code = main(
+            [
+                "benchmark",
+                "--corpus",
+                str(CORPUS_DIR),
+                "--configs",
+                str(CONFIGS_DIR),
+                "--strategy",
+                "mask",
+                "--gates",
+                str(GATE_FILE),
+            ]
+        )
+        assert exit_code == 2
+        assert "measured under strategy 'redact'" in capsys.readouterr().err
+
+    def test_a_matching_strategy_passes_the_guard(self, capsys: pytest.CaptureFixture[str]) -> None:
+        # Explicitly asking for the measured strategy is not an error — the guard
+        # compares strategies, it does not forbid the flag.
+        exit_code = main(
+            [
+                "benchmark",
+                "--corpus",
+                str(CORPUS_DIR),
+                "--configs",
+                str(CONFIGS_DIR),
+                "--strategy",
+                "redact",
+                "--gates",
+                str(GATE_FILE),
+            ]
+        )
+        assert exit_code == 0
+        assert "gates passed" in capsys.readouterr().out
+
+    def test_a_gate_file_without_a_measured_strategy_is_refused(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # Comparing against an unknown baseline is the silent wrongness the gates
+        # module exists to prevent, so the record is required rather than assumed.
+        path = tmp_path / "gates.yaml"
+        path.write_text(
+            yaml.safe_dump(
+                {
+                    "version": SUPPORTED_VERSION,
+                    "gate_sets": {
+                        "deterministic_only": {
+                            "gates": [{"name": "g", "metric": "strict_f1", "min": 0.1}]
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        exit_code = main(
+            [
+                "benchmark",
+                "--corpus",
+                str(CORPUS_DIR),
+                "--configs",
+                str(CONFIGS_DIR),
+                "--gates",
+                str(path),
+            ]
+        )
+        assert exit_code == 2
+        assert "measured.strategy" in capsys.readouterr().err

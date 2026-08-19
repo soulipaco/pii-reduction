@@ -21,14 +21,17 @@ import pandas as pd
 
 from pii_reduction.config.errors import ConfigurationError
 from pii_reduction.config.loader import load_resolved_dataset
+from pii_reduction.config.registries import KNOWN_REDUCERS
 from pii_reduction.config.resolved import ResolvedDataset
 from pii_reduction.evaluation.matching import RELAXED, STRICT, Prediction, TruthSpan
 from pii_reduction.evaluation.metrics import (
     DetectionMetric,
+    FragmentLeakageMetric,
     LeakageMetric,
     OverRedactionMetric,
     detection_metrics,
     detection_metrics_by,
+    fragment_leakage_metrics,
     leakage_metrics,
     over_redaction_metrics,
 )
@@ -37,7 +40,7 @@ from pii_reduction.processing.pipeline import build_pipeline
 from pii_reduction.sources.local import PandasSource
 from pii_reduction.synthetic.corpus import Corpus, load_corpus
 
-__all__ = ["DEFAULT_DATASETS", "BenchmarkOutcome", "run_benchmark"]
+__all__ = ["DEFAULT_DATASETS", "BenchmarkOutcome", "run_benchmark", "with_chain", "with_reducer"]
 
 #: Dataset config per document type. One parser per dataset is the real-world shape:
 #: transcripts and free-text notes are different contracts, not a runtime branch.
@@ -57,6 +60,10 @@ class BenchmarkOutcome:
     strict: DetectionMetric
     relaxed: DetectionMetric
     leakage: LeakageMetric
+    #: ADR-0013 §5's second variant: any recognisable piece survived, not only the
+    #: exact full surface. For ``mask`` a non-zero rate is configured behaviour; for
+    #: ``redact``/``pseudonymize`` it is a leak the full-surface metric cannot see.
+    fragment_leakage: FragmentLeakageMetric
     over_redaction: OverRedactionMetric
     rows: tuple[MetricRow, ...] = ()
     # repr is suppressed on both: a bare `outcome` in a notebook cell would otherwise
@@ -118,6 +125,25 @@ def with_chain(config: ResolvedDataset, chain_name: str) -> ResolvedDataset:
     return config.model_copy(update={"columns": columns})
 
 
+def with_reducer(config: ResolvedDataset, reducer_name: str) -> ResolvedDataset:
+    """Return the same dataset configuration with a different reduction strategy.
+
+    The counterpart of :func:`with_chain`, for ADR-0013's strategy comparison: mask
+    and redact runs must come from the *same* configuration or the difference measures
+    two files drifting apart rather than two strategies. The name is validated against
+    the reducer registry, so a typo still fails loudly.
+    """
+    if reducer_name not in KNOWN_REDUCERS:
+        raise ConfigurationError(
+            f"reduction strategy {reducer_name!r} is not known "
+            f"(known: {', '.join(sorted(KNOWN_REDUCERS))})"
+        )
+    columns = tuple(
+        column.model_copy(update={"reducer": reducer_name}) for column in config.columns
+    )
+    return config.model_copy(update={"columns": columns})
+
+
 def run_benchmark(
     *,
     corpus_dir: str | Path,
@@ -125,6 +151,7 @@ def run_benchmark(
     datasets: dict[str, str] | None = None,
     splits: Sequence[str] | None = None,
     provider_chain: str | None = None,
+    reducer: str | None = None,
     benchmark_run_id: str | None = None,
 ) -> BenchmarkOutcome:
     """Process every document with its configured parser, then score the result."""
@@ -153,6 +180,8 @@ def run_benchmark(
         config = load_resolved_dataset(Path(configs_dir), dataset_name)
         if provider_chain is not None:
             config = with_chain(config, provider_chain)
+        if reducer is not None:
+            config = with_reducer(config, reducer)
         policy = config.columns[0]
         chains.add(policy.provider_chain)
         strategies.add(policy.reducer)
@@ -194,6 +223,19 @@ def run_benchmark(
     strict = detection_metrics(truths, predictions, mode=STRICT)
     relaxed = detection_metrics(truths, predictions, mode=RELAXED)
     leakage = leakage_metrics(truths, reduced_texts, surfaces, strategy=strategy)
+    fragment_leakage = fragment_leakage_metrics(
+        truths,
+        reduced_texts,
+        surfaces,
+        # The ambient exclusion needs the text as it was before reduction; restricted
+        # to the documents that ran, like everything else in this function.
+        source_texts={
+            document.document_id: document.text
+            for document in corpus.documents
+            if document.document_id in scored
+        },
+        strategy=strategy,
+    )
     over_redaction = over_redaction_metrics(
         (
             (token.document_id, token.token, token.kind)
@@ -206,11 +248,13 @@ def run_benchmark(
     rows = _build_rows(
         benchmark_run_id=run_id,
         provider=chain,
+        strategy=strategy,
         truths=truths,
         predictions=predictions,
         strict=strict,
         relaxed=relaxed,
         leakage=leakage,
+        fragment_leakage=fragment_leakage,
         over_redaction=over_redaction,
     )
     return BenchmarkOutcome(
@@ -220,6 +264,7 @@ def run_benchmark(
         strict=strict,
         relaxed=relaxed,
         leakage=leakage,
+        fragment_leakage=fragment_leakage,
         over_redaction=over_redaction,
         rows=tuple(rows),
         predictions=tuple(predictions),
@@ -243,11 +288,13 @@ def _build_rows(
     *,
     benchmark_run_id: str,
     provider: str,
+    strategy: str,
     truths: Sequence[TruthSpan],
     predictions: Sequence[Prediction],
     strict: DetectionMetric,
     relaxed: DetectionMetric,
     leakage: LeakageMetric,
+    fragment_leakage: FragmentLeakageMetric,
     over_redaction: OverRedactionMetric,
 ) -> list[MetricRow]:
     def row(
@@ -263,6 +310,7 @@ def _build_rows(
         return MetricRow(
             benchmark_run_id=benchmark_run_id,
             provider=provider,
+            strategy=strategy,
             language=language,
             entity_type=entity_type,
             document_type=document_type,
@@ -279,6 +327,9 @@ def _build_rows(
         "strict_f1": strict.f1,
         "relaxed_f1": relaxed.f1,
         "leakage_rate": leakage.rate,
+        # Distinct name on purpose: ADR-0013 §5 forbids comparing a mask run's leakage
+        # with a redact run's as one metric, and a shared name is how that happens.
+        "fragment_leakage_rate": fragment_leakage.rate,
         "document_clean_rate": leakage.document_clean_rate,
         "over_redaction_rate": over_redaction.rate,
     }
@@ -359,6 +410,7 @@ def summarise(outcome: BenchmarkOutcome) -> str:
         f"splits={splits} chain={outcome.provider_chain} strategy={outcome.strategy}\n"
         f"strict f1={outcome.strict.f1:.3f} relaxed f1={outcome.relaxed.f1:.3f} "
         f"leakage={outcome.leakage.rate:.3f} "
+        f"fragment leakage={outcome.fragment_leakage.rate:.3f} "
         f"document clean rate={outcome.leakage.document_clean_rate:.3f} "
         f"over-redaction={outcome.over_redaction.rate:.3f}"
     )

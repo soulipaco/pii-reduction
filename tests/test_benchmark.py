@@ -228,6 +228,67 @@ class TestSplits:
         assert total == len(load_corpus(CORPUS_DIR).entities)
 
 
+class TestStrategyComparison:
+    """ADR-0013 §5: strategies are compared from one configuration, per-strategy metrics.
+
+    Whole-corpus runs on the deterministic chain, one per strategy, from the same
+    dataset files — `with_reducer` exists so the comparison cannot be two configs
+    drifting apart.
+    """
+
+    @pytest.fixture(scope="class")
+    def masked(self) -> BenchmarkOutcome:
+        return run_benchmark(
+            corpus_dir=CORPUS_DIR,
+            configs_dir=CONFIGS_DIR,
+            reducer="mask",
+            benchmark_run_id="test_mask",
+        )
+
+    def test_the_strategy_is_recorded_everywhere_it_matters(self, masked: BenchmarkOutcome) -> None:
+        assert masked.strategy == "mask"
+        assert masked.leakage.strategy == "mask"
+        assert masked.fragment_leakage.strategy == "mask"
+
+    def test_mask_retains_fragments_where_redact_does_not(
+        self, outcome: BenchmarkOutcome, masked: BenchmarkOutcome
+    ) -> None:
+        """The whole point of the second metric.
+
+        Full-value leakage is identical across the two strategies — both cover the
+        exact surface — so on that number alone mask looks as safe as redact. The
+        fragment rate is where the deliberate retention (last4, partial_email)
+        becomes visible.
+        """
+        assert masked.leakage.rate == outcome.leakage.rate
+        assert masked.fragment_leakage.rate > outcome.fragment_leakage.rate + 0.3
+
+    def test_redact_fragment_rate_equals_its_full_rate_on_this_corpus(
+        self, outcome: BenchmarkOutcome
+    ) -> None:
+        # Nothing partially survives a full redaction of a correct span, and the
+        # ambient exclusion removes the one coincidence (`chne` in `Rechnername`).
+        # If these ever diverge, a partial leak has appeared: investigate before
+        # touching the metric.
+        assert outcome.fragment_leakage.rate == pytest.approx(outcome.leakage.rate)
+
+    def test_the_fragment_row_is_published(self, masked: BenchmarkOutcome) -> None:
+        names = {row.metric_name for row in masked.rows}
+        assert "fragment_leakage_rate" in names
+        assert "leakage_rate" in names, "the full-value metric must stay published beside it"
+
+    def test_an_unknown_strategy_fails_loudly(self) -> None:
+        from pii_reduction.config.errors import ConfigurationError
+
+        with pytest.raises(ConfigurationError, match="not known"):
+            run_benchmark(
+                corpus_dir=CORPUS_DIR,
+                configs_dir=CONFIGS_DIR,
+                reducer="tokenize",
+                benchmark_run_id="test_bad",
+            )
+
+
 class TestCli:
     def test_benchmark_command_prints_the_table(self, capsys: pytest.CaptureFixture[str]) -> None:
         exit_code = main(["benchmark", "--corpus", str(CORPUS_DIR), "--configs", str(CONFIGS_DIR)])
@@ -236,6 +297,23 @@ class TestCli:
         assert "PII reduction benchmark" in captured
         assert "strict_recall" in captured
         assert "documents=102" in captured
+
+    def test_strategy_flag_runs_mask(self, capsys: pytest.CaptureFixture[str]) -> None:
+        exit_code = main(
+            [
+                "benchmark",
+                "--corpus",
+                str(CORPUS_DIR),
+                "--configs",
+                str(CONFIGS_DIR),
+                "--strategy",
+                "mask",
+            ]
+        )
+        captured = capsys.readouterr().out
+        assert exit_code == 0
+        assert "strategy=mask" in captured
+        assert "fragment leakage=" in captured
 
     def test_markdown_output(self, capsys: pytest.CaptureFixture[str]) -> None:
         main(

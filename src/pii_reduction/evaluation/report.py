@@ -2,8 +2,10 @@
 
 Rows follow the metric grain of ``docs/03_DATA_CONTRACTS.md`` §15
 (``benchmark_run_id, provider, language, entity_type, document_type,
-difficulty_tier, metric_name, metric_value, support``), so a report can be persisted
-to a table as easily as printed.
+difficulty_tier, strategy, metric_name, metric_value, support``), so a report can be
+persisted to a table as easily as printed. ``strategy`` is in the grain because
+ADR-0013 §5 forbids comparing leakage across strategies as one number — a persisted
+mask row must never be indistinguishable from a redact row.
 
 Rendering is deliberately plain text: a benchmark that needs a dashboard to be read
 does not get read.
@@ -25,6 +27,7 @@ class MetricRow:
     entity_type: str
     document_type: str
     difficulty_tier: str
+    strategy: str
     metric_name: str
     metric_value: float
     support: int
@@ -38,6 +41,7 @@ COLUMNS = (
     ("entity_type", "entity"),
     ("document_type", "doc type"),
     ("difficulty_tier", "tier"),
+    ("strategy", "strategy"),
     ("metric_name", "metric"),
     ("metric_value", "value"),
     ("support", "support"),

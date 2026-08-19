@@ -10,7 +10,7 @@ Empty slices report 0.0 with support 0 rather than raising or silently vanishing
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from pii_reduction.evaluation.matching import (
@@ -22,11 +22,14 @@ from pii_reduction.evaluation.matching import (
 )
 
 __all__ = [
+    "DEFAULT_FRAGMENT_LENGTH",
     "DetectionMetric",
+    "FragmentLeakageMetric",
     "LeakageMetric",
     "OverRedactionMetric",
     "detection_metrics",
     "detection_metrics_by",
+    "fragment_leakage_metrics",
     "leakage_metrics",
     "over_redaction_metrics",
     "precision_recall_f1",
@@ -86,6 +89,42 @@ class LeakageMetric:
     @property
     def document_clean_rate(self) -> float:
         return _ratio(self.clean_documents, self.documents_with_pii)
+
+
+@dataclass(frozen=True)
+class FragmentLeakageMetric:
+    """Did any *recognisable piece* of the value survive? (ADR-0013 §5)
+
+    ``LeakageMetric`` counts only the exact full surface, which two facts make
+    insufficient on its own. Masking *deliberately* retains part of the value —
+    ``ma***@example.com`` keeps the domain, ``last4`` keeps four digits — so a mask
+    run's full-value leakage is trivially low while identifying fragments remain.
+    And a boundary error can redact half a name and leave the other half, which the
+    full-surface match scores as clean (found in session 5: the gate held at 0.117
+    while a repair rule leaked half-names).
+
+    ``retained`` counts entities where any whitespace-free window of
+    ``fragment_length`` characters of the surface survives in the reduced text —
+    excluding windows that already occur in the source document *outside every
+    entity span*, because their survival is not evidence: the German word
+    ``Rechnername`` contains ``chne`` from ``…schneider@…``, and counting it would
+    charge the reducer with leaking a word it never touched. With that exclusion a
+    full survival still retains every window, so on like-for-like text this is a
+    superset measure: ``fragment rate >= full-value rate``.
+
+    **Never compare this across strategies as if it were one number.** For ``mask``
+    a non-zero rate is the configured behaviour; for ``redact`` and ``pseudonymize``
+    it is a leak. ``strategy`` records which reading applies.
+    """
+
+    retained: int
+    total: int
+    fragment_length: int
+    strategy: str = ""
+
+    @property
+    def rate(self) -> float:
+        return _ratio(self.retained, self.total)
 
 
 @dataclass(frozen=True)
@@ -237,6 +276,94 @@ def leakage_metrics(
         total=total,
         clean_documents=clean,
         documents_with_pii=len(per_document),
+        strategy=strategy,
+    )
+
+
+#: Window size for :func:`fragment_leakage_metrics`. Four is the smallest piece the
+#: shipped mask rules deliberately keep (``last4`` on a phone number), so anything the
+#: masker retains on purpose is visible at this length — and it is long enough that a
+#: name fragment surviving in ordinary prose by coincidence is rare rather than routine.
+DEFAULT_FRAGMENT_LENGTH = 4
+
+
+def _fragment_windows(surface: str, length: int) -> Iterator[str]:
+    """Whitespace-free windows of ``length`` characters; the whole surface if shorter.
+
+    Windows spanning whitespace are skipped because they straddle tokens — ``a R`` from
+    ``Maria Rossi`` says nothing recognisable — and a surface shorter than the window
+    falls back to itself, so a three-letter name is not silently unmeasurable.
+    """
+    if len(surface) <= length:
+        yield surface
+        return
+    for index in range(len(surface) - length + 1):
+        window = surface[index : index + length]
+        if not any(character.isspace() for character in window):
+            yield window
+
+
+def _ambient_texts(truths: Sequence[TruthSpan], source_texts: Mapping[str, str]) -> dict[str, str]:
+    """Each document's text with every entity span blanked out.
+
+    What remains is the prose the reducer was never asked to touch. A fragment that
+    occurs here can survive reduction without any value having leaked — but a fragment
+    that occurs only inside entity spans (two emails sharing a domain, say) is still
+    evidence, which is why the spans are blanked rather than the whole document
+    excluded.
+    """
+    spans: dict[str, list[tuple[int, int]]] = {}
+    for truth in truths:
+        spans.setdefault(truth.document_id, []).append((truth.start, truth.end))
+    ambient: dict[str, str] = {}
+    for document_id, text in source_texts.items():
+        characters = list(text)
+        for start, end in spans.get(document_id, []):
+            characters[start:end] = "\x00" * (end - start)
+        ambient[document_id] = "".join(characters)
+    return ambient
+
+
+def fragment_leakage_metrics(
+    truths: Sequence[TruthSpan],
+    reduced_texts: Mapping[str, str],
+    surfaces: Mapping[str, str],
+    *,
+    source_texts: Mapping[str, str] | None = None,
+    strategy: str = "",
+    fragment_length: int = DEFAULT_FRAGMENT_LENGTH,
+) -> FragmentLeakageMetric:
+    """Count ground-truth values with any surviving fragment (ADR-0013 §5).
+
+    Same conventions as :func:`leakage_metrics`: ``surfaces`` maps entity id to the
+    injected value, and a document absent from ``reduced_texts`` counts as retained,
+    because the value was demonstrably not removed.
+
+    ``source_texts`` enables the ambient exclusion described on
+    :class:`FragmentLeakageMetric`. Without it every surviving window counts, which
+    overstates leakage wherever a value shares four letters with ordinary prose.
+    """
+    ambient = _ambient_texts(truths, source_texts) if source_texts is not None else {}
+    retained = 0
+    total = 0
+    for truth in truths:
+        total += 1
+        surface = surfaces.get(truth.entity_id)
+        reduced = reduced_texts.get(truth.document_id)
+        if surface is None or reduced is None:
+            retained += 1
+            continue
+        background = ambient.get(truth.document_id, "")
+        if any(
+            window in reduced
+            for window in _fragment_windows(surface, fragment_length)
+            if window not in background
+        ):
+            retained += 1
+    return FragmentLeakageMetric(
+        retained=retained,
+        total=total,
+        fragment_length=fragment_length,
         strategy=strategy,
     )
 

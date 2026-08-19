@@ -49,6 +49,7 @@ __all__ = [
     "GateResult",
     "evaluate_gates",
     "load_gate_file",
+    "load_measured_strategy",
 ]
 
 #: Gate values are written at three decimals — the same precision the benchmark table
@@ -254,6 +255,37 @@ def _evaluate_one(rows: Sequence[MetricRow], gate: Gate) -> GateResult:
     return GateResult(
         gate=gate, passed=True, reason="within bounds", observed=observed, support=support
     )
+
+
+def load_measured_strategy(path: Path) -> str:
+    """The reduction strategy the file's floors were measured on.
+
+    Leakage is defined per strategy (ADR-0013 §5), so a gate value is meaningful only
+    against a run using the same strategy. The chain is guarded at the data level —
+    the gate set is selected by the chain the run actually used — and this gives the
+    caller what it needs to guard the strategy the same way, rather than trusting a
+    CLI flag that a config-level ``reducer:`` setting would bypass.
+
+    A file that does not record it is refused: comparing against an unknown baseline
+    is the silent wrongness this module exists to prevent.
+    """
+    if not path.is_file():
+        raise GateConfigurationError(f"benchmark gate file not found: {path}")
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise GateConfigurationError(
+            f"file {str(path)!r}: invalid YAML ({exc.__class__.__name__})"
+        ) from exc
+    measured = loaded.get("measured") if isinstance(loaded, dict) else None
+    strategy = measured.get("strategy") if isinstance(measured, dict) else None
+    if not isinstance(strategy, str) or not strategy:
+        raise GateConfigurationError(
+            f"file {str(path)!r}: 'measured.strategy' is not recorded. Gate values are "
+            "measured under one reduction strategy and mean nothing under another "
+            "(ADR-0013 §5); record the strategy the floors were measured on"
+        )
+    return strategy
 
 
 def load_gate_file(path: Path, gate_set: str) -> tuple[Gate, ...]:

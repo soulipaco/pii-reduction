@@ -12,6 +12,7 @@ from pii_reduction.evaluation import (
     TruthSpan,
     detection_metrics,
     detection_metrics_by,
+    fragment_leakage_metrics,
     iou,
     leakage_metrics,
     match_spans,
@@ -216,6 +217,105 @@ class TestLeakage:
         assert metric.strategy == "mask"
 
 
+class TestFragmentLeakage:
+    """ADR-0013 §5's second variant: a recognisable piece survived.
+
+    Two facts make the full-surface metric insufficient on its own, and each gets a
+    test here: masking deliberately retains part of the value, and a boundary error
+    can leave half a name that the exact-match metric scores as clean.
+    """
+
+    def test_a_clean_redaction_retains_nothing(self) -> None:
+        reduced = {"doc_0001": "<EMAIL> ...", "doc_0002": "... <PERSON> ..."}
+        metric = fragment_leakage_metrics(LEAK_TRUTHS, reduced, LEAK_SURFACES)
+        assert metric.retained == 0
+        assert metric.rate == 0.0
+
+    def test_a_masked_email_is_retained_although_the_full_value_is_gone(self) -> None:
+        # `ma***@example.com`: full-value leakage says clean, which is exactly the
+        # reading ADR-0013 forbids taking at face value for mask.
+        reduced = {"doc_0001": "ma***@example.com ...", "doc_0002": "... <PERSON> ..."}
+        full = leakage_metrics(LEAK_TRUTHS, reduced, LEAK_SURFACES)
+        fragment = fragment_leakage_metrics(LEAK_TRUTHS, reduced, LEAK_SURFACES)
+        assert full.leaked == 0
+        assert fragment.retained == 1
+
+    def test_a_half_redacted_name_is_visible_here_and_not_in_the_full_metric(self) -> None:
+        # The session-5 failure mode: a repair rule dropped half a name and
+        # `leakage_rate` held steady because it matches only the exact full surface.
+        reduced = {"doc_0001": "<EMAIL>", "doc_0002": "... <PERSON> Rossi ..."}
+        full = leakage_metrics(LEAK_TRUTHS, reduced, LEAK_SURFACES)
+        fragment = fragment_leakage_metrics(LEAK_TRUTHS, reduced, LEAK_SURFACES)
+        assert full.leaked == 0
+        assert fragment.retained == 1
+
+    def test_a_full_survival_is_a_superset_of_the_full_metric(self) -> None:
+        reduced = {"doc_0001": "maria@example.com", "doc_0002": "<PERSON>"}
+        full = leakage_metrics(LEAK_TRUTHS, reduced, LEAK_SURFACES)
+        fragment = fragment_leakage_metrics(LEAK_TRUTHS, reduced, LEAK_SURFACES)
+        assert fragment.retained >= full.leaked == 1
+
+    def test_a_missing_document_counts_as_retained(self) -> None:
+        metric = fragment_leakage_metrics(LEAK_TRUTHS, {"doc_0001": "<EMAIL>"}, LEAK_SURFACES)
+        assert metric.retained == 1
+
+    def test_an_ambient_fragment_is_not_evidence(self) -> None:
+        """The measured false positive this exclusion exists for.
+
+        `lukas.schneider@example.com` shares the window `chne` with the ordinary
+        German word `Rechnername`. The reducer never touched that word, so its
+        survival says nothing — with the source text supplied, it is excluded; without
+        it, it would count.
+        """
+        source = {"doc_0001": "E-Mail: lukas.schneider@example.com\nRechnername: X"}
+        reduced = {"doc_0001": "E-Mail: <EMAIL>\nRechnername: X"}
+        truths = [truth("EMAIL", 8, 35, entity_id="a")]
+        surfaces = {"a": "lukas.schneider@example.com"}
+        assert source["doc_0001"][8:35] == surfaces["a"]
+
+        naive = fragment_leakage_metrics(truths, reduced, surfaces)
+        excluded = fragment_leakage_metrics(truths, reduced, surfaces, source_texts=source)
+        assert naive.retained == 1
+        assert excluded.retained == 0
+
+    def test_a_fragment_inside_another_entity_span_still_counts(self) -> None:
+        # Ambient means "prose the reducer never touched". A second email sharing the
+        # domain is inside an entity span, so blanking the spans keeps the evidence.
+        source = {"doc_0001": "a@example.com and b@example.com"}
+        reduced = {"doc_0001": "<EMAIL> and b*@example.com"}
+        truths = [
+            truth("EMAIL", 0, 13, entity_id="a"),
+            truth("EMAIL", 18, 31, entity_id="b"),
+        ]
+        surfaces = {"a": "a@example.com", "b": "b@example.com"}
+        metric = fragment_leakage_metrics(truths, reduced, surfaces, source_texts=source)
+        # Both entities share every `example.com` window, and one copy survives, so
+        # both are retained — the masked b kept its domain, and a's domain is
+        # indistinguishable from it. Conservative in the safe direction.
+        assert metric.retained == 2
+
+    def test_a_short_surface_falls_back_to_itself(self) -> None:
+        truths = [truth("PERSON", 0, 3, entity_id="a")]
+        surfaces = {"a": "Wei"}
+        retained = fragment_leakage_metrics(truths, {"doc_0001": "... Wei ..."}, surfaces)
+        clean = fragment_leakage_metrics(truths, {"doc_0001": "<PERSON>"}, surfaces)
+        assert retained.retained == 1
+        assert clean.retained == 0
+
+    def test_windows_never_span_whitespace(self) -> None:
+        # `a R` from `Maria Rossi` says nothing recognisable; only within-token
+        # windows count.
+        truths = [truth("PERSON", 0, 11, entity_id="b")]
+        surfaces = {"b": "Maria Rossi"}
+        metric = fragment_leakage_metrics(truths, {"doc_0001": "... ia R ..."}, surfaces)
+        assert metric.retained == 0
+
+    def test_strategy_travels_with_the_number(self) -> None:
+        metric = fragment_leakage_metrics([], {}, {}, strategy="mask")
+        assert metric.strategy == "mask"
+        assert metric.rate == 0.0
+
+
 class TestOverRedaction:
     def test_surviving_tokens_score_zero(self) -> None:
         metric = over_redaction_metrics(
@@ -244,6 +344,7 @@ class TestReport:
             entity_type="EMAIL",
             document_type="*",
             difficulty_tier="*",
+            strategy="redact",
             metric_name="strict_recall",
             metric_value=1.0,
             support=51,

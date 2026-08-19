@@ -93,6 +93,13 @@ total ground-truth PII entities
 
 A system can have imperfect span F1 but still achieve low leakage if replacement covers the sensitive content. Conversely, boundary errors may leave partial leakage.
 
+Leakage is measured in two variants, and they are deliberately not one number (ADR-0013 §5):
+
+- **`leakage_rate`** — the exact full surface survives. The headline for `redact` and `pseudonymize`.
+- **`fragment_leakage_rate`** — any recognisable piece survives: a whitespace-free window of four characters of the value, excluding windows that already occur in the source document outside every entity span (a value can share four letters with ordinary prose — `…schneider@…` shares `chne` with the German *Rechnername* — and the survival of a word the reducer never touched is not evidence). For `mask` a non-zero rate is the configured behaviour, since masking retains part of the value by design; for `redact` it exposes the partial leak the full-surface match cannot see, such as half of a hard-wrapped name.
+
+Comparing a mask run's leakage against a redact run's as if they were the same metric is forbidden; the two variants carry distinct names and the strategy travels with every result so the reading cannot be confused. Measured on the committed corpus, hybrid chain: full-value leakage is 0.117 under *both* strategies — masking covers the exact surface just as redaction does — while fragment leakage is 0.117 under `redact` and 0.606 under `mask`, which is the deliberate retention (`last4`, `partial_email`) becoming visible.
+
 ### Over-redaction rate
 
 Measure how often protected negative examples or known non-PII tokens are modified.

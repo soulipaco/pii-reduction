@@ -23,10 +23,12 @@ from pii_reduction.evaluation.matching import (
 )
 from pii_reduction.evaluation.metrics import (
     DetectionMetric,
+    FragmentLeakageMetric,
     LeakageMetric,
     OverRedactionMetric,
     detection_metrics,
     detection_metrics_by,
+    fragment_leakage_metrics,
     leakage_metrics,
     over_redaction_metrics,
     precision_recall_f1,
@@ -37,6 +39,7 @@ __all__ = [
     "RELAXED",
     "STRICT",
     "DetectionMetric",
+    "FragmentLeakageMetric",
     "Gate",
     "GateConfigurationError",
     "GateReport",
@@ -50,6 +53,7 @@ __all__ = [
     "detection_metrics",
     "detection_metrics_by",
     "evaluate_gates",
+    "fragment_leakage_metrics",
     "iou",
     "leakage_metrics",
     "load_gate_file",
