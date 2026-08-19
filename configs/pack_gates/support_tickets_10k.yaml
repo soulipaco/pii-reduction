@@ -1,0 +1,132 @@
+# Regression gates for the 10,000-document `support_tickets` pack — Increment E's
+# scale baseline (docs/16_BENCHMARK_REPORT_10K.md).
+#
+# A NEW gate set on its own corpus, like every pack gate set: the synthetic floors in
+# `configs/benchmark_gates.yaml` and the 200-document pack floors are untouched by
+# these numbers. Run on demand — building the pack needs a download (ADR-0017) and CI
+# is deliberately offline:
+#
+#   pii-reduction build-pack support_tickets --documents 10000 --out demo/packs/support_tickets_10k
+#   pii-reduction benchmark --corpus demo/packs/support_tickets_10k \
+#       --gates configs/pack_gates/support_tickets_10k.yaml
+#   pii-reduction benchmark --corpus demo/packs/support_tickets_10k \
+#       --chain deterministic_presidio --gates configs/pack_gates/support_tickets_10k.yaml
+#
+# No wall-clock gate exists or may be added here (ADR-0009): the report publishes
+# rows/s as context, and a run that took twice as long with the same quality passes.
+
+version: 1
+
+measured:
+  pack: support_tickets at 10000 documents (30000 entities, 2079 protected tokens, en, tier 1)
+  source: bitext/Bitext-customer-support-llm-chatbot-training-dataset
+  source_revision: 430d1a89bd93bd1fa23c16f29dd53e73f0087443
+  seed: 42
+  splits: all (dev + calibration + test)
+  strategy: redact
+  date: 2026-08-19
+  session: 6
+  versions:
+    presidio-analyzer: 2.2.364
+    spacy: 3.8.15
+    en_core_web_md: 3.8.0
+    xx_ent_wiki_sm: 3.8.0
+
+gate_sets:
+
+  deterministic_only:
+    description: >
+      The model-free chain at scale. Precision is capped at 0.999 by the source
+      corpus itself: 21 of Bitext's own example addresses are correctly detected and
+      charged as false positives because the manifest does not own them
+      (docs/16_BENCHMARK_REPORT_10K.md §1) — a property of the measurement, not the
+      engine, and invisible at 200 documents. The fragment floor sits above the
+      full-value floor because email fragments survive through leaked names the
+      chain cannot detect (§2).
+    gates:
+      - name: email_strict_recall
+        metric: strict_recall
+        entity_type: EMAIL
+        min: 1.000
+        support: 10000
+      - name: phone_strict_recall
+        metric: strict_recall
+        entity_type: PHONE
+        min: 1.000
+        support: 10000
+      - name: phone_strict_precision
+        metric: strict_precision
+        entity_type: PHONE
+        min: 1.000
+        support: 10000
+      - name: email_strict_precision
+        metric: strict_precision
+        entity_type: EMAIL
+        min: 0.998
+        support: 10000
+      - name: overall_strict_precision
+        metric: strict_precision
+        min: 0.999
+        support: 30000
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.800
+        support: 30000
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.333
+        support: 30000
+      - name: fragment_leakage_rate
+        metric: fragment_leakage_rate
+        max: 0.373
+        support: 30000
+      - name: over_redaction_rate
+        metric: over_redaction_rate
+        max: 0.000
+        support: 2079
+
+  deterministic_presidio:
+    description: >
+      The hybrid chain at scale: recall 1.000 on 30,000 entities, leakage and
+      fragment leakage both 0.000, over-redaction 0.000 across 2,079 protected
+      tokens. The only errors are precision — spans in public prose no manifest
+      owns.
+    gates:
+      - name: overall_strict_f1
+        metric: strict_f1
+        min: 0.998
+        support: 30000
+      - name: overall_strict_recall
+        metric: strict_recall
+        min: 1.000
+        support: 30000
+      - name: overall_strict_precision
+        metric: strict_precision
+        min: 0.996
+        support: 30000
+      - name: person_strict_recall
+        metric: strict_recall
+        entity_type: PERSON
+        min: 1.000
+        support: 10000
+      - name: person_strict_precision
+        metric: strict_precision
+        entity_type: PERSON
+        min: 0.989
+        support: 10000
+      - name: leakage_rate
+        metric: leakage_rate
+        max: 0.000
+        support: 30000
+      - name: fragment_leakage_rate
+        metric: fragment_leakage_rate
+        max: 0.000
+        support: 30000
+      - name: document_clean_rate
+        metric: document_clean_rate
+        min: 1.000
+        support: 10000
+      - name: over_redaction_rate
+        metric: over_redaction_rate
+        max: 0.000
+        support: 2079

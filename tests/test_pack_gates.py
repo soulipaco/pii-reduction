@@ -24,6 +24,11 @@ pytestmark = pytest.mark.unit
 
 PACK_GATE_DIR = REPO_ROOT / "configs" / "pack_gates"
 
+#: Gate files that describe a size variant of a pack rather than a PackSpec of their
+#: own. Enumerated explicitly so the loader coverage below cannot silently skip a
+#: file that exists on disk but matches no spec name.
+VARIANT_GATE_FILES = {"support_tickets_10k": "bitext_customer_support"}
+
 
 class TestThePackGateFiles:
     """A pack's gates are a new gate set on its own corpus, never a replacement.
@@ -34,7 +39,7 @@ class TestThePackGateFiles:
     files, not the numbers — the numbers need the pack, and the pack needs the network.
     """
 
-    @pytest.mark.parametrize("pack", sorted(PACKS))
+    @pytest.mark.parametrize("pack", sorted(PACKS) + sorted(VARIANT_GATE_FILES))
     @pytest.mark.parametrize("gate_set", ["deterministic_only", "deterministic_presidio"])
     def test_every_pack_gate_file_loads_for_every_chain(self, pack: str, gate_set: str) -> None:
         gates = load_gate_file(PACK_GATE_DIR / f"{pack}.yaml", gate_set)
@@ -58,6 +63,31 @@ class TestThePackGateFiles:
         entry = load_registry(REPO_ROOT / "demo" / "registry.yaml")[PACKS[pack].dataset]
         measured = read_yaml(PACK_GATE_DIR / f"{pack}.yaml")["measured"]
         assert measured["source_revision"] == entry.require_retrieval().revision
+
+    def test_no_gate_file_exists_without_coverage_here(self) -> None:
+        # A file on disk that neither PACKS nor VARIANT_GATE_FILES names would be
+        # loaded by nobody and could rot unnoticed — the exact failure this module
+        # exists to catch.
+        on_disk = {path.stem for path in PACK_GATE_DIR.glob("*.yaml")}
+        covered = set(PACKS) | set(VARIANT_GATE_FILES)
+        assert on_disk == covered, f"uncovered gate files: {sorted(on_disk ^ covered)}"
+
+    def test_the_10k_variant_pins_the_same_source_revision(self) -> None:
+        # A variant is the same corpus at a different size; if its pin drifts from the
+        # registry's, its floors were measured on bytes nobody can rebuild.
+        entry = load_registry(REPO_ROOT / "demo" / "registry.yaml")["bitext_customer_support"]
+        measured = read_yaml(PACK_GATE_DIR / "support_tickets_10k.yaml")["measured"]
+        assert measured["source_revision"] == entry.require_retrieval().revision
+        assert measured["seed"] == DEFAULT_SEED
+
+    def test_no_variant_gate_file_carries_a_wall_clock_gate(self) -> None:
+        # ADR-0009, stated at the exact place a throughput floor would be tempting:
+        # the 10k report publishes rows/s beside these floors, and the floor must
+        # never follow the number into the gate file.
+        for variant in VARIANT_GATE_FILES:
+            for gate_set in ("deterministic_only", "deterministic_presidio"):
+                for gate in load_gate_file(PACK_GATE_DIR / f"{variant}.yaml", gate_set):
+                    assert "rows" not in gate.metric and "second" not in gate.metric
 
     def test_a_pack_with_no_protected_tokens_has_no_over_redaction_gate(self) -> None:
         """A gate that measures nothing must never be green (ADR-0009).

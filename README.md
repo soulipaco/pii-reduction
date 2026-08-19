@@ -323,7 +323,7 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 - **Language-aware processing:** `docs/05_MULTILINGUAL_STRATEGY.md`
 - **Configuration model:** `docs/06_CONFIGURATION_CONTRACT.md`
 - **Databricks execution model:** `docs/07_DATABRICKS_RUNTIME.md`
-- **Metrics and benchmarking:** `docs/08_EVALUATION_BENCHMARKING.md`
+- **Metrics and benchmarking:** `docs/08_EVALUATION_BENCHMARKING.md`; the 10k-document two-chain comparison is `docs/16_BENCHMARK_REPORT_10K.md`
 - **Security and privacy:** `docs/09_SECURITY_PRIVACY_GOVERNANCE.md`
 - **Test strategy:** `docs/10_TESTING_QA.md`
 - **Implementation roadmap:** `docs/11_ROADMAP.md`

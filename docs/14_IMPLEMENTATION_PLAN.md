@@ -269,15 +269,24 @@ hold.
 - **Exit:** each demo pack reproducible from documented commands; provenance
   registry complete; injected ground truth validates against documents.
 
-### E — Benchmark framework hardening (roadmap Phase 5)
+### E — Benchmark framework hardening (roadmap Phase 5) — **complete, see §8**
 - Slice metrics by document type; runtime metrics (cold/warm init, rows/sec);
   Markdown benchmark report generator; benchmark run metadata (config hash,
   model versions); splits are 20% dev / 20% calibration / 60% test per `docs/02`
   and ADR-0011 — thresholds are calibrated on the **calibration split only**, then
   locked, and the test split is reported exactly once (`AGENTS.md` benchmark
   integrity).
-- **Exit:** two chains compared end-to-end on a generated 10k-row pack with a
-  committed report; CI regression gate values chosen from this baseline (ADR-0009).
+- **Exit: met** (session 6). Two chains compared end-to-end on a 10,000-document
+  pack, committed report at `docs/16_BENCHMARK_REPORT_10K.md`, gate values chosen
+  from that baseline in `configs/pack_gates/support_tickets_10k.yaml`. Two written
+  deviations from the wording above: "cold/warm init" became process-time
+  measurement recorded as such, because model loading is lazy and the code has no
+  init phase to time separately; and the 10k gates run on demand rather than in CI,
+  because building the pack needs a download and CI is deliberately offline
+  (ADR-0017) — the CI floors remain `configs/benchmark_gates.yaml`, which now also
+  gate the fragment-leakage variant. Threshold calibration turned out to be a
+  null operation with reasons (§8): every score is a recognizer constant, so the
+  thresholds were reviewed and locked rather than moved.
 
 ### F — Databricks execution (roadmap Phase 6)
 - Via Databricks Connect against the authenticated workspace (ADR-0006; local JDK
@@ -354,6 +363,7 @@ Last updated: session 6 (2026-08-18), after Increment D (Q3) and the Greek diagn
 | D | `synthetic/fetch.py`, `synthetic/public.py`, `synthetic/packs.py`, `fetch-dataset` + `build-pack`, three demo packs and their gate sets (ADR-0017, ADR-0018) | 807 default / 73 integration (799 when D first landed; the audit-fix commit added 8) |
 | Q4 | Greek PERSON diagnosed: span absorption, label confusion, άνω τελεία (ADR-0019). No number moved — the corpus is deliberately not made easier | 809 default / 87 integration |
 | E (part) | ADR-0013 §5's two leakage variants: `fragment_leakage_rate` beside `leakage_rate` (now gated: 0.433 det / 0.117 hybrid), `strategy` in the metric-row grain, `--strategy` on the CLI, `with_reducer`; gates compare the run's strategy to the file's recorded one at the data level | 828 default / 87 integration |
+| E | Run provenance (`RunMetadata` + `RuntimeMetric` on the outcome, config hash + rows/s in the summary), threshold calibration reviewed on the calibration split and locked (constants — nothing to tune), the one-time test-split read, and the 10k-document two-chain comparison with its own gate set (`docs/16_BENCHMARK_REPORT_10K.md`, `configs/pack_gates/support_tickets_10k.yaml`) | 838 default / 87 integration |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 

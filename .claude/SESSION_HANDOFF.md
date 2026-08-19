@@ -1424,3 +1424,74 @@ and record *what the model returned instead* — exact / wrong label / wrong spa
 nothing — rather than only whether it was right. The "wrong span" column is what turned
 a five-year-old-sounding "Greek is weak" into three separate, actionable bugs, and it is
 the same column that solved Q2.
+
+---
+
+## Session 6 (overnight continuation) — 2026-08-19 — Increment E complete
+
+Worked autonomously by request; the user reviews this in the morning. Commits
+`5175a56` (E1), `4fb13eb` (E2), and the E3 commit that follows this file. Every
+commit was audited (privacy + architecture) before landing, and both auditors
+reproduced the published numbers independently.
+
+### Start here (session 7) — supersedes the block above
+
+**State:** Increments D and E complete, Q4 answered. The queue in plan §8 is empty;
+next is **Increment F (Databricks Connect)** per the roadmap — deliberately not
+started unattended, since it runs against the authenticated workspace. The other
+open thread is ADR-0019's **mechanism-2 measurement** (what would requesting Greek
+`LOC`/`ORG`/`MISC` and reconciling them do to leakage and over-redaction?), scoped
+in plan §8 Q4's follow-ups.
+
+**Leakage is two numbers now (ADR-0013 §5, E1).** `fragment_leakage_rate` counts any
+surviving whitespace-free 4-char window of a value, minus windows occurring in the
+source text outside entity spans — ambient prose is not evidence (`chne` in
+`Rechnername` was the false positive that forced that exclusion, now a test).
+Mask: 0.922 det / 0.606 hybrid — the deliberate retention made visible. Redact:
+fragment == full on the committed corpus, pinned by test AND gate floors. The
+strategy is in the metric-row grain, and gates compare the run's strategy to the
+file's recorded `measured.strategy` at the data level — a config-level
+`reducer: mask` cannot slip past a flag check.
+
+**Calibration was a null operation with reasons (E2).** Every score is a recognizer
+constant (det 1.0, spaCy NER flat 0.85 for TP and FP alike — 19/19 on the
+calibration split). Thresholds reviewed and locked, not moved; provenance travels as
+`provider=note` in `RunMetadata.threshold_calibration`, and the note feeds the
+config fingerprint — rewording it changes `config_hash`, documented in docs/06.
+**The test split was read once**: dev 0.875 / calibration 0.882 / test 0.921, test
+above the working splits — the direction that says nothing was tuned onto it.
+
+**The 10k comparison is `docs/16_BENCHMARK_REPORT_10K.md` (E3)**, with its own gate
+set (`configs/pack_gates/support_tickets_10k.yaml`, on-demand like all pack gates).
+Two findings only scale could show: precision is structurally capped by the source
+corpus itself (21 of Bitext's own example addresses correctly detected, charged as
+FPs — the benign form of ADR-0018's contaminant), and the fragment metric sees
+cross-entity recovery (det fragment 0.373 > full 0.333: email windows surviving
+inside leaked names, because the pool derives locals from names — as reality does).
+Throughput: ~2,147 det vs ~29 hybrid rows/s on ~600-char documents (~74×); context,
+never gates.
+
+**Greek span-absorption remedy: scoped, unshippable, recorded (plan §8 Q4
+follow-ups).** Colon-trim fires zero times (absorbed-label spans arrive `MISC`/`LOC`
+and are dropped before PERSON repair sees them); leading-token-trim can always be
+cutting a real name's first token — the invisible error. Tier-4 absorption costs
+metrics and a swallowed verb, not privacy: the name IS redacted. Next Greek step is
+the mechanism-2 measurement, not more span repair.
+
+### Traps encountered, for whoever works nights here
+
+- **Wall-clock is contamination-prone.** The first hybrid 10k measured 5 rows/s
+  because the box was simultaneously running test suites and audits; the quiet
+  re-run measured 29. Runtime numbers say so in the report and may never be gated
+  (ADR-0009).
+- **The harness collapses `
+` inside bash heredocs.** A `"...
+..."` in a patch
+  script arrives as a real newline and breaks the written file (twice this session:
+  a test string, a ` ` literal). Write files with the editor tools, not
+  heredoc-driven patch scripts, when a string literal contains escapes.
+- **Auditors stall sometimes** (infrastructure watchdog, 600s). Resume them with a
+  message — their context survives and they finish in minutes.
+- **Sequence audits against a frozen diff.** Both E1 auditors reviewed the tree
+  while I kept editing adjacent files for E2; their line references survived, but
+  the clean way is: freeze slice, audit, fix, commit, then start the next slice.
