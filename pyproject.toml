@@ -48,8 +48,14 @@ parquet = [
   "pyarrow>=14",
 ]
 # Version selected against the workspace runtime at Increment F (ADR-0006).
+# Lives in its OWN venv, never the core one: the client pins pyspark and couples to
+# the server runtime, and the client's Python minor must match it (ADR-0006, amended
+# session 7). 15.4 LTS pairs with Python 3.11; 16.x with 3.12. Both handshake with
+# versionless serverless; use the newest the local Python allows:
+#   uv venv .venv-dbx --python 3.12
+#   VIRTUAL_ENV=.venv-dbx uv pip install -e ".[databricks]"
 databricks = [
-  "databricks-connect",
+  "databricks-connect>=15.4",
 ]
 dev = [
   "pytest>=8.0",
@@ -109,5 +115,12 @@ ignore_missing_imports = true
 # developer machine with the extras installed and fails in the push tier that
 # deliberately installs neither — which is how CI found it on the first real run.
 [[tool.mypy.overrides]]
-module = ["presidio_analyzer", "presidio_analyzer.*", "lingua", "lingua.*"]
+module = [
+  "presidio_analyzer",
+  "presidio_analyzer.*",
+  "lingua",
+  "lingua.*",
+  "databricks.connect",
+  "databricks.connect.*",
+]
 ignore_missing_imports = true

@@ -28,6 +28,26 @@ Workspace host/IDs come from CLI profiles or env at runtime — never committed
 `pandas>=1.5,<3` is pinned in core **now** so the local baseline never drifts onto
 a pandas that Spark-parity work cannot use.
 
+**Amended (session 7, Increment F).** The decision held with three facts the
+original could not know:
+
+1. **The workspace is serverless-only** — classic cluster creation is refused
+   ("no associated worker environments"), so Databricks Connect targets serverless
+   compute. Client generations 15.4 (Python 3.11) and 16.4 (Python 3.12) both
+   handshake with versionless serverless; the dedicated venv the isolated extra
+   anticipated is real (`uv venv .venv-dbx --python 3.12`), and the extra now pins
+   `databricks-connect>=15.4`.
+2. **Serverless Python-UDF sandboxes are broken on this workspace's channel**
+   (`ISOLATION_STARTUP_FAILURE`: the aarch64 image's own Python fails to exec —
+   Databricks-side, reproducible, client-version-independent). The `mapInPandas`
+   path is therefore shipped and proven at the function level in the default tier,
+   and watched by a `databricks`-marked test that skips with the incident name and
+   starts asserting distributed parity the day the sandbox works.
+3. **Parity was met on the driver path**: corpus up as Delta, read through the
+   Spark source adapter, the byte-identical local `Pipeline.process`, Delta out,
+   read back — output-hash equality with the local run, plus audit and run-metrics
+   Delta tables that carry metadata only.
+
 ## Consequences
 
 - `databricks`-marked tests require credentials and are excluded from CI

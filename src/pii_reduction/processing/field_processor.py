@@ -24,7 +24,28 @@ from pii_reduction.parsers.base import BaseParser
 from pii_reduction.providers.base import BaseProvider
 from pii_reduction.reducers.base import BaseReducer
 
-__all__ = ["FieldOutcome", "FieldProcessor", "ProviderChain"]
+__all__ = ["AUDIT_COLUMNS", "FieldOutcome", "FieldProcessor", "ProviderChain"]
+
+#: The complete audit-row schema, in emission order. Public because the Delta output
+#: path needs to write a schema-stable empty audit table when a run detects nothing,
+#: and the parity test asserts the written table carries exactly these columns —
+#: an exact set rather than a denylist, so a future field carrying raw text under a
+#: new name cannot slip past the metadata-only guarantee (AGENTS.md rule 8).
+AUDIT_COLUMNS = (
+    "run_id",
+    "row_id",
+    "column_name",
+    "segment_id",
+    "segment_start",
+    "entity_type",
+    "start",
+    "end",
+    "score",
+    "provider",
+    "recognizer",
+    "language",
+    "resolution_rule",
+)
 
 
 @dataclass(frozen=True)

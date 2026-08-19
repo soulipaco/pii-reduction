@@ -363,6 +363,7 @@ Last updated: session 6 (2026-08-18), after Increment D (Q3) and the Greek diagn
 | D | `synthetic/fetch.py`, `synthetic/public.py`, `synthetic/packs.py`, `fetch-dataset` + `build-pack`, three demo packs and their gate sets (ADR-0017, ADR-0018) | 807 default / 73 integration (799 when D first landed; the audit-fix commit added 8) |
 | Q4 | Greek PERSON diagnosed: span absorption, label confusion, άνω τελεία (ADR-0019). No number moved — the corpus is deliberately not made easier | 809 default / 87 integration |
 | E (part) | ADR-0013 §5's two leakage variants: `fragment_leakage_rate` beside `leakage_rate` (now gated: 0.433 det / 0.117 hybrid), `strategy` in the metric-row grain, `--strategy` on the CLI, `with_reducer`; gates compare the run's strategy to the file's recorded one at the data level | 828 default / 87 integration |
+| F | `databricks/` package (see the F section below) — parity met on the workspace, distributed path shipped and infra-blocked, audits applied (run identity across warm workers, exact-set audit-schema assertion, schema-drift test, Spark-free guard extended) | 854 default / 90 deselected incl. 3 databricks |
 | E | Run provenance (`RunMetadata` + `RuntimeMetric` on the outcome, config hash + rows/s in the summary), threshold calibration reviewed on the calibration split and locked (constants — nothing to tune), the one-time test-split read, and the 10k-document two-chain comparison with its own gate set (`docs/16_BENCHMARK_REPORT_10K.md`, `configs/pack_gates/support_tickets_10k.yaml`) | 838 default / 87 integration |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
@@ -805,13 +806,56 @@ leakage and over-redaction?), not more span repair.
 work cannot touch it. But 2 of 8 do go silent in the tier-3 `Από:` form, so better
 detection would move tier 3; it is simply the smallest of the three effects.
 
+#### Increment F — Databricks execution — **complete on the driver path; distributed path infra-blocked**
+
+Run against the real workspace (serverless-only — classic cluster creation is
+refused, so ADR-0006's Connect decision was the only path, now amended with what
+was found).
+
+**Exit criterion met:** local vs Databricks parity on the shared fixture — the
+committed corpus's plain documents went up as a Delta table, were read back through
+`SparkTableSource`, processed by the *byte-identical* local `Pipeline.process`,
+written to Delta by `DeltaTableOutput`, read back, and the reduced column hashes
+equal the local run's. Audit and run-metrics Delta tables written and verified
+metadata-only (no surface, no text — AGENTS.md rule 8). The parity tests create one
+throwaway schema and drop it afterwards. `databricks`-marked tests never run in CI.
+
+**No per-row model loading:** the `mapInPandas` partition processor builds the
+pipeline once per worker via a config-hash-keyed cache, and that init-once property
+is asserted by default-tier unit tests driving the function with plain iterators —
+no Spark required, so the Databricks path's logic is regression-guarded on every
+push even though the workspace itself never is.
+
+**The distributed path produces the reduced frame only** — per-worker audit rows
+and run metrics are discarded; fanning them out of `mapInPandas` is a second output
+channel, deliberately out of scope for v1. A run needing the audit/metrics Delta
+tables uses `run_driver`. Run identity is driver-generated and part of the worker
+cache key, so one distributed run stamps one `pii_run_id` and a warm worker cannot
+stamp a previous job's id onto a new one.
+
+**The distributed path is also shipped but cannot execute on this workspace:** serverless
+Python-UDF sandboxes fail server-side (`ISOLATION_STARTUP_FAILURE` — the channel's
+aarch64 image cannot exec its own Python; reproduced across client generations 15.4
+and 16.4, so it is Databricks infrastructure, not client skew). A `databricks`-marked
+test watches it: it skips today naming the incident, and asserts real distributed
+parity with no code change the day the sandbox works.
+
+Environment facts recorded for reuse: dedicated venv (`.venv-dbx17`, Python 3.12,
+`databricks-connect` 16.4) per ADR-0006's isolation; profile via
+`DATABRICKS_CONFIG_PROFILE` only; the extra pins `databricks-connect>=15.4`.
+
 ### After the queue
 
-`docs/11_ROADMAP.md` order still holds: Increment E (benchmark hardening, split
-discipline, mask-vs-redact leakage variants per ADR-0013 §5), then F (Databricks
-Connect). Two parked ideas with their rationale are in the session-3 handoff:
-MLflow trace redaction, and GLiNER for the Greek gap — the latter subject to
-**ADR-0015 (CPU-only)**.
+The `docs/11_ROADMAP.md` build order (…, E, F) is **complete through Phase 6**. What
+remains, none of it sequenced yet:
+
+- **The Greek decision** (plan §8 Q4 follow-ups): token-level coverage surgery inside
+  promoted spans — measured, unshipped, waiting on a deliberate call.
+- **Distributed-path re-verification** the day the workspace's serverless sandbox is
+  fixed: the databricks-marked test flips from skip to assertion by itself.
+- Two parked ideas with their rationale in the session-3 handoff: MLflow trace
+  redaction, and GLiNER for the Greek gap — the latter subject to **ADR-0015
+  (CPU-only)**.
 
 Also open from Increment D: the `incident_notes` pack (ADR-0010's third family), and a
 permissively-licensed public transcript corpus free of real PII, to replace the one

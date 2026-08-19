@@ -46,7 +46,7 @@ def test_core_layers_import_without_any_provider_extra() -> None:
     code = (
         "import sys, pii_reduction.config, pii_reduction.contracts, "
         "pii_reduction.entities, pii_reduction.providers, pii_reduction.parsers, "
-        "pii_reduction.reducers, pii_reduction.processing\n"
+        "pii_reduction.reducers, pii_reduction.processing, pii_reduction.databricks\n"
         "loaded = {name.split('.')[0] for name in sys.modules}\n"
         f"print(','.join(sorted(loaded & set({list(OPTIONAL_MODULES)!r}))))"
     )

@@ -1506,3 +1506,40 @@ the mechanism-2 measurement, not more span repair.
 - **Sequence audits against a frozen diff.** Both E1 auditors reviewed the tree
   while I kept editing adjacent files for E2; their line references survived, but
   the clean way is: freeze slice, audit, fix, commit, then start the next slice.
+
+---
+
+## Session 7 — 2026-08-19 — Increment F: Databricks execution
+
+User authorized both open decisions in plain terms; the Greek call went to
+"hold until zero damage" (recorded, nothing shipped) and Databricks went ahead.
+
+**Increment F's exit criterion is met on the real workspace.** The corpus went up as
+a Delta table, came back through `SparkTableSource`, was processed by the
+byte-identical local `Pipeline.process`, landed via `DeltaTableOutput`, and the
+reduced column hashes equal the local run's. Audit and run-metrics Delta tables
+verified metadata-only. The parity tests build one throwaway schema and drop it.
+
+**Two workspace facts that shape everything:**
+
+1. **Serverless-only.** Classic cluster creation is refused ("no associated worker
+   environments"). ADR-0006's Connect decision was the only path; amended with the
+   findings.
+2. **Serverless Python-UDF sandboxes are broken on this workspace's channel**
+   (`ISOLATION_STARTUP_FAILURE`: the aarch64 image cannot exec its own Python).
+   Reproduced across client 15.4/py3.11 and 16.4/py3.12 — Databricks infra, not
+   client skew. The `mapInPandas` path is shipped, its init-once and parity
+   semantics are unit-tested WITHOUT Spark in the default tier, and a
+   databricks-marked test skips today naming the incident and asserts distributed
+   parity automatically when the sandbox is fixed. Re-check occasionally.
+
+**Environment:** `.venv-dbx17` (Python 3.12, databricks-connect 16.4) — the
+dedicated venv ADR-0006 anticipated; the extra pins `databricks-connect>=15.4` with
+the Python-minor coupling documented in pyproject. Profile via
+`DATABRICKS_CONFIG_PROFILE` (contact-center-portfolio used for parity); never a
+host in code — `get_session` deliberately has no host/token parameters.
+
+**Run the workspace tests with:**
+```
+DATABRICKS_CONFIG_PROFILE=<profile> .venv-dbx17/Scripts/python.exe -m pytest tests/test_databricks_parity.py -m databricks -o addopts=""
+```
