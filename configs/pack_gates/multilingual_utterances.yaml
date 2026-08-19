@@ -36,7 +36,7 @@ measured:
   # commit that follows it, because a commit cannot name its own hash. Checking
   # out this hash, rebuilding the pack from the pinned source and re-running must
   # reproduce the floors below.
-  commit: 96eae02  # session-6 code; session-8 hash recorded in the commit that follows ADR-0020
+  commit: 4f3716c  # ADR-0020; the deterministic_only floors still reproduce at 96eae02
   versions:
     presidio-analyzer: 2.2.364
     spacy: 3.8.15
