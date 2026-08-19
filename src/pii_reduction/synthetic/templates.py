@@ -12,8 +12,13 @@ Tiers follow ``docs/02_PUBLIC_DATA_STRATEGY.md``:
 
 Placeholders in braces are replaced by the injector, which records the exact span of
 each replacement in the emitted string. ``PERSON``/``EMAIL``/``PHONE`` become ground
-truth; ``TICKET``/``KB``/``MACHINE``/``VERSION``/``ORDER`` become protected tokens
-that must survive reduction untouched (``docs/10_TESTING_QA.md`` §6).
+truth; ``TICKET``/``KB``/``MACHINE``/``VERSION``/``ORDER``/``CHANGE``/``REQUEST``/
+``ASSET`` become protected tokens that must survive reduction untouched
+(``docs/10_TESTING_QA.md`` §6).
+
+These are the *benchmark* corpus's templates. The second profile — the incident-notes
+over-redaction stress corpus — lives in :mod:`pii_reduction.synthetic.incidents` and
+shares this placeholder vocabulary and the same generator (ADR-0022).
 """
 
 from __future__ import annotations

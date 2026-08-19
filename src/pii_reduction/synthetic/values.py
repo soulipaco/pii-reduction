@@ -135,6 +135,12 @@ class ValueProvider(Protocol):
 
     def order(self) -> SyntheticValue: ...
 
+    def change(self) -> SyntheticValue: ...
+
+    def request(self) -> SyntheticValue: ...
+
+    def asset(self) -> SyntheticValue: ...
+
 
 class PoolValueProvider:
     """Deterministic values from curated pools.
@@ -205,6 +211,34 @@ class PoolValueProvider:
     def order(self) -> SyntheticValue:
         index = self._next("order")
         return SyntheticValue(f"order_{index:04d}", f"{12000 + index * 11}")
+
+    # The three below exist for the incident-notes corpus (ADR-0022), which stresses
+    # the over-redaction gate with more identifier *shapes* than the ticket corpus
+    # carries. Shapes matter more than realism here: `is_identifier_shaped` judges a
+    # surface by its token structure, so what is being tested is whether that judgement
+    # holds across the conventions operational systems actually use.
+
+    def change(self) -> SyntheticValue:
+        index = self._next("change")
+        return SyntheticValue(f"change_{index:04d}", f"CHG{30000 + index * 17:07d}")
+
+    def request(self) -> SyntheticValue:
+        index = self._next("request")
+        return SyntheticValue(f"request_{index:04d}", f"REQ{10000 + index * 23:07d}")
+
+    def asset(self) -> SyntheticValue:
+        """A letter-prefixed asset tag, e.g. ``AST-B90029``.
+
+        Same structural family as the codes above — an upper-case prefix and a digit
+        run, which `is_identifier_shaped` classifies as an identifier because no token
+        carries a lowercase run of three. It varies the *prefix vocabulary* rather than
+        the shape; a genuinely name-like tag would need a lowercase run, and inventing
+        one to fail the heuristic would be building the corpus to prove a point.
+        """
+        index = self._next("asset")
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+        letter = alphabet[index % len(alphabet)]
+        return SyntheticValue(f"asset_{index:04d}", f"AST-{letter}{90000 + index * 29:05d}")
 
 
 def _validate_phone_pools() -> None:

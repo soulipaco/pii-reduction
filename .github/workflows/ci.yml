@@ -95,10 +95,12 @@ jobs:
         # baseline and live in one reviewed file (ADR-0009).
         run: pii-reduction benchmark --gates configs/benchmark_gates.yaml
 
-      - name: Corpus is reproducible from its seed
-        # The committed corpus is the ground truth every metric above is scored
-        # against. If regenerating it from the same seed does not reproduce it byte
+      - name: Corpora are reproducible from their seeds
+        # The committed corpora are the ground truth every metric above is scored
+        # against. If regenerating one from the same seed does not reproduce it byte
         # for byte, the gates are measuring a different corpus than the repository's.
         run: |
           pii-reduction build-corpus --out "${RUNNER_TEMP}/corpus"
           diff -r tests/fixtures/corpus "${RUNNER_TEMP}/corpus"
+          pii-reduction build-incidents --out "${RUNNER_TEMP}/incidents"
+          diff -r tests/fixtures/incidents "${RUNNER_TEMP}/incidents"

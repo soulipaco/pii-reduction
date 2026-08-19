@@ -142,6 +142,14 @@ labels are `LOCATION`, `ORGANIZATION` and `NRP`; anything else is refused, becau
 promoting `URL` or `DATE_TIME` is a category error rather than a coverage choice.
 A promoted span carries `promoted: True` in its `EntityMatch.metadata`.
 
+**Over-redaction is not 0.000 everywhere, and promotion is barely why.** On the
+identifier-dense incident-notes corpus (ADR-0022) the hybrid chain destroys 14 of
+585 protected tokens, all Greek ticket ids inside a PERSON span covering
+`Περιστατικό INC…`. Thirteen are native `PERSON` labels from the base model and
+occur with promotion disabled; exactly one is promotion-attributable. The 0.000 in
+the table below is real for the benchmark corpus and the packs and does not
+generalise to text this dense in identifiers.
+
 **It is enabled for Greek only.** Applied to every language it was measured to cost
 English PERSON precision 0.833 → 0.694 and German 0.963 → 0.839, and to take
 over-redaction off its 0.000 gate. Scoped to Greek, English and German are numerically

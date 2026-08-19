@@ -1663,7 +1663,7 @@ accumulate instead of being re-derived. Re-run occasionally:
 DATABRICKS_CONFIG_PROFILE=<profile> .venv-dbx17/Scripts/python.exe -m pytest tests/test_databricks_parity.py -m databricks -o addopts=""
 ```
 
-**903 default-tier tests** (854 + 4 layering guards + 19 promotion/scope + 26 extension), 95
+**916 default-tier tests**, 95
 deselected; **92 integration**; all six gate-set runs green — both benchmark sets on
 both chains, plus `multilingual_utterances` and `support_tickets` on both. The two touched test
 modules also pass with every optional extra hard-blocked, and `mypy src tests` caught
@@ -1820,16 +1820,72 @@ the argument, not the number, was the thing that needed to be right.
    every affected run. **Do not report a defect found through a harness you have not
    checked runs the code you think it does.**
 
-**Recorded rather than fixed:** `README.md`'s repository tree is session-0
-aspirational — it marks `configs/`, `src/` and `tests/` "to be implemented" though all
-three shipped, lists a `notebooks/` directory that does not exist, and its docs list
-stops at 13 while 14-16 exist. Fixing the one `notebooks/` line would imply the
-surrounding lines are current, which is worse than a visibly dated block. It wants a
-whole-README refresh, not a patch — noted here so the deferral does not become
-permanent by silence.
+**The README was refreshed** (its tree, status blurb, licence section and capability
+lists), and the `incident_notes` family was delivered — as something other than a pack.
+
+### The incident-notes stress corpus (ADR-0022)
+
+**The design question was the work.** `demo/registry.yaml` is the licence record for
+*public* corpora; a generated corpus has no source, licence or retrieval block, so an
+entry there would corrupt what the registry means. And a generated corpus inherits
+Increment D's own criticism — it can say nothing honest about detection realism. What
+it *can* say is whether identifiers survive, because identifier formats are conventions
+and `is_identifier_shaped` judges token structure rather than meaning. So it shipped as
+an **over-redaction stress corpus**, committed at `tests/fixtures/incidents/`, gated by
+`configs/incident_gates.yaml`, explicitly not a pack.
+
+Built because the over-redaction gate was thin: 102 tokens at 1.00/document on the
+benchmark corpus, 56 of one kind on `support_tickets`, **zero** on
+`multilingual_utterances`. It adds 585 tokens across seven kinds at 6.5/document.
+
+**It found two things immediately, which is the whole argument for it:**
+
+1. **Over-redaction is 0.024, not 0.000.** 14 Greek tier-4 ticket ids swallowed by a
+   PERSON span covering `Περιστατικό INC…`. The identifier guard passes it by design: it
+   refuses only when no token is name-like, and the Greek word is.
+
+   **I got the attribution wrong and an audit caught it.** I probed one document, saw
+   the unpromoted adapter return no span, and wrote that this was a cost of ADR-0020.
+   Re-running the *whole corpus* with `promote: []` still destroys 13 of the 14 — those
+   are native `PERSON` labels from the base model, owing nothing to either ADR. Exactly
+   one is promotion-attributable. Had that stood, a future session would have gone
+   tuning promotion to recover 1 token in 14. **Generalizing from a single document is
+   the error to watch for; re-run the corpus.**
+2. **A work-note author is never offered to a provider.** PERSON recall is 0.000 at
+   tier 4 in *all three* languages while tier 3 is 0.933-1.000. The transcript parser
+   classifies `2026-04-03 09:12:04 - Peter Novak:` as structure — correct for a role
+   label, wrong for a person. Those names cannot be redacted by any provider or repair
+   rule. Pinned by a structural test, not by the metric.
+
+**Neither is fixed here, deliberately.** A corpus that motivates a fix and validates it
+in the same commit cannot show the fix was not fitted to it. Finding 2 in particular
+collides with the reconstruction guarantee (`README.md` asks whether transcript
+reconstruction preserves speaker metadata *exactly*) and needs its own ADR.
+
+**A metric caveat fell out too:** `fragment_leakage_rate` exceeds `leakage_rate` on both
+chains here, and unlike ADR-0020's gap it is an attribution artefact — emails are
+name-derived, so a leaked PERSON carries an unrelated EMAIL's four-character windows,
+and the ambient exclusion does not remove windows sitting inside a *different*
+unredacted entity. The metric was not changed to suit a corpus introduced alongside it.
+
+**One process note.** The provenance guard added earlier this session (commit must be a
+hash, never `pending`) immediately caught the new gate file — working as designed, but
+it means the old two-commit dance would leave a red commit. Resolved by committing the
+corpus and code first, then the gate file recording *that* commit's hash. Cleaner than
+the old pattern, and worth reusing.
+
+**One near-miss worth keeping.** Adding `profile` to `meta` made
+`tests/fixtures/corpus/meta.json` stale, so the CI step that diffs a regenerated corpus
+would have gone red on push — on the *benchmark* corpus, reading as a corpus-integrity
+failure rather than a new key. No default-tier test caught it, because the
+reproducibility tests compare texts and spans and never `meta`. Found by an audit that
+actually ran the CI command. `GENERATOR_VERSION` is now `2`, which is the field that
+exists to signal exactly this.
 
 **Still open, none started:** the distributed-path re-verification whenever Databricks
-fixes the channel; the README refresh above; and
+fixes the channel; **the transcript speaker-prefix leak** (finding 2 above — it needs an
+ADR reconciling redaction with the reconstruction guarantee, and it is the most
+serious thing left open); and
 the parked ideas (`incident_notes` pack, a public transcript corpus to replace
 MultiWOZ, NOTICE emission if a pack is ever published, MLflow trace redaction, GLiNER
 under ADR-0015).

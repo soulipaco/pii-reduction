@@ -1,0 +1,721 @@
+document_id,language,document_type,tier,split,text
+inc_0001,en,plain,3,test,"Incident: INC00100000
+Configuration item: DEMO-PC-6900
+Related change: CHG0030000
+Raised by: James Whitfield
+Contact: maria.rossi@example.net
+Callback: +1 202 555 0128
+Asset tag: AST-A90000
+Knowledge article: KB000002700
+Agent build: v4.0.0
+"
+inc_0002,en,transcript,4,test,"Incident INC00100037 — work notes
+2026-04-03 09:12:04 - Peter Novak: Alert confirmed on DEMO-PC-6907; opened REQ0010000.
+2026-04-03 10:44:19 - Automation: Applied v4.1.1 under change CHG0030017.
+2026-04-03 11:31:52 - Peter N.: Caller reachable on +1 202 555 0143; see KB000002713.
+2026-04-03 12:05:40 - Service Desk: Asset AST-B90029 returned. Notify james.whitfield@example.net.
+"
+inc_0003,en,plain,3,dev,"Incident: INC00100074
+Configuration item: DEMO-PC-6914
+Related change: CHG0030034
+Raised by: James Whitfield
+Contact: helen.marsh@example.com
+Callback: +1 202 555 0120
+Asset tag: AST-C90058
+Knowledge article: KB000002726
+Agent build: v4.2.2
+"
+inc_0004,en,transcript,4,dev,"Incident INC00100111 — work notes
+2026-04-03 09:12:04 - James Whitfield: Alert confirmed on DEMO-PC-6921; opened REQ0010023.
+2026-04-03 10:44:19 - Automation: Applied v4.3.3 under change CHG0030051.
+2026-04-03 11:31:52 - Peter N.: Caller reachable on +1 202 555 0136; see KB000002739.
+2026-04-03 12:05:40 - Service Desk: Asset AST-D90087 returned. Notify maria.rossi@example.net.
+"
+inc_0005,en,plain,3,test,"Incident: INC00100148
+Configuration item: DEMO-PC-6928
+Related change: CHG0030068
+Raised by: Peter Novak
+Contact: helen.marsh@example.com
+Callback: +1 202 555 0134
+Asset tag: AST-E90116
+Knowledge article: KB000002752
+Agent build: v4.4.4
+"
+inc_0006,en,transcript,4,test,"Incident INC00100185 — work notes
+2026-04-03 09:12:04 - Grace Okafor: Alert confirmed on DEMO-PC-6935; opened REQ0010046.
+2026-04-03 10:44:19 - Automation: Applied v4.5.5 under change CHG0030085.
+2026-04-03 11:31:52 - Maria R.: Caller reachable on +1 202 555 0142; see KB000002765.
+2026-04-03 12:05:40 - Service Desk: Asset AST-F90145 returned. Notify helen.marsh@example.org.
+"
+inc_0007,en,plain,3,calibration,"Incident: INC00100222
+Configuration item: DEMO-PC-6942
+Related change: CHG0030102
+Raised by: Grace Okafor
+Contact: aisha.bello@example.com
+Callback: +1 202 555 0130
+Asset tag: AST-G90174
+Knowledge article: KB000002778
+Agent build: v4.6.6
+"
+inc_0008,en,transcript,4,test,"Incident INC00100259 — work notes
+2026-04-03 09:12:04 - James Whitfield: Alert confirmed on DEMO-PC-6949; opened REQ0010069.
+2026-04-03 10:44:19 - Automation: Applied v4.7.0 under change CHG0030119.
+2026-04-03 11:31:52 - James: Caller reachable on +1 202 555 0123; see KB000002791.
+2026-04-03 12:05:40 - Service Desk: Asset AST-H90203 returned. Notify daniel.ferreira@example.org.
+"
+inc_0009,en,plain,3,test,"Incident: INC00100296
+Configuration item: DEMO-PC-6956
+Related change: CHG0030136
+Raised by: Grace Okafor
+Contact: maria.rossi@example.net
+Callback: +1 202 555 0134
+Asset tag: AST-J90232
+Knowledge article: KB000002804
+Agent build: v4.8.1
+"
+inc_0010,en,transcript,4,test,"Incident INC00100333 — work notes
+2026-04-03 09:12:04 - James Whitfield: Alert confirmed on DEMO-PC-6963; opened REQ0010092.
+2026-04-03 10:44:19 - Automation: Applied v4.9.2 under change CHG0030153.
+2026-04-03 11:31:52 - Helen M.: Caller reachable on +1 202 555 0137; see KB000002817.
+2026-04-03 12:05:40 - Service Desk: Asset AST-K90261 returned. Notify grace.okafor@example.net.
+"
+inc_0011,en,plain,3,test,"Incident: INC00100370
+Configuration item: DEMO-PC-6970
+Related change: CHG0030170
+Raised by: Daniel Ferreira
+Contact: peter.novak@example.net
+Callback: +1 202 555 0122
+Asset tag: AST-L90290
+Knowledge article: KB000002830
+Agent build: v4.10.3
+"
+inc_0012,en,transcript,4,test,"Incident INC00100407 — work notes
+2026-04-03 09:12:04 - Maria Rossi: Alert confirmed on DEMO-PC-6977; opened REQ0010115.
+2026-04-03 10:44:19 - Automation: Applied v4.11.4 under change CHG0030187.
+2026-04-03 11:31:52 - Peter: Caller reachable on +1 202 555 0122; see KB000002843.
+2026-04-03 12:05:40 - Service Desk: Asset AST-M90319 returned. Notify peter.novak@example.com.
+"
+inc_0013,en,plain,3,dev,"Incident: INC00100444
+Configuration item: DEMO-PC-6984
+Related change: CHG0030204
+Raised by: Helen Marsh
+Contact: grace.okafor@example.org
+Callback: +1 202 555 0140
+Asset tag: AST-N90348
+Knowledge article: KB000002856
+Agent build: v4.12.5
+"
+inc_0014,en,transcript,4,test,"Incident INC00100481 — work notes
+2026-04-03 09:12:04 - Daniel Ferreira: Alert confirmed on DEMO-PC-6991; opened REQ0010138.
+2026-04-03 10:44:19 - Automation: Applied v4.13.6 under change CHG0030221.
+2026-04-03 11:31:52 - Aisha: Caller reachable on +1 202 555 0131; see KB000002869.
+2026-04-03 12:05:40 - Service Desk: Asset AST-P90377 returned. Notify peter.novak@example.net.
+"
+inc_0015,en,plain,3,test,"Incident: INC00100518
+Configuration item: DEMO-PC-6998
+Related change: CHG0030238
+Raised by: Grace Okafor
+Contact: james.whitfield@example.net
+Callback: +1 202 555 0140
+Asset tag: AST-Q90406
+Knowledge article: KB000002882
+Agent build: v4.14.0
+"
+inc_0016,en,transcript,4,test,"Incident INC00100555 — work notes
+2026-04-03 09:12:04 - Aisha Bello: Alert confirmed on DEMO-PC-7005; opened REQ0010161.
+2026-04-03 10:44:19 - Automation: Applied v4.15.1 under change CHG0030255.
+2026-04-03 11:31:52 - Peter N.: Caller reachable on +1 202 555 0134; see KB000002895.
+2026-04-03 12:05:40 - Service Desk: Asset AST-R90435 returned. Notify helen.marsh@example.org.
+"
+inc_0017,en,plain,3,test,"Incident: INC00100592
+Configuration item: DEMO-PC-7012
+Related change: CHG0030272
+Raised by: Peter Novak
+Contact: daniel.ferreira@example.com
+Callback: +1 202 555 0127
+Asset tag: AST-S90464
+Knowledge article: KB000002908
+Agent build: v4.16.2
+"
+inc_0018,en,transcript,4,test,"Incident INC00100629 — work notes
+2026-04-03 09:12:04 - Maria Rossi: Alert confirmed on DEMO-PC-7019; opened REQ0010184.
+2026-04-03 10:44:19 - Automation: Applied v4.17.3 under change CHG0030289.
+2026-04-03 11:31:52 - Daniel: Caller reachable on +1 202 555 0128; see KB000002921.
+2026-04-03 12:05:40 - Service Desk: Asset AST-T90493 returned. Notify james.whitfield@example.com.
+"
+inc_0019,en,plain,3,test,"Incident: INC00100666
+Configuration item: DEMO-PC-7026
+Related change: CHG0030306
+Raised by: Daniel Ferreira
+Contact: peter.novak@example.net
+Callback: +1 202 555 0135
+Asset tag: AST-U90522
+Knowledge article: KB000002934
+Agent build: v4.18.4
+"
+inc_0020,en,transcript,4,test,"Incident INC00100703 — work notes
+2026-04-03 09:12:04 - Helen Marsh: Alert confirmed on DEMO-PC-7033; opened REQ0010207.
+2026-04-03 10:44:19 - Automation: Applied v4.19.5 under change CHG0030323.
+2026-04-03 11:31:52 - Omar H.: Caller reachable on +1 202 555 0128; see KB000002947.
+2026-04-03 12:05:40 - Service Desk: Asset AST-V90551 returned. Notify aisha.bello@example.com.
+"
+inc_0021,en,plain,3,calibration,"Incident: INC00100740
+Configuration item: DEMO-PC-7040
+Related change: CHG0030340
+Raised by: Grace Okafor
+Contact: helen.marsh@example.net
+Callback: +1 202 555 0132
+Asset tag: AST-W90580
+Knowledge article: KB000002960
+Agent build: v4.0.6
+"
+inc_0022,en,transcript,4,calibration,"Incident INC00100777 — work notes
+2026-04-03 09:12:04 - Daniel Ferreira: Alert confirmed on DEMO-PC-7047; opened REQ0010230.
+2026-04-03 10:44:19 - Automation: Applied v4.1.0 under change CHG0030357.
+2026-04-03 11:31:52 - Peter N.: Caller reachable on +1 202 555 0136; see KB000002973.
+2026-04-03 12:05:40 - Service Desk: Asset AST-X90609 returned. Notify omar.haddad@example.com.
+"
+inc_0023,en,plain,3,test,"Incident: INC00100814
+Configuration item: DEMO-PC-7054
+Related change: CHG0030374
+Raised by: Maria Rossi
+Contact: james.whitfield@example.com
+Callback: +1 202 555 0140
+Asset tag: AST-Y90638
+Knowledge article: KB000002986
+Agent build: v4.2.1
+"
+inc_0024,en,transcript,4,test,"Incident INC00100851 — work notes
+2026-04-03 09:12:04 - Aisha Bello: Alert confirmed on DEMO-PC-7061; opened REQ0010253.
+2026-04-03 10:44:19 - Automation: Applied v4.3.2 under change CHG0030391.
+2026-04-03 11:31:52 - Helen Marsh: Caller reachable on +1 202 555 0122; see KB000002999.
+2026-04-03 12:05:40 - Service Desk: Asset AST-Z90667 returned. Notify helen.marsh@example.org.
+"
+inc_0025,en,plain,3,test,"Incident: INC00100888
+Configuration item: DEMO-PC-7068
+Related change: CHG0030408
+Raised by: Omar Haddad
+Contact: grace.okafor@example.net
+Callback: +1 202 555 0120
+Asset tag: AST-A90696
+Knowledge article: KB000003012
+Agent build: v4.4.3
+"
+inc_0026,en,transcript,4,test,"Incident INC00100925 — work notes
+2026-04-03 09:12:04 - James Whitfield: Alert confirmed on DEMO-PC-7075; opened REQ0010276.
+2026-04-03 10:44:19 - Automation: Applied v4.5.4 under change CHG0030425.
+2026-04-03 11:31:52 - Grace Okafor: Caller reachable on +1 202 555 0130; see KB000003025.
+2026-04-03 12:05:40 - Service Desk: Asset AST-B90725 returned. Notify james.whitfield@example.org.
+"
+inc_0027,en,plain,3,test,"Incident: INC00100962
+Configuration item: DEMO-PC-7082
+Related change: CHG0030442
+Raised by: Helen Marsh
+Contact: aisha.bello@example.org
+Callback: +1 202 555 0120
+Asset tag: AST-C90754
+Knowledge article: KB000003038
+Agent build: v4.6.5
+"
+inc_0028,en,transcript,4,test,"Incident INC00100999 — work notes
+2026-04-03 09:12:04 - Grace Okafor: Alert confirmed on DEMO-PC-7089; opened REQ0010299.
+2026-04-03 10:44:19 - Automation: Applied v4.7.6 under change CHG0030459.
+2026-04-03 11:31:52 - Aisha Bello: Caller reachable on +1 202 555 0123; see KB000003051.
+2026-04-03 12:05:40 - Service Desk: Asset AST-D90783 returned. Notify grace.okafor@example.net.
+"
+inc_0029,en,plain,3,test,"Incident: INC00101036
+Configuration item: DEMO-PC-7096
+Related change: CHG0030476
+Raised by: Peter Novak
+Contact: aisha.bello@example.org
+Callback: +1 202 555 0125
+Asset tag: AST-E90812
+Knowledge article: KB000003064
+Agent build: v4.8.0
+"
+inc_0030,en,transcript,4,test,"Incident INC00101073 — work notes
+2026-04-03 09:12:04 - Maria Rossi: Alert confirmed on DEMO-PC-7103; opened REQ0010322.
+2026-04-03 10:44:19 - Automation: Applied v4.9.1 under change CHG0030493.
+2026-04-03 11:31:52 - Daniel: Caller reachable on +1 202 555 0120; see KB000003077.
+2026-04-03 12:05:40 - Service Desk: Asset AST-F90841 returned. Notify james.whitfield@example.org.
+"
+inc_0031,de,plain,3,test,"Vorfall: INC00101110
+Konfigurationselement: DEMO-PC-7110
+Zugehoerige Aenderung: CHG0030510
+Gemeldet von: Katrin Wagner
+Kontakt: juergen.mueller@example.com
+Rueckruf: +49 30 23125 027
+Inventarnummer: AST-G90870
+Wissensartikel: KB000003090
+Agentenversion: v4.10.2
+"
+inc_0032,de,transcript,4,calibration,"Vorfall INC00101147 — Arbeitsnotizen
+2026-04-03 09:12:04 - Lukas Schneider: Meldung auf DEMO-PC-7117 bestaetigt; REQ0010345 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.11.3 unter Aenderung CHG0030527 verteilt.
+2026-04-03 11:31:52 - Lukas Schneider: Anrufer erreichbar unter +49 30 23125 035; siehe KB000003103.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-H90899 zurueck. Info an lukas.schneider@example.net.
+"
+inc_0033,de,plain,3,test,"Vorfall: INC00101184
+Konfigurationselement: DEMO-PC-7124
+Zugehoerige Aenderung: CHG0030544
+Gemeldet von: Anja Hoffmann
+Kontakt: anja.hoffmann@example.net
+Rueckruf: +49 30 23125 035
+Inventarnummer: AST-J90928
+Wissensartikel: KB000003116
+Agentenversion: v4.12.4
+"
+inc_0034,de,transcript,4,dev,"Vorfall INC00101221 — Arbeitsnotizen
+2026-04-03 09:12:04 - Anja Hoffmann: Meldung auf DEMO-PC-7131 bestaetigt; REQ0010368 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.13.5 unter Aenderung CHG0030561 verteilt.
+2026-04-03 11:31:52 - Katrin Wagner: Anrufer erreichbar unter +49 30 23125 039; siehe KB000003129.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-K90957 zurueck. Info an miriam.koehler@example.com.
+"
+inc_0035,de,plain,3,test,"Vorfall: INC00101258
+Konfigurationselement: DEMO-PC-7138
+Zugehoerige Aenderung: CHG0030578
+Gemeldet von: Jürgen Müller
+Kontakt: katrin.wagner@example.org
+Rueckruf: +49 30 23125 041
+Inventarnummer: AST-L90986
+Wissensartikel: KB000003142
+Agentenversion: v4.14.6
+"
+inc_0036,de,transcript,4,dev,"Vorfall INC00101295 — Arbeitsnotizen
+2026-04-03 09:12:04 - Stefan Bauer: Meldung auf DEMO-PC-7145 bestaetigt; REQ0010391 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.15.0 unter Aenderung CHG0030595 verteilt.
+2026-04-03 11:31:52 - Tobias Lang: Anrufer erreichbar unter +49 30 23125 034; siehe KB000003155.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-M91015 zurueck. Info an lukas.schneider@example.com.
+"
+inc_0037,de,plain,3,test,"Vorfall: INC00101332
+Konfigurationselement: DEMO-PC-7152
+Zugehoerige Aenderung: CHG0030612
+Gemeldet von: Jürgen Müller
+Kontakt: lukas.schneider@example.org
+Rueckruf: +49 30 23125 020
+Inventarnummer: AST-N91044
+Wissensartikel: KB000003168
+Agentenversion: v4.16.1
+"
+inc_0038,de,transcript,4,dev,"Vorfall INC00101369 — Arbeitsnotizen
+2026-04-03 09:12:04 - Jürgen Müller: Meldung auf DEMO-PC-7159 bestaetigt; REQ0010414 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.17.2 unter Aenderung CHG0030629 verteilt.
+2026-04-03 11:31:52 - Jürgen M.: Anrufer erreichbar unter +49 30 23125 022; siehe KB000003181.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-P91073 zurueck. Info an jan.becker@example.com.
+"
+inc_0039,de,plain,3,test,"Vorfall: INC00101406
+Konfigurationselement: DEMO-PC-7166
+Zugehoerige Aenderung: CHG0030646
+Gemeldet von: Lukas Schneider
+Kontakt: jan.becker@example.org
+Rueckruf: +49 30 23125 022
+Inventarnummer: AST-Q91102
+Wissensartikel: KB000003194
+Agentenversion: v4.18.3
+"
+inc_0040,de,transcript,4,calibration,"Vorfall INC00101443 — Arbeitsnotizen
+2026-04-03 09:12:04 - Jürgen Müller: Meldung auf DEMO-PC-7173 bestaetigt; REQ0010437 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.19.4 unter Aenderung CHG0030663 verteilt.
+2026-04-03 11:31:52 - Katrin Wagner: Anrufer erreichbar unter +49 30 23125 035; siehe KB000003207.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-R91131 zurueck. Info an juergen.mueller@example.net.
+"
+inc_0041,de,plain,3,test,"Vorfall: INC00101480
+Konfigurationselement: DEMO-PC-7180
+Zugehoerige Aenderung: CHG0030680
+Gemeldet von: Anja Hoffmann
+Kontakt: tobias.lang@example.com
+Rueckruf: +49 30 23125 035
+Inventarnummer: AST-S91160
+Wissensartikel: KB000003220
+Agentenversion: v4.0.5
+"
+inc_0042,de,transcript,4,test,"Vorfall INC00101517 — Arbeitsnotizen
+2026-04-03 09:12:04 - Miriam Köhler: Meldung auf DEMO-PC-7187 bestaetigt; REQ0010460 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.1.6 unter Aenderung CHG0030697 verteilt.
+2026-04-03 11:31:52 - Jürgen M.: Anrufer erreichbar unter +49 30 23125 023; siehe KB000003233.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-T91189 zurueck. Info an miriam.koehler@example.org.
+"
+inc_0043,de,plain,3,dev,"Vorfall: INC00101554
+Konfigurationselement: DEMO-PC-7194
+Zugehoerige Aenderung: CHG0030714
+Gemeldet von: Miriam Köhler
+Kontakt: miriam.koehler@example.org
+Rueckruf: +49 30 23125 043
+Inventarnummer: AST-U91218
+Wissensartikel: KB000003246
+Agentenversion: v4.2.0
+"
+inc_0044,de,transcript,4,test,"Vorfall INC00101591 — Arbeitsnotizen
+2026-04-03 09:12:04 - Jan Becker: Meldung auf DEMO-PC-7201 bestaetigt; REQ0010483 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.3.1 unter Aenderung CHG0030731 verteilt.
+2026-04-03 11:31:52 - Lukas S.: Anrufer erreichbar unter +49 30 23125 032; siehe KB000003259.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-V91247 zurueck. Info an stefan.bauer@example.com.
+"
+inc_0045,de,plain,3,dev,"Vorfall: INC00101628
+Konfigurationselement: DEMO-PC-7208
+Zugehoerige Aenderung: CHG0030748
+Gemeldet von: Jürgen Müller
+Kontakt: juergen.mueller@example.com
+Rueckruf: +49 30 23125 037
+Inventarnummer: AST-W91276
+Wissensartikel: KB000003272
+Agentenversion: v4.4.2
+"
+inc_0046,de,transcript,4,test,"Vorfall INC00101665 — Arbeitsnotizen
+2026-04-03 09:12:04 - Tobias Lang: Meldung auf DEMO-PC-7215 bestaetigt; REQ0010506 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.5.3 unter Aenderung CHG0030765 verteilt.
+2026-04-03 11:31:52 - Anja: Anrufer erreichbar unter +49 30 23125 025; siehe KB000003285.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-X91305 zurueck. Info an katrin.wagner@example.org.
+"
+inc_0047,de,plain,3,test,"Vorfall: INC00101702
+Konfigurationselement: DEMO-PC-7222
+Zugehoerige Aenderung: CHG0030782
+Gemeldet von: Jürgen Müller
+Kontakt: lukas.schneider@example.org
+Rueckruf: +49 30 23125 037
+Inventarnummer: AST-Y91334
+Wissensartikel: KB000003298
+Agentenversion: v4.6.4
+"
+inc_0048,de,transcript,4,test,"Vorfall INC00101739 — Arbeitsnotizen
+2026-04-03 09:12:04 - Lukas Schneider: Meldung auf DEMO-PC-7229 bestaetigt; REQ0010529 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.7.5 unter Aenderung CHG0030799 verteilt.
+2026-04-03 11:31:52 - Jan Becker: Anrufer erreichbar unter +49 30 23125 037; siehe KB000003311.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-Z91363 zurueck. Info an jan.becker@example.com.
+"
+inc_0049,de,plain,3,dev,"Vorfall: INC00101776
+Konfigurationselement: DEMO-PC-7236
+Zugehoerige Aenderung: CHG0030816
+Gemeldet von: Jürgen Müller
+Kontakt: anja.hoffmann@example.org
+Rueckruf: +49 30 23125 035
+Inventarnummer: AST-A91392
+Wissensartikel: KB000003324
+Agentenversion: v4.8.6
+"
+inc_0050,de,transcript,4,calibration,"Vorfall INC00101813 — Arbeitsnotizen
+2026-04-03 09:12:04 - Tobias Lang: Meldung auf DEMO-PC-7243 bestaetigt; REQ0010552 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.9.0 unter Aenderung CHG0030833 verteilt.
+2026-04-03 11:31:52 - Jürgen: Anrufer erreichbar unter +49 30 23125 021; siehe KB000003337.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-B91421 zurueck. Info an anja.hoffmann@example.org.
+"
+inc_0051,de,plain,3,test,"Vorfall: INC00101850
+Konfigurationselement: DEMO-PC-7250
+Zugehoerige Aenderung: CHG0030850
+Gemeldet von: Jan Becker
+Kontakt: miriam.koehler@example.org
+Rueckruf: +49 30 23125 034
+Inventarnummer: AST-C91450
+Wissensartikel: KB000003350
+Agentenversion: v4.10.1
+"
+inc_0052,de,transcript,4,dev,"Vorfall INC00101887 — Arbeitsnotizen
+2026-04-03 09:12:04 - Katrin Wagner: Meldung auf DEMO-PC-7257 bestaetigt; REQ0010575 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.11.2 unter Aenderung CHG0030867 verteilt.
+2026-04-03 11:31:52 - Miriam Köhler: Anrufer erreichbar unter +49 30 23125 043; siehe KB000003363.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-D91479 zurueck. Info an tobias.lang@example.com.
+"
+inc_0053,de,plain,3,calibration,"Vorfall: INC00101924
+Konfigurationselement: DEMO-PC-7264
+Zugehoerige Aenderung: CHG0030884
+Gemeldet von: Jürgen Müller
+Kontakt: katrin.wagner@example.com
+Rueckruf: +49 30 23125 021
+Inventarnummer: AST-E91508
+Wissensartikel: KB000003376
+Agentenversion: v4.12.3
+"
+inc_0054,de,transcript,4,test,"Vorfall INC00101961 — Arbeitsnotizen
+2026-04-03 09:12:04 - Jan Becker: Meldung auf DEMO-PC-7271 bestaetigt; REQ0010598 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.13.4 unter Aenderung CHG0030901 verteilt.
+2026-04-03 11:31:52 - Stefan B.: Anrufer erreichbar unter +49 30 23125 021; siehe KB000003389.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-F91537 zurueck. Info an tobias.lang@example.net.
+"
+inc_0055,de,plain,3,test,"Vorfall: INC00101998
+Konfigurationselement: DEMO-PC-7278
+Zugehoerige Aenderung: CHG0030918
+Gemeldet von: Anja Hoffmann
+Kontakt: jan.becker@example.net
+Rueckruf: +49 30 23125 022
+Inventarnummer: AST-G91566
+Wissensartikel: KB000003402
+Agentenversion: v4.14.5
+"
+inc_0056,de,transcript,4,dev,"Vorfall INC00102035 — Arbeitsnotizen
+2026-04-03 09:12:04 - Anja Hoffmann: Meldung auf DEMO-PC-7285 bestaetigt; REQ0010621 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.15.6 unter Aenderung CHG0030935 verteilt.
+2026-04-03 11:31:52 - Lukas Schneider: Anrufer erreichbar unter +49 30 23125 022; siehe KB000003415.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-H91595 zurueck. Info an juergen.mueller@example.org.
+"
+inc_0057,de,plain,3,test,"Vorfall: INC00102072
+Konfigurationselement: DEMO-PC-7292
+Zugehoerige Aenderung: CHG0030952
+Gemeldet von: Lukas Schneider
+Kontakt: juergen.mueller@example.net
+Rueckruf: +49 30 23125 039
+Inventarnummer: AST-J91624
+Wissensartikel: KB000003428
+Agentenversion: v4.16.0
+"
+inc_0058,de,transcript,4,test,"Vorfall INC00102109 — Arbeitsnotizen
+2026-04-03 09:12:04 - Jan Becker: Meldung auf DEMO-PC-7299 bestaetigt; REQ0010644 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.17.1 unter Aenderung CHG0030969 verteilt.
+2026-04-03 11:31:52 - Lukas: Anrufer erreichbar unter +49 30 23125 041; siehe KB000003441.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-K91653 zurueck. Info an stefan.bauer@example.org.
+"
+inc_0059,de,plain,3,test,"Vorfall: INC00102146
+Konfigurationselement: DEMO-PC-7306
+Zugehoerige Aenderung: CHG0030986
+Gemeldet von: Jürgen Müller
+Kontakt: stefan.bauer@example.com
+Rueckruf: +49 30 23125 028
+Inventarnummer: AST-L91682
+Wissensartikel: KB000003454
+Agentenversion: v4.18.2
+"
+inc_0060,de,transcript,4,dev,"Vorfall INC00102183 — Arbeitsnotizen
+2026-04-03 09:12:04 - Miriam Köhler: Meldung auf DEMO-PC-7313 bestaetigt; REQ0010667 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: v4.19.3 unter Aenderung CHG0031003 verteilt.
+2026-04-03 11:31:52 - Anja Hoffmann: Anrufer erreichbar unter +49 30 23125 040; siehe KB000003467.
+2026-04-03 12:05:40 - Service Desk: Inventar AST-M91711 zurueck. Info an katrin.wagner@example.org.
+"
+inc_0061,el,plain,3,test,"Περιστατικό: INC00102220
+Στοιχείο διαμόρφωσης: DEMO-PC-7320
+Σχετική αλλαγή: CHG0031020
+Καταγράφηκε από: Δημήτρης Λέκκας
+Επικοινωνία: giorgos.dimitriou@example.com
+Τηλέφωνο: +30 210 000 0034
+Κωδικός παγίου: AST-N91740
+Άρθρο γνώσης: KB000003480
+Έκδοση πράκτορα: v4.0.4
+"
+inc_0062,el,transcript,4,test,"Περιστατικό INC00102257 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Γιώργος Δημητρίου: Επιβεβαιώθηκε στο DEMO-PC-7327· ανοίχτηκε REQ0010690.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.1.5 με αλλαγή CHG0031037.
+2026-04-03 11:31:52 - Γιώργος Δημητρίου: Τηλέφωνο +30 210 000 0026· δείτε KB000003493.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-P91769 επιστράφηκε. Ενημέρωση sofia.karagianni@example.com.
+"
+inc_0063,el,plain,3,dev,"Περιστατικό: INC00102294
+Στοιχείο διαμόρφωσης: DEMO-PC-7334
+Σχετική αλλαγή: CHG0031054
+Καταγράφηκε από: Δημήτρης Λέκκας
+Επικοινωνία: giorgos.dimitriou@example.com
+Τηλέφωνο: +30 210 000 0031
+Κωδικός παγίου: AST-Q91798
+Άρθρο γνώσης: KB000003506
+Έκδοση πράκτορα: v4.2.6
+"
+inc_0064,el,transcript,4,dev,"Περιστατικό INC00102331 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Σοφία Καραγιάννη: Επιβεβαιώθηκε στο DEMO-PC-7341· ανοίχτηκε REQ0010713.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.3.0 με αλλαγή CHG0031071.
+2026-04-03 11:31:52 - Μαρία: Τηλέφωνο +30 210 000 0037· δείτε KB000003519.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-R91827 επιστράφηκε. Ενημέρωση sofia.karagianni@example.net.
+"
+inc_0065,el,plain,3,test,"Περιστατικό: INC00102368
+Στοιχείο διαμόρφωσης: DEMO-PC-7348
+Σχετική αλλαγή: CHG0031088
+Καταγράφηκε από: Ελένη Παππά
+Επικοινωνία: sofia.karagianni@example.net
+Τηλέφωνο: +30 210 000 0023
+Κωδικός παγίου: AST-S91856
+Άρθρο γνώσης: KB000003532
+Έκδοση πράκτορα: v4.4.1
+"
+inc_0066,el,transcript,4,test,"Περιστατικό INC00102405 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Μαρία Παπαδοπούλου: Επιβεβαιώθηκε στο DEMO-PC-7355· ανοίχτηκε REQ0010736.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.5.2 με αλλαγή CHG0031105.
+2026-04-03 11:31:52 - Σοφία Κ.: Τηλέφωνο +30 210 000 0023· δείτε KB000003545.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-T91885 επιστράφηκε. Ενημέρωση maria.papadopoulou@example.org.
+"
+inc_0067,el,plain,3,test,"Περιστατικό: INC00102442
+Στοιχείο διαμόρφωσης: DEMO-PC-7362
+Σχετική αλλαγή: CHG0031122
+Καταγράφηκε από: Σοφία Καραγιάννη
+Επικοινωνία: nikos.antoniou@example.net
+Τηλέφωνο: +30 210 000 0030
+Κωδικός παγίου: AST-U91914
+Άρθρο γνώσης: KB000003558
+Έκδοση πράκτορα: v4.6.3
+"
+inc_0068,el,transcript,4,calibration,"Περιστατικό INC00102479 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Νίκος Αντωνίου: Επιβεβαιώθηκε στο DEMO-PC-7369· ανοίχτηκε REQ0010759.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.7.4 με αλλαγή CHG0031139.
+2026-04-03 11:31:52 - Σοφία Καραγιάννη: Τηλέφωνο +30 210 000 0035· δείτε KB000003571.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-V91943 επιστράφηκε. Ενημέρωση sofia.karagianni@example.com.
+"
+inc_0069,el,plain,3,test,"Περιστατικό: INC00102516
+Στοιχείο διαμόρφωσης: DEMO-PC-7376
+Σχετική αλλαγή: CHG0031156
+Καταγράφηκε από: Γιώργος Δημητρίου
+Επικοινωνία: anna.vasileiou@example.org
+Τηλέφωνο: +30 210 000 0021
+Κωδικός παγίου: AST-W91972
+Άρθρο γνώσης: KB000003584
+Έκδοση πράκτορα: v4.8.5
+"
+inc_0070,el,transcript,4,test,"Περιστατικό INC00102553 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Ελένη Παππά: Επιβεβαιώθηκε στο DEMO-PC-7383· ανοίχτηκε REQ0010782.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.9.6 με αλλαγή CHG0031173.
+2026-04-03 11:31:52 - Δημήτρης Λ.: Τηλέφωνο +30 210 000 0040· δείτε KB000003597.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-X92001 επιστράφηκε. Ενημέρωση sofia.karagianni@example.com.
+"
+inc_0071,el,plain,3,test,"Περιστατικό: INC00102590
+Στοιχείο διαμόρφωσης: DEMO-PC-7390
+Σχετική αλλαγή: CHG0031190
+Καταγράφηκε από: Κώστας Ιωάννου
+Επικοινωνία: anna.vasileiou@example.net
+Τηλέφωνο: +30 210 000 0020
+Κωδικός παγίου: AST-Y92030
+Άρθρο γνώσης: KB000003610
+Έκδοση πράκτορα: v4.10.0
+"
+inc_0072,el,transcript,4,test,"Περιστατικό INC00102627 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Γιώργος Δημητρίου: Επιβεβαιώθηκε στο DEMO-PC-7397· ανοίχτηκε REQ0010805.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.11.1 με αλλαγή CHG0031207.
+2026-04-03 11:31:52 - Γιώργος Δημητρίου: Τηλέφωνο +30 210 000 0024· δείτε KB000003623.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-Z92059 επιστράφηκε. Ενημέρωση eleni.pappa@example.org.
+"
+inc_0073,el,plain,3,dev,"Περιστατικό: INC00102664
+Στοιχείο διαμόρφωσης: DEMO-PC-7404
+Σχετική αλλαγή: CHG0031224
+Καταγράφηκε από: Μαρία Παπαδοπούλου
+Επικοινωνία: anna.vasileiou@example.com
+Τηλέφωνο: +30 210 000 0021
+Κωδικός παγίου: AST-A92088
+Άρθρο γνώσης: KB000003636
+Έκδοση πράκτορα: v4.12.2
+"
+inc_0074,el,transcript,4,calibration,"Περιστατικό INC00102701 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Σοφία Καραγιάννη: Επιβεβαιώθηκε στο DEMO-PC-7411· ανοίχτηκε REQ0010828.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.13.3 με αλλαγή CHG0031241.
+2026-04-03 11:31:52 - Δημήτρης Λ.: Τηλέφωνο +30 210 000 0031· δείτε KB000003649.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-B92117 επιστράφηκε. Ενημέρωση nikos.antoniou@example.net.
+"
+inc_0075,el,plain,3,test,"Περιστατικό: INC00102738
+Στοιχείο διαμόρφωσης: DEMO-PC-7418
+Σχετική αλλαγή: CHG0031258
+Καταγράφηκε από: Νίκος Αντωνίου
+Επικοινωνία: giorgos.dimitriou@example.org
+Τηλέφωνο: +30 210 000 0037
+Κωδικός παγίου: AST-C92146
+Άρθρο γνώσης: KB000003662
+Έκδοση πράκτορα: v4.14.4
+"
+inc_0076,el,transcript,4,test,"Περιστατικό INC00102775 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Άννα Βασιλείου: Επιβεβαιώθηκε στο DEMO-PC-7425· ανοίχτηκε REQ0010851.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.15.5 με αλλαγή CHG0031275.
+2026-04-03 11:31:52 - Μαρία Π.: Τηλέφωνο +30 210 000 0025· δείτε KB000003675.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-D92175 επιστράφηκε. Ενημέρωση maria.papadopoulou@example.org.
+"
+inc_0077,el,plain,3,dev,"Περιστατικό: INC00102812
+Στοιχείο διαμόρφωσης: DEMO-PC-7432
+Σχετική αλλαγή: CHG0031292
+Καταγράφηκε από: Ελένη Παππά
+Επικοινωνία: maria.papadopoulou@example.net
+Τηλέφωνο: +30 210 000 0030
+Κωδικός παγίου: AST-E92204
+Άρθρο γνώσης: KB000003688
+Έκδοση πράκτορα: v4.16.6
+"
+inc_0078,el,transcript,4,test,"Περιστατικό INC00102849 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Άννα Βασιλείου: Επιβεβαιώθηκε στο DEMO-PC-7439· ανοίχτηκε REQ0010874.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.17.0 με αλλαγή CHG0031309.
+2026-04-03 11:31:52 - Νίκος: Τηλέφωνο +30 210 000 0025· δείτε KB000003701.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-F92233 επιστράφηκε. Ενημέρωση giorgos.dimitriou@example.org.
+"
+inc_0079,el,plain,3,test,"Περιστατικό: INC00102886
+Στοιχείο διαμόρφωσης: DEMO-PC-7446
+Σχετική αλλαγή: CHG0031326
+Καταγράφηκε από: Ελένη Παππά
+Επικοινωνία: kostas.ioannou@example.com
+Τηλέφωνο: +30 210 000 0026
+Κωδικός παγίου: AST-G92262
+Άρθρο γνώσης: KB000003714
+Έκδοση πράκτορα: v4.18.1
+"
+inc_0080,el,transcript,4,test,"Περιστατικό INC00102923 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Κώστας Ιωάννου: Επιβεβαιώθηκε στο DEMO-PC-7453· ανοίχτηκε REQ0010897.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.19.2 με αλλαγή CHG0031343.
+2026-04-03 11:31:52 - Δημήτρης: Τηλέφωνο +30 210 000 0027· δείτε KB000003727.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-H92291 επιστράφηκε. Ενημέρωση nikos.antoniou@example.com.
+"
+inc_0081,el,plain,3,test,"Περιστατικό: INC00102960
+Στοιχείο διαμόρφωσης: DEMO-PC-7460
+Σχετική αλλαγή: CHG0031360
+Καταγράφηκε από: Νίκος Αντωνίου
+Επικοινωνία: anna.vasileiou@example.org
+Τηλέφωνο: +30 210 000 0028
+Κωδικός παγίου: AST-J92320
+Άρθρο γνώσης: KB000003740
+Έκδοση πράκτορα: v4.0.3
+"
+inc_0082,el,transcript,4,dev,"Περιστατικό INC00102997 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Γιώργος Δημητρίου: Επιβεβαιώθηκε στο DEMO-PC-7467· ανοίχτηκε REQ0010920.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.1.4 με αλλαγή CHG0031377.
+2026-04-03 11:31:52 - Σοφία: Τηλέφωνο +30 210 000 0040· δείτε KB000003753.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-K92349 επιστράφηκε. Ενημέρωση anna.vasileiou@example.net.
+"
+inc_0083,el,plain,3,test,"Περιστατικό: INC00103034
+Στοιχείο διαμόρφωσης: DEMO-PC-7474
+Σχετική αλλαγή: CHG0031394
+Καταγράφηκε από: Δημήτρης Λέκκας
+Επικοινωνία: eleni.pappa@example.com
+Τηλέφωνο: +30 210 000 0028
+Κωδικός παγίου: AST-L92378
+Άρθρο γνώσης: KB000003766
+Έκδοση πράκτορα: v4.2.5
+"
+inc_0084,el,transcript,4,test,"Περιστατικό INC00103071 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Μαρία Παπαδοπούλου: Επιβεβαιώθηκε στο DEMO-PC-7481· ανοίχτηκε REQ0010943.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.3.6 με αλλαγή CHG0031411.
+2026-04-03 11:31:52 - Σοφία Κ.: Τηλέφωνο +30 210 000 0023· δείτε KB000003779.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-M92407 επιστράφηκε. Ενημέρωση anna.vasileiou@example.org.
+"
+inc_0085,el,plain,3,test,"Περιστατικό: INC00103108
+Στοιχείο διαμόρφωσης: DEMO-PC-7488
+Σχετική αλλαγή: CHG0031428
+Καταγράφηκε από: Δημήτρης Λέκκας
+Επικοινωνία: anna.vasileiou@example.net
+Τηλέφωνο: +30 210 000 0036
+Κωδικός παγίου: AST-N92436
+Άρθρο γνώσης: KB000003792
+Έκδοση πράκτορα: v4.4.0
+"
+inc_0086,el,transcript,4,test,"Περιστατικό INC00103145 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Γιώργος Δημητρίου: Επιβεβαιώθηκε στο DEMO-PC-7495· ανοίχτηκε REQ0010966.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.5.1 με αλλαγή CHG0031445.
+2026-04-03 11:31:52 - Άννα Βασιλείου: Τηλέφωνο +30 210 000 0026· δείτε KB000003805.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-P92465 επιστράφηκε. Ενημέρωση sofia.karagianni@example.com.
+"
+inc_0087,el,plain,3,test,"Περιστατικό: INC00103182
+Στοιχείο διαμόρφωσης: DEMO-PC-7502
+Σχετική αλλαγή: CHG0031462
+Καταγράφηκε από: Άννα Βασιλείου
+Επικοινωνία: eleni.pappa@example.net
+Τηλέφωνο: +30 210 000 0037
+Κωδικός παγίου: AST-Q92494
+Άρθρο γνώσης: KB000003818
+Έκδοση πράκτορα: v4.6.2
+"
+inc_0088,el,transcript,4,test,"Περιστατικό INC00103219 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Νίκος Αντωνίου: Επιβεβαιώθηκε στο DEMO-PC-7509· ανοίχτηκε REQ0010989.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.7.3 με αλλαγή CHG0031479.
+2026-04-03 11:31:52 - Δημήτρης: Τηλέφωνο +30 210 000 0022· δείτε KB000003831.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-R92523 επιστράφηκε. Ενημέρωση dimitris.lekkas@example.net.
+"
+inc_0089,el,plain,3,test,"Περιστατικό: INC00103256
+Στοιχείο διαμόρφωσης: DEMO-PC-7516
+Σχετική αλλαγή: CHG0031496
+Καταγράφηκε από: Δημήτρης Λέκκας
+Επικοινωνία: giorgos.dimitriou@example.net
+Τηλέφωνο: +30 210 000 0029
+Κωδικός παγίου: AST-S92552
+Άρθρο γνώσης: KB000003844
+Έκδοση πράκτορα: v4.8.4
+"
+inc_0090,el,transcript,4,test,"Περιστατικό INC00103293 — σημειώσεις εργασίας
+2026-04-03 09:12:04 - Σοφία Καραγιάννη: Επιβεβαιώθηκε στο DEMO-PC-7523· ανοίχτηκε REQ0011012.
+2026-04-03 10:44:19 - Αυτοματισμός: Εφαρμόστηκε v4.9.5 με αλλαγή CHG0031513.
+2026-04-03 11:31:52 - Άννα: Τηλέφωνο +30 210 000 0032· δείτε KB000003857.
+2026-04-03 12:05:40 - Γραφείο: Το πάγιο AST-T92581 επιστράφηκε. Ενημέρωση sofia.karagianni@example.net.
+"

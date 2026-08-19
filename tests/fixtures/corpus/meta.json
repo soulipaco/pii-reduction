@@ -2,12 +2,13 @@
   "documents": 102,
   "documents_per_language": 34,
   "entities": 180,
-  "generator_version": "1",
+  "generator_version": "2",
   "languages": [
     "en",
     "de",
     "el"
   ],
+  "profile": "benchmark",
   "protected_tokens": 102,
   "seed": 42
 }

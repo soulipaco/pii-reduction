@@ -719,9 +719,13 @@ What landed:
   gates in `configs/benchmark_gates.yaml` are untouched; each pack has its own gate set
   under `configs/pack_gates/`, and a test asserts no workflow gates on a pack.
 
-**Deliberately not done:** the `incident_notes` pack. ADR-0010 named three families and
-this delivers two; incident metadata combined with generated work notes needs no public
-source and is better placed with Increment E's mask/redact variants than bolted on here.
+**Deliberately not done at the time:** the `incident_notes` pack. ADR-0010 named three
+families and this delivers two; incident metadata combined with generated work notes
+needs no public source. **Delivered in session 8 as something else** — ADR-0022 makes
+it a generated *over-redaction stress corpus* rather than a pack, because a source-less
+corpus cannot go in a registry that exists to record public-data licences, and because
+a generated corpus can say nothing honest about detection realism. What it can say is
+whether identifiers survive, and it found two things nothing else could.
 
 **One superseded constraint, recorded because the old advice is still in the session-5
 handoff.** That handoff said to share **one** `ValueProvider` across a pack, or a
@@ -920,9 +924,47 @@ remains, none of it sequenced yet:
   redaction, and GLiNER for the Greek gap — the latter subject to **ADR-0015
   (CPU-only)**.
 
-Also open from Increment D: the `incident_notes` pack (ADR-0010's third family), and a
+Also open from Increment D: a
 permissively-licensed public transcript corpus free of real PII, to replace the one
 MultiWOZ's rejection removed (ADR-0018).
+
+### The incident-notes stress corpus (ADR-0022)
+
+`tests/fixtures/incidents/` — 90 documents, 315 entities, **585 protected tokens across
+seven kinds at 6.5 per document**, en/de/el, generated and committed. Built because the
+over-redaction metric was thinly supported: 102 tokens at 1.00 per document on the
+benchmark corpus, 56 of a single kind on `support_tickets`, **zero** on
+`multilingual_utterances`. It is **not a pack** and carries no realism claim.
+
+| chain | strict F1 | leakage | fragment | clean rate | over-redaction |
+|---|---|---|---|---|---|
+| `deterministic_only` | 0.727 | 0.429 | 0.463 | 0.000 | **0.000** |
+| `deterministic_presidio` | 0.761 | 0.289 | 0.314 | 0.489 | **0.024** |
+
+PERSON strict recall, hybrid chain: tier 3 is 1.000 (en) / 1.000 (de) / 0.933 (el);
+**tier 4 is 0.000 in all three**. EMAIL and PHONE are 1.000 everywhere on both chains.
+
+**Two findings, neither visible to any earlier corpus:**
+
+1. **Over-redaction is not 0.000.** 14 of 585 tokens destroyed, all Greek tier-4 ticket
+   ids inside a PERSON span covering `Περιστατικό INC…`. **Attribution corrected during
+   review:** re-running the whole corpus with `promote: []` still destroys 13, so those
+   are native `PERSON` labels from the base model and owe nothing to either ADR; exactly
+   one is promotion-attributable and none to ADR-0021. The first draft blamed promotion
+   on the strength of one document — generalizing from a single case was the error. The
+   identifier guard passes these by design: it refuses only when *no* token is
+   name-like, and the Greek word is.
+2. **A work-note author is never offered to a provider.** The transcript parser treats
+   `2026-04-03 09:12:04 - Peter Novak:` as structure — right for a role label, wrong for
+   a person — so those names cannot be redacted by anything. Verified structurally by a
+   test. Not fixed here: redacting inside a speaker prefix collides with the
+   reconstruction guarantee and needs its own decision.
+
+Also exposed: `fragment_leakage_rate` exceeds `leakage_rate` on *both* chains here, and
+unlike ADR-0020's gap it is an attribution artefact — name-derived emails mean a leaked
+PERSON carries an unrelated EMAIL's windows, and the ambient exclusion does not remove
+windows sitting inside another unredacted entity. The metric is not changed to suit a
+corpus introduced alongside it.
 
 ### Known deferrals carried forward
 

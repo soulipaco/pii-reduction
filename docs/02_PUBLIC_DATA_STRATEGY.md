@@ -319,11 +319,17 @@ Plain and semi-structured support text.
 
 Agent/customer turns rendered into multiple transcript formats.
 
-### `incident_notes`
+### `incident_notes` — delivered as something else (ADR-0022)
 
-Incident metadata combined with generated work-note histories.
+Incident metadata combined with generated work-note histories. **This family has no
+public source**, which is why it is not a pack: `demo/registry.yaml` is the licence
+record for public corpora, and a source-less entry there would say nothing true. It
+ships instead as a *generated over-redaction stress corpus* at
+`tests/fixtures/incidents/`, carrying no realism claim and never quoted beside the
+packs. See ADR-0022, including the two findings it produced immediately.
 
-These create three structurally different challenges while using the same PII engine.
+The first two create structurally different challenges while using the same PII
+engine; the third tests whether operational identifiers survive it.
 
 ## Data volume targets
 
@@ -372,7 +378,8 @@ This document is the policy; what implements it:
 
 Three packs are built (`pii_reduction.synthetic.packs`): `support_tickets` and
 `support_conversations` from Bitext, `multilingual_utterances` from MASSIVE de/el.
-`incident_notes`, the third family named above, is not built yet.
+`incident_notes` is **not** among them and never will be — it has no public source,
+so ADR-0022 delivers it as a generated stress corpus outside the pack machinery.
 
 Two decisions worth reading before extending this:
 

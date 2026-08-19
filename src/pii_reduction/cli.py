@@ -26,6 +26,7 @@ from pii_reduction.evaluation.gates import (
 from pii_reduction.evaluation.report import render_markdown
 from pii_reduction.synthetic.corpus import build_corpus, write_corpus
 from pii_reduction.synthetic.fetch import DEFAULT_CACHE_DIR
+from pii_reduction.synthetic.incidents import incident_templates
 from pii_reduction.synthetic.packs import (
     DEFAULT_REGISTRY,
     PACKS,
@@ -33,10 +34,15 @@ from pii_reduction.synthetic.packs import (
     fetch_dataset,
     pack_spec,
 )
+from pii_reduction.synthetic.templates import templates_for
 
 __all__ = ["main"]
 
 DEFAULT_CORPUS_DIR = Path("tests/fixtures/corpus")
+#: The incident-notes stress corpus (ADR-0022). Committed like the benchmark
+#: corpus and beside it, because it is generated rather than fetched: there is no
+#: source to rebuild it from, only this generator and its seed.
+DEFAULT_INCIDENTS_DIR = Path("tests/fixtures/incidents")
 DEFAULT_CONFIGS_DIR = Path("configs")
 DEFAULT_PACK_DIR = Path("demo/packs")
 #: These two define the committed corpus. `configs/benchmark_gates.yaml` records them
@@ -44,6 +50,10 @@ DEFAULT_PACK_DIR = Path("demo/packs")
 #: with different values and you are measuring a different corpus.
 DEFAULT_SEED = 42
 DEFAULT_DOCUMENTS_PER_LANGUAGE = 34
+#: 30 x 3 languages = 90 documents carrying ~585 protected tokens, which is what
+#: takes the over-redaction metric's support from 102 to 687 across the two
+#: committed corpora.
+DEFAULT_INCIDENTS_PER_LANGUAGE = 30
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -58,6 +68,16 @@ def _build_parser() -> argparse.ArgumentParser:
     corpus.add_argument("--seed", type=int, default=DEFAULT_SEED)
     corpus.add_argument(
         "--documents-per-language", type=int, default=DEFAULT_DOCUMENTS_PER_LANGUAGE
+    )
+
+    incidents = subparsers.add_parser(
+        "build-incidents",
+        help="generate the incident-notes over-redaction stress corpus (ADR-0022)",
+    )
+    incidents.add_argument("--out", type=Path, default=DEFAULT_INCIDENTS_DIR)
+    incidents.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    incidents.add_argument(
+        "--documents-per-language", type=int, default=DEFAULT_INCIDENTS_PER_LANGUAGE
     )
 
     download = subparsers.add_parser(
@@ -147,8 +167,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _run(argv: Sequence[str] | None) -> int:
     args = _build_parser().parse_args(argv)
 
-    if args.command == "build-corpus":
-        corpus = build_corpus(seed=args.seed, documents_per_language=args.documents_per_language)
+    if args.command in {"build-corpus", "build-incidents"}:
+        incidents = args.command == "build-incidents"
+        corpus = build_corpus(
+            seed=args.seed,
+            documents_per_language=args.documents_per_language,
+            templates=incident_templates if incidents else templates_for,
+            id_prefix="inc" if incidents else "doc",
+            profile="incident_notes" if incidents else "benchmark",
+        )
         written = write_corpus(corpus, args.out)
         print(
             f"wrote {corpus.meta['documents']} documents, "

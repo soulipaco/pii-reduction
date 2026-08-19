@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
@@ -47,7 +47,10 @@ MANIFEST_FILE = "manifest.csv"
 PROTECTED_FILE = "protected.csv"
 META_FILE = "meta.json"
 
-GENERATOR_VERSION = "1"
+#: Bumped to 2 when `meta` gained `profile`: two corpora now come out of this
+#: generator, and a meta block that cannot say which one it is could be scored against
+#: the wrong gate file. The field exists to signal exactly this kind of schema change.
+GENERATOR_VERSION = "2"
 
 PLACEHOLDER_RE = re.compile(r"\{([A-Z_]+)\}")
 
@@ -61,7 +64,9 @@ PII_PLACEHOLDERS: dict[str, str] = {
     "PHONE_COMPACT": PHONE,
 }
 
-PROTECTED_PLACEHOLDERS = frozenset({"TICKET", "KB", "MACHINE", "VERSION", "ORDER"})
+PROTECTED_PLACEHOLDERS = frozenset(
+    {"TICKET", "KB", "MACHINE", "VERSION", "ORDER", "CHANGE", "REQUEST", "ASSET"}
+)
 
 SPLITS = (("dev", 20), ("calibration", 40), ("test", 100))
 
@@ -183,6 +188,12 @@ def _value_for(placeholder: str, language: str, provider: ValueProvider):  # typ
         return provider.version()
     if placeholder == "ORDER":
         return provider.order()
+    if placeholder == "CHANGE":
+        return provider.change()
+    if placeholder == "REQUEST":
+        return provider.request()
+    if placeholder == "ASSET":
+        return provider.asset()
     raise CorpusError(f"template uses unknown placeholder {{{placeholder}}}")
 
 
@@ -256,8 +267,23 @@ def _render(
     return document, entities, protected
 
 
-def build_corpus(*, seed: int = 42, documents_per_language: int = 34) -> Corpus:
-    """Generate a deterministic corpus. Same seed and size give a byte-identical result."""
+def build_corpus(
+    *,
+    seed: int = 42,
+    documents_per_language: int = 34,
+    templates: Callable[[str], tuple[TemplateSpec, ...]] = templates_for,
+    id_prefix: str = "doc",
+    profile: str = "benchmark",
+) -> Corpus:
+    """Generate a deterministic corpus. Same seed and size give a byte-identical result.
+
+    ``templates`` and ``id_prefix`` exist so a second corpus profile can reuse every
+    invariant this function already enforces — span validation, split assignment,
+    deterministic value sequencing — rather than growing a parallel generator that
+    would drift from it. The incident-notes corpus (ADR-0022) is the second caller;
+    its ids are prefixed differently so a document from one corpus can never be
+    mistaken for a document from the other in a manifest or a metric row.
+    """
     if documents_per_language < 1:
         raise CorpusError("documents_per_language must be at least 1")
 
@@ -268,13 +294,13 @@ def build_corpus(*, seed: int = 42, documents_per_language: int = 34) -> Corpus:
 
     index = 0
     for language in LANGUAGES:
-        specs = templates_for(language)
+        specs = templates(language)
         for position in range(documents_per_language):
             spec = specs[position % len(specs)]
             index += 1
             document, document_entities, document_protected = _render(
                 spec,
-                document_id=f"doc_{index:04d}",
+                document_id=f"{id_prefix}_{index:04d}",
                 language=language,
                 provider=provider,
                 seed=seed,
@@ -285,6 +311,7 @@ def build_corpus(*, seed: int = 42, documents_per_language: int = 34) -> Corpus:
 
     meta: dict[str, object] = {
         "generator_version": GENERATOR_VERSION,
+        "profile": profile,
         "seed": seed,
         "documents_per_language": documents_per_language,
         "languages": list(LANGUAGES),

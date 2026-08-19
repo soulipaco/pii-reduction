@@ -225,6 +225,17 @@ parser_options:
   fallback: preserve_line
 ```
 
+> **`preserve_prefix: true` puts the speaker label out of scope for detection, and a
+> speaker label is not always a role.** The prefix `2026-04-03 09:12:04 - Peter Novak:`
+> is treated as structure, so that name is never offered to any provider and **cannot
+> be redacted by anything** — no provider, no repair rule, no reduction strategy. This
+> is correct for `Customer`/`Agent`/`Πελάτης` and wrong for a work-note author, a
+> signed email quote, or any transcript whose speakers are named people. Measured:
+> PERSON recall is 0.000 at tier 4 in all three languages on the incident-notes corpus
+> (ADR-0022), against 0.933–1.000 in the same documents' structured headers. If your
+> transcripts name their speakers, this option is a silent leak; there is no
+> configuration that currently fixes it.
+
 A production parser may support multiple transcript patterns. Configuration should describe intent rather than embed large regexes in YAML wherever possible.
 
 ## Note-history parser options
