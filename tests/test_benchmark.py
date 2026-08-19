@@ -228,6 +228,49 @@ class TestSplits:
         assert total == len(load_corpus(CORPUS_DIR).entities)
 
 
+class TestRunProvenance:
+    """AGENTS.md rule 9: a result must carry what reproducing it needs (Increment E)."""
+
+    def test_the_outcome_carries_one_run_record_per_document_type(
+        self, outcome: BenchmarkOutcome
+    ) -> None:
+        assert len(outcome.runs) == 2
+        assert {run.source_dataset for run in outcome.runs} == {
+            "benchmark_corpus_plain",
+            "benchmark_corpus_transcript",
+        }
+
+    def test_every_run_records_a_config_fingerprint(self, outcome: BenchmarkOutcome) -> None:
+        # The hash is what ties a number back to the exact settings that produced it;
+        # the two document types legitimately differ (different parser), so two hashes.
+        assert all(run.config_hash for run in outcome.runs)
+
+    def test_the_threshold_calibration_provenance_travels(self, outcome: BenchmarkOutcome) -> None:
+        # configs/providers.yaml records the session-6 calibration review; every run
+        # made under it must say so, or "default_uncalibrated" would keep being
+        # reported for thresholds that were in fact reviewed and locked (ADR-0005).
+        # Prefixed with the provider name: the record describes the configured
+        # providers, and this fixture's run uses the deterministic-only chain — the
+        # prefix is what stops presidio's note reading as a claim about this run's
+        # own thresholds.
+        assert all(
+            run.threshold_calibration == "presidio=reviewed-s6-calibration-split-constants-locked"
+            for run in outcome.runs
+        )
+
+    def test_runtime_is_measured_per_document_type(self, outcome: BenchmarkOutcome) -> None:
+        assert {metric.document_type for metric in outcome.runtime} == {"plain", "transcript"}
+        for metric in outcome.runtime:
+            assert metric.rows > 0
+            assert metric.process_seconds > 0
+            assert metric.rows_per_second > 0
+
+    def test_the_summary_prints_the_provenance_line(self, outcome: BenchmarkOutcome) -> None:
+        text = summarise(outcome)
+        assert "config=" in text
+        assert "rows/s" in text
+
+
 class TestStrategyComparison:
     """ADR-0013 §5: strategies are compared from one configuration, per-strategy metrics.
 

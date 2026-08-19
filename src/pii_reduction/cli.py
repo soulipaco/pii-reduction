@@ -14,6 +14,7 @@ from pathlib import Path
 
 from pii_reduction import __version__
 from pii_reduction.benchmark import BenchmarkOutcome, run_benchmark, summarise
+from pii_reduction.config.registries import KNOWN_REDUCERS
 from pii_reduction.contracts.errors import PiiReductionError
 from pii_reduction.evaluation.gates import (
     GateConfigurationError,
@@ -108,7 +109,7 @@ def _build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument(
         "--strategy",
         dest="reducer",
-        choices=["redact", "mask", "pseudonymize"],
+        choices=sorted(KNOWN_REDUCERS),
         help=(
             "override the configured reduction strategy (ADR-0013). Leakage numbers are "
             "per strategy and must not be compared across strategies"

@@ -187,6 +187,14 @@ class ProviderSettings(ConfigModel):
     languages: tuple[str, ...] | None = None
     entities: tuple[str, ...] = ()
     thresholds: dict[str, float] = Field(default_factory=dict)
+    #: Provenance of the thresholds above, carried into every run's metadata as
+    #: ``RunMetadata.threshold_calibration`` prefixed with this provider's name —
+    #: the record describes the configured providers, not which ones a given run's
+    #: chain reached. Empty means nobody has reviewed them; with no note anywhere the
+    #: run records ``default_uncalibrated``, which is the honest default. NOTE: this
+    #: string feeds the config fingerprint, so rewording it changes ``config_hash``
+    #: — provenance prose is load-bearing (docs/06).
+    calibration: str = ""
     options: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("entities")

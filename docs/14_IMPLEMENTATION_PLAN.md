@@ -466,6 +466,36 @@ Limitations, stated so the numbers are not read as more than they are:
   deliberately offline as well as model-free (ADR-0009, ADR-0017). The pack gate files
   are checked for validity by the test suite; their *numbers* are run on demand.
 
+### Threshold calibration, and the split protocol's one test read (Increment E)
+
+**The thresholds were reviewed against the calibration split and locked unchanged,
+because there is nothing to tune on that axis.** Every score the shipped chains emit
+is a recognizer constant on this corpus: the deterministic recognizers emit 1.0
+(their `possible` tier, which emits 0.85, never fires here), and the spaCy NER path
+emits a flat 0.85 for true and false positives alike (19 calibration-split
+PERSON predictions: 15 TP and 4 FP, every one at 0.85). A per-entity threshold can
+only sit below a constant — keeping everything that recognizer emits — or above it,
+dropping everything. The configured values sit below deliberately and gate
+hypothetical sub-constant scores; improving PERSON precision is reconciler work
+(the identifier guard, span repair), not threshold work. The review is recorded in
+`configs/providers.yaml` and travels into every run's metadata as
+`threshold_calibration`, replacing `default_uncalibrated`.
+
+**The test split was read once** (ADR-0011's protocol), hybrid chain, `redact`,
+session 6 — after all session-6 detection changes and before any future ones:
+
+| split | documents | entities | strict F1 | relaxed F1 | leakage | over-redaction |
+|---|---|---|---|---|---|---|
+| dev | 18 | 33 | 0.875 | 0.906 | 0.121 | 0.000 |
+| calibration | 27 | 48 | 0.882 | 0.903 | 0.125 | 0.000 |
+| **test** | **57** | **99** | **0.921** | **0.921** | **0.111** | **0.000** |
+
+The test split scores *above* the working splits, which is the direction that says
+nothing was tuned onto it. These are per-split observations under the split-scoped
+scoring fixed in session 5; the whole-corpus gates in `configs/benchmark_gates.yaml`
+remain the regression floors, and a future change that wants to claim test-split
+improvement must re-run this protocol rather than iterate on the test number.
+
 ### Reduction strategies, measured (Increment E, ADR-0013 §5)
 
 Whole corpus, both chains, all three strategies from one configuration via
@@ -715,13 +745,27 @@ comparison rather than on the two corpora as they stand, each mechanism isolated
 changing one thing at a time, and the finding is recorded with a test that fails if a
 model bump changes it. No published number moved, because none should have.
 
-**What it opens** (ranked by what the measurement supports, none started): Greek span
+**What it opens** (ranked by what the measurement supports): Greek span
 absorption as an ADR-0016-family remedy — repair the output, and the rule must be
 structural rather than a list of Greek words; evidence-gated promotion of `LOC`, `ORG` **and**
 `MISC` — which one appears varies by carrier, so a one-label remedy would miss the
 rest — which trades leakage for over-redaction and needs a measurement before an
 implementation; and a better-licensed Greek model at Phase 7, now with a benchmark that
 can say which of the three it fixed.
+
+**The first of those was scoped in this session and found unshippable as stated.**
+Two structural trim rules were examined at the provider boundary. Colon-trim — a
+PERSON span containing `:`/`·` is trimmed to the value side, safe because no name
+contains a colon — **fires zero times on the corpus**: the label-absorbed spans
+arrive as `MISC`/`LOC`, which ADR-0004 drops before any PERSON repair could see
+them, so there is nothing for the rule to repair. And leading-token-trim — drop a
+capitalised token ahead of the name — can always be cutting the first token of a
+real three-token name, which is a leak, the invisible error ADR-0016 chose the
+visible one over. The absorbed tier-4 spans also *redact the whole phrase including
+the name*, so mechanism 1 costs metrics and a swallowed verb, not privacy. **The
+next concrete Greek step is therefore the mechanism-2 measurement** (what would
+requesting Greek `LOC`/`ORG`/`MISC` from the model and reconciling them do to
+leakage and over-redaction?), not more span repair.
 
 **Narrowed rather than ruled out:** treating Greek as a *pure* detection problem. Only
 4 of the 40 Greek probes returned no span at all, and tier 4 is 100% boundary error — detection

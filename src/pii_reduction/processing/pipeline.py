@@ -204,6 +204,19 @@ class Pipeline:
         metrics.provider_versions = {
             name: settings.type for name, settings in self.config.providers.items()
         }
+        # Calibration state of the CONFIGURED providers, each note attributed to its
+        # provider by name — like `provider_versions` above, this describes the
+        # configuration, not which providers this particular run's chain reached. A
+        # deterministic-only run therefore carries `presidio=...` too, and the prefix
+        # is what keeps that honest rather than misattributed. No notes at all keeps
+        # the accumulator's default ("default_uncalibrated").
+        notes = sorted(
+            f"{name}={settings.calibration}"
+            for name, settings in self.config.providers.items()
+            if settings.calibration
+        )
+        if notes:
+            metrics.threshold_calibration = "; ".join(notes)
 
         outputs: dict[str, list[str | None]] = {
             processor.output_column: [] for processor in self._processors

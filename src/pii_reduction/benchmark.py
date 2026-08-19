@@ -12,6 +12,7 @@ rather than being filtered out of the table.
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -23,6 +24,7 @@ from pii_reduction.config.errors import ConfigurationError
 from pii_reduction.config.loader import load_resolved_dataset
 from pii_reduction.config.registries import KNOWN_REDUCERS
 from pii_reduction.config.resolved import ResolvedDataset
+from pii_reduction.contracts.results import RunMetadata
 from pii_reduction.evaluation.matching import RELAXED, STRICT, Prediction, TruthSpan
 from pii_reduction.evaluation.metrics import (
     DetectionMetric,
@@ -40,7 +42,14 @@ from pii_reduction.processing.pipeline import build_pipeline
 from pii_reduction.sources.local import PandasSource
 from pii_reduction.synthetic.corpus import Corpus, load_corpus
 
-__all__ = ["DEFAULT_DATASETS", "BenchmarkOutcome", "run_benchmark", "with_chain", "with_reducer"]
+__all__ = [
+    "DEFAULT_DATASETS",
+    "BenchmarkOutcome",
+    "RuntimeMetric",
+    "run_benchmark",
+    "with_chain",
+    "with_reducer",
+]
 
 #: Dataset config per document type. One parser per dataset is the real-world shape:
 #: transcripts and free-text notes are different contracts, not a runtime branch.
@@ -50,6 +59,27 @@ DEFAULT_DATASETS: dict[str, str] = {
 }
 
 SLICE_DIMENSIONS = ("entity_type", "language", "difficulty_tier")
+
+
+@dataclass(frozen=True)
+class RuntimeMetric:
+    """Wall-clock for one document type's pipeline, honestly attributed.
+
+    Model loading is lazy — the Presidio engine is built on the first ``process``
+    call, not at pipeline construction — so ``build_seconds`` is near zero for every
+    chain and the first-call cost lands in ``process_seconds``. Recorded as measured
+    rather than split into phases the code does not actually have. Quality gates on
+    wall-clock stay forbidden (ADR-0009): these numbers are context, not floors.
+    """
+
+    document_type: str
+    rows: int
+    build_seconds: float
+    process_seconds: float
+
+    @property
+    def rows_per_second(self) -> float:
+        return self.rows / self.process_seconds if self.process_seconds > 0 else 0.0
 
 
 @dataclass(frozen=True)
@@ -71,6 +101,12 @@ class BenchmarkOutcome:
     predictions: tuple[Prediction, ...] = field(default=(), repr=False)
     reduced_texts: dict[str, str] = field(default_factory=dict, repr=False)
     documents: int = 0
+    #: One pipeline run per document type: config hash, provider versions, row
+    #: counts, status — what ties a number back to the exact settings that
+    #: produced it (AGENTS.md rule 9). ``repr`` stays on: it carries metadata only.
+    runs: tuple[RunMetadata, ...] = ()
+    #: Wall-clock per document type, measured on this machine and this run.
+    runtime: tuple[RuntimeMetric, ...] = ()
     #: Splits this result covers; empty means the whole corpus. Recorded because
     #: ``AGENTS.md`` rule 9 requires it to reproduce a result, and because a
     #: ``--split dev`` table is otherwise indistinguishable from a whole-corpus one
@@ -172,6 +208,8 @@ def run_benchmark(
     #: document types (below) — deriving it from the frame would score those skipped
     #: documents as missed, which is the bug this exists to prevent.
     scored: set[str] = set()
+    runs: list[RunMetadata] = []
+    runtime: list[RuntimeMetric] = []
 
     for document_type, dataset_name in selected.items():
         subset = frame[frame["document_type"] == document_type]
@@ -186,8 +224,22 @@ def run_benchmark(
         chains.add(policy.provider_chain)
         strategies.add(policy.reducer)
 
+        build_started = time.perf_counter()
         pipeline = build_pipeline(config, run_id=f"{run_id}_{document_type}")
+        build_seconds = time.perf_counter() - build_started
+        process_started = time.perf_counter()
         outcome = pipeline.process(PandasSource(subset, name=config.dataset.name).load())
+        runtime.append(
+            RuntimeMetric(
+                # Rows *submitted*; `outcome.run.rows_read` agrees today, and a row
+                # the pipeline failed on still consumed the wall-clock beside it.
+                document_type=document_type,
+                rows=len(subset),
+                build_seconds=build_seconds,
+                process_seconds=time.perf_counter() - process_started,
+            )
+        )
+        runs.append(outcome.run)
 
         scored.update(str(document_id) for document_id in subset["document_id"])
         predictions.extend(
@@ -267,6 +319,8 @@ def run_benchmark(
         fragment_leakage=fragment_leakage,
         over_redaction=over_redaction,
         rows=tuple(rows),
+        runs=tuple(runs),
+        runtime=tuple(runtime),
         predictions=tuple(predictions),
         reduced_texts=reduced_texts,
         # What ran, not what was selected: a narrowed `datasets` mapping skips whole
@@ -403,9 +457,14 @@ def _build_rows(
 
 
 def summarise(outcome: BenchmarkOutcome) -> str:
-    """One-paragraph summary printed under the table."""
+    """One-paragraph summary printed under the table.
+
+    The third line is provenance: the config fingerprint and the wall-clock, so a
+    pasted summary carries what reproducing it needs (AGENTS.md rule 9). Rates are
+    per document type because the two pipelines genuinely differ.
+    """
     splits = ", ".join(outcome.splits) if outcome.splits else "all"
-    return (
+    text = (
         f"documents={outcome.documents} entities={outcome.strict.support} "
         f"splits={splits} chain={outcome.provider_chain} strategy={outcome.strategy}\n"
         f"strict f1={outcome.strict.f1:.3f} relaxed f1={outcome.relaxed.f1:.3f} "
@@ -414,6 +473,14 @@ def summarise(outcome: BenchmarkOutcome) -> str:
         f"document clean rate={outcome.leakage.document_clean_rate:.3f} "
         f"over-redaction={outcome.over_redaction.rate:.3f}"
     )
+    if outcome.runs:
+        hashes = ", ".join(sorted({run.config_hash[:12] for run in outcome.runs}))
+        rates = " ".join(
+            f"{metric.document_type}={metric.rows_per_second:.0f} rows/s"
+            for metric in outcome.runtime
+        )
+        text += f"\nconfig={hashes} runtime: {rates}"
+    return text
 
 
 def load_corpus_frame(corpus_dir: str | Path) -> pd.DataFrame:

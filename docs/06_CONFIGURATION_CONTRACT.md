@@ -258,7 +258,17 @@ providers:
     type: presidio
     languages: [en]
     entities: [PERSON, EMAIL, PHONE, ADDRESS]
-    threshold: 0.50
+    # Per entity, never a single global threshold — provider scores are recognizer
+    # constants, and one global value would silently drop whole entity types
+    # (ADR-0005). `calibration` records the provenance of these values; it travels
+    # into every run's metadata as `threshold_calibration`, and because it is part of
+    # the configuration it also feeds the config fingerprint — rewording the note
+    # changes `config_hash`, deliberately: provenance prose is load-bearing.
+    thresholds:
+      PERSON: 0.5
+      EMAIL: 0.6
+      PHONE: 0.3
+    calibration: reviewed-s6-calibration-split-constants-locked
 
 chains:
   default_hybrid:

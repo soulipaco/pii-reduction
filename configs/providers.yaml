@@ -24,6 +24,17 @@ providers:
       PERSON: 0.5
       EMAIL: 0.6
       PHONE: 0.3
+    # Reviewed against the CALIBRATION split — never test — in session 6, Increment E,
+    # and locked unchanged, because there is nothing to tune on this axis: every score
+    # the chain emits is a recognizer constant. Deterministic recognizers emit 1.0;
+    # the spaCy NER path emits a flat 0.85 for true and false positives alike. A
+    # threshold can only sit below a constant, keeping everything that recognizer
+    # emits, or above it, dropping everything. These sit below deliberately and gate
+    # hypothetical sub-constant scores from recognizers that do emit a range.
+    # Calibrating PERSON precision therefore cannot be done with a number here; that
+    # is what the reconciler-level guards are for. This string travels into every
+    # run's metadata as threshold_calibration.
+    calibration: reviewed-s6-calibration-split-constants-locked
     options:
       models:
         en: en_core_web_md
