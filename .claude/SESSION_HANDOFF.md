@@ -1509,7 +1509,7 @@ the mechanism-2 measurement, not more span repair.
 
 ---
 
-## Session 7 — 2026-08-19 — Increment F: Databricks execution
+## Session 7 — 2026-08-19 — Increment F: Databricks execution — **complete, committed `4464065`, CI green**
 
 User authorized both open decisions in plain terms; the Greek call went to
 "hold until zero damage" (recorded, nothing shipped) and Databricks went ahead.
@@ -1543,3 +1543,19 @@ host in code — `get_session` deliberately has no host/token parameters.
 ```
 DATABRICKS_CONFIG_PROFILE=<profile> .venv-dbx17/Scripts/python.exe -m pytest tests/test_databricks_parity.py -m databricks -o addopts=""
 ```
+
+**Post-audit additions (both auditors ran before the commit):** run identity is
+driver-generated and in the worker cache key (a warm worker was stamping a previous
+job's run id — two tests pin it); `distributed_frame`'s declared schema is asserted
+name-and-order equal to what `process` appends (the first declaration had the two
+appended columns swapped, caught by the new test); the audit-table assertion is an
+exact column-set match against `AUDIT_COLUMNS`, not a denylist; the parity fixture
+refuses to adopt a pre-existing schema; the Spark-free guard in `test_package.py`
+now imports `pii_reduction.databricks`; the distributed path's reduced-frame-only
+scope is disclosed in the docstring and plan §8 F.
+
+**854 default-tier tests, 90 deselected (3 databricks). The roadmap is complete
+through Phase 6.** Remaining, unsequenced: the Greek promotion design call (plan §8
+Q4 follow-ups), the sandbox-incident recheck, docs/01+plan §3 naming `databricks/`
+as an execution surface (architecture review Q3 — docs lag, code is right), and the
+parked ideas.
