@@ -148,6 +148,24 @@ over-redaction off its 0.000 gate. Scoped to Greek, English and German are numer
 unchanged. `NRP` is promotable but not enabled: Presidio derives it from spaCy's
 `NORP`, which `xx_ent_wiki_sm` does not emit, so it never fires.
 
+#### Span extension (`extend_person_left`, ADR-0021)
+
+The other opt-in repair, and the opposite error to promotion: the model returning only
+the *surname* of a two-token Greek name. When enabled, a PERSON span is widened over
+**one** preceding token, unless that token is across a line break, identifier-shaped,
+ends in a boundary mark (`:`, either άνω τελεία codepoint, or sentence-final
+punctuation), or is uncased.
+
+The rule lives in `providers/base.py` beside the line-bounding repair, because it is
+not Presidio-specific; this adapter only decides whether to switch it on. It returns
+the widened span **and** the original, and refuses to claim a token another candidate
+from the same call already covers — both are required for it to be leak-safe, because
+the reconciler resolves overlaps by priority without backtracking. Firings are counted
+as `person_extended_left` through the drop counter.
+
+Greek only, for the same reason as promotion: applied to every language it cost English
+PERSON recall 0.962 → 0.885 and German 1.000 → 0.885.
+
 **What promotion cannot reach:** spaCy's `MISC`. On the Greek slice the model emits
 `PER 8, MISC 41, LOC 20, ORG 1` and Presidio surfaces only the first, third and
 fourth — `MISC` has no Presidio entity name and is discarded inside Presidio, before
@@ -199,6 +217,7 @@ providers:
       models:
         el: xx_ent_wiki_sm
       promote: [LOCATION, ORGANIZATION]
+      extend_person_left: true
 
 chains:
   deterministic_presidio:
@@ -216,10 +235,11 @@ instance's engine is ever built.
   boundary or the label wrong: the preceding verb `Ονομάζομαι` is absorbed into the
   span, and two of the eight pool names come back exactly placed but labelled `ORG`
   or `LOC`. See the diagnosis below; a remedy aimed at detection will move little.
-  **The label half of this shipped** (ADR-0020): promoting `LOCATION`/`ORGANIZATION`
-  took Greek tier 1 from 0.222 to 0.444 and tier 2 from 0.111 to 0.667. The boundary
-  half did not — tiers 3 and 4 are unchanged, and tier 4 remains 0.000, because no
-  label change can repair a span that swallowed the preceding verb.
+  **Both halves have now partly shipped.** ADR-0020 promoted `LOCATION`/`ORGANIZATION`
+  and took Greek tier 1 from 0.222 to 0.444 and tier 2 from 0.111 to 0.667; ADR-0021
+  extended PERSON spans leftward and took tier 1 to 0.556 and tier 3 from 0.167 to
+  0.333. Tier 4 remains 0.000: it is span *absorption*, where the model swallows the
+  preceding verb, which neither a label change nor a leftward extension can repair.
 - The flat 0.85 NER score means false positives cannot be filtered by confidence. The
   probe found the word "Email" tagged PERSON at 0.85 in one sentence.
 - The default email recognizer rejects `.test` and `.invalid` domains, which is why
@@ -235,7 +255,7 @@ instance's engine is ever built.
 |---|---|---|---|---|
 | EMAIL | 1.000 | 1.000 | 1.000 | 51 |
 | PHONE | 1.000 | 1.000 | 1.000 | 51 |
-| PERSON | 0.747 | 0.795 | 0.770 | 78 |
+| PERSON | 0.771 | 0.821 | 0.795 | 78 |
 
 PERSON strict recall by language and tier:
 
@@ -243,29 +263,38 @@ PERSON strict recall by language and tier:
 |---|---|---|---|---|
 | en | 1.000 | 0.889 | 1.000 | 1.000 |
 | de | 1.000 | 1.000 | 1.000 | 1.000 |
-| **el** | **0.444** | **0.667** | **0.167** | **0.000** |
+| **el** | **0.556** | **0.667** | **0.333** | **0.000** |
 
-Greek tiers 1 and 2 moved with ADR-0020's label promotion (from 0.222 and 0.111).
-Tier 3 and tier 4 did not, and that is the expected shape rather than a shortfall:
-promotion addresses ADR-0019's *label confusion* only. Tier 4 is span absorption — the
-model swallows the capitalised verb before the name — which no label change can reach.
+Greek tiers 1 and 2 moved with ADR-0020's label promotion (from 0.222 and 0.111), and
+tiers 1 and 3 again with ADR-0021's span extension (from 0.444 and 0.167). Tier 4 has
+not moved and is not expected to: it is span absorption, ADR-0019's mechanism 1, which
+neither a label change nor a leftward extension can reach.
+
+What remains is mostly not a boundary or label problem any more. Classifying all 26
+Greek PERSON entities: 13 matched, and of the 13 misses **8 are the model returning no
+span at all**, 4 arrive under a refused label (3 of them `MISC`, which Presidio
+discards before this adapter) and 1 is a boundary error. So **12 of the 13 never reach
+the reconciler as a usable span**. Those are properties of the model and of Presidio's
+label set, which is why the next real move is a better-licensed Greek model at Phase 7
+rather than another repair rule.
 
 Chain comparison, whole corpus:
 
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
-| strict F1 | 0.723 | **0.899** |
+| strict F1 | 0.723 | **0.910** |
 | relaxed F1 | 0.723 | **0.921** |
 | leakage rate | 0.433 | **0.067** |
-| fragment leakage rate | 0.433 | **0.078** |
+| fragment leakage rate | 0.433 | **0.067** |
 | document clean rate | 0.161 | **0.871** |
 | over-redaction rate | 0.000 | **0.000** |
 
 `document clean rate` is derived from the full-surface leakage metric, so it means "no
-complete PII value survives", not "nothing identifying survives". Two of the nine
-documents that became clean with ADR-0020 still contain a Greek given name whose
-surname was redacted — the same two behind the fragment/full gap above. Stated here
-because this is the metric most likely to be quoted on its own.
+complete PII value survives" rather than "nothing identifying survives" — worth knowing
+because it is the metric most likely to be quoted on its own. Between ADR-0020 and
+ADR-0021 that distinction was load-bearing: two documents counted as clean while still
+carrying a Greek given name. ADR-0021 completed both spans, so the two readings coincide
+again on this corpus.
 
 Three things this table says plainly:
 
@@ -275,19 +304,21 @@ Three things this table says plainly:
 2. **The strict–relaxed gap is boundary quality** — spans covering the right name with
    the wrong edges. It was zero while only deterministic spans existed (ADR-0011),
    opened to 0.886 vs 0.921 the moment a model joined, became 0.902 vs 0.914 after
-   ADR-0016's span repair, and is 0.899 vs 0.921 after ADR-0020's promotion. Repair
+   ADR-0016's span repair, 0.899 vs 0.921 after ADR-0020's promotion, and 0.910 vs
+   0.921 after ADR-0021's extension. Repair
    narrowed the *strict* side by fixing boundaries and widened the relaxed side
    slightly, because keeping every line fragment of a crossing span redacts the
    occasional neighbouring label. Promotion then moved both the other way — strict
-   down 0.003, relaxed up 0.007 — which is the signature of spans that cover the right
-   name with imprecise edges. Both are deliberate safe-direction trades; the rest is
-   Greek boundary fuzziness.
+   down 0.003, relaxed up 0.007 — the signature of spans that cover the right name with
+   imprecise edges; ADR-0021's extension then repaired those edges and took strict past
+   where it started. All three are deliberate safe-direction trades; the rest is Greek
+   boundary fuzziness.
 
-   **The fragment-leakage rate no longer equals the full-value rate** (0.078 vs 0.067).
-   That gap was investigated rather than absorbed, as ADR-0013 §5 requires: no entity
-   leaks that did not leak before promotion. Seven are fixed outright and two Greek
-   values go from fully leaked to partially redacted, the surname removed and the
-   given name left.
+   **The fragment-leakage rate equals the full-value rate**, which is a result rather
+   than a tautology — a boundary error that redacts half a name separates them. ADR-0020
+   did exactly that for two Greek values, and the gap (0.078 vs 0.067) was investigated
+   rather than absorbed, as ADR-0013 §5 requires: no entity leaked that had not leaked
+   before. ADR-0021 completed both spans and closed it.
 3. **Greek is the outstanding gap, and it is three bugs rather than one weakness**
    (ADR-0019, plan §8 Q4). It had been read as a pure licensing consequence; the
    diagnosis says otherwise. Probed directly, `xx_ent_wiki_sm` almost always returns a

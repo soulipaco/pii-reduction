@@ -1560,7 +1560,7 @@ Q4 follow-ups), the sandbox-incident recheck, docs/01+plan §3 naming `databrick
 as an execution surface (architecture review Q3 — docs lag, code is right), and the
 parked ideas.
 
-## Session 8 — 2026-08-19 — Docs reconciled with Increment F; sandbox re-checked; **the Greek call taken and shipped (ADR-0020)**
+## Session 8 — 2026-08-19 — Docs reconciled with Increment F; sandbox re-checked; **the Greek call taken and shipped (ADR-0020, ADR-0021)**
 
 **Start here:** the queue is empty. The Greek promotion decision was brought to you,
 taken, and shipped as **ADR-0020** — the second half of this session. Published
@@ -1663,7 +1663,7 @@ accumulate instead of being re-derived. Re-run occasionally:
 DATABRICKS_CONFIG_PROFILE=<profile> .venv-dbx17/Scripts/python.exe -m pytest tests/test_databricks_parity.py -m databricks -o addopts=""
 ```
 
-**876 default-tier tests** (854 + 4 layering guards + 18 promotion/scope/attribution), 95
+**903 default-tier tests** (854 + 4 layering guards + 19 promotion/scope + 26 extension), 95
 deselected; **92 integration**; all six gate-set runs green — both benchmark sets on
 both chains, plus `multilingual_utterances` and `support_tickets` on both. The two touched test
 modules also pass with every optional extra hard-blocked, and `mypy src tests` caught
@@ -1752,6 +1752,74 @@ not emit — not from `MISC`, which is a separate ceiling.
 message, which is how it surfaced; the branch is gone and the disjointness that makes
 it unnecessary is asserted instead.
 
+### The span extension (ADR-0021), and why the plan's next target was wrong
+
+**The recommended next step was mechanism 1 (span absorption). Measuring it first
+showed it is worth one entity.** Classifying all 26 Greek PERSON entities on the
+shipped chain gave 11 matched and 15 misses: **8 SILENT** (the model returns no span at
+all), **4 DROPPED** under a refused label (3 of them `MISC`), **2 PARTIAL**,
+**1 ABSORBED**. After ADR-0021: 13 matched, 13 misses, PARTIAL empty. Absorption was the
+dominant mechanism when ADR-0019 measured it — *before* promotion; promotion has since
+converted most absorbed spans into approved ones. Classify before building: the
+recommendation was three hours old and already stale.
+
+**What shipped instead** was the `PARTIAL` remedy — worth twice as much and it closes
+the fragment-leakage gap ADR-0020 opened. `extend_person_span_left` widens a PERSON
+span over **one** preceding token when four structural refusals allow it: not across a
+line break, not over an identifier-shaped token, not over a token ending in `:` or the
+άνω τελεία, not over an uncased token. It lives in `providers/base.py` beside
+`_bound_to_line` (same repair family, not Presidio-specific) and is opt-in per provider
+instance, enabled for Greek only.
+
+**It is the mirror of the trim session 7 rejected, and that is the whole argument.**
+Trimming a leading token can cut the first token of a genuine three-token name — an
+invisible leak. Extending can only swallow a neighbouring word — a visible
+over-redaction. ADR-0016 chose the visible error; this follows it rather than reversing
+it.
+
+**Result:** strict F1 0.899 → **0.910** (above the 0.902 that preceded promotion),
+PERSON precision 0.747 → 0.771 and recall 0.795 → 0.821, Greek PERSON 0.423 → 0.500 on
+both, Greek tier 1 0.444 → 0.556 and tier 3 0.167 → 0.333, **fragment leakage
+0.078 → 0.067 — equal to the full-value rate again**. Over-redaction still 0.000,
+leakage and clean rate unchanged, en and de numerically unchanged. Nothing measured got
+worse. It fires exactly twice on the corpus and both times lands exactly on the truth
+span; on the `multilingual_utterances` pack (66 Greek PERSON in public text) it is
+inert, which is the evidence it does not over-fire.
+
+**The audits caught a defect that invalidated the ADR's central argument.** ADR-0021
+was written claiming extension "can only over-redact — the visible error". Both
+reviewers independently reproduced the opposite: widening a PERSON span into overlap
+with a higher-priority EMAIL makes the reconciler reject the PERSON outright, so the
+**name survives in cleartext**; and widening over a neighbouring PERSON's last token
+wins the length tie-break and evicts that neighbour. Both are under-redaction — the
+invisible error the whole design was justified by avoiding. The reconciler resolves
+overlaps by priority and is greedy without backtracking, and a provider-layer repair
+cannot see what it will collide with.
+
+Two defences, because the conflicts are visible in different places: `_extend_left` now
+receives its **sibling candidates** and refuses to claim a token another already covers
+(same provider call), and it returns the **widened span plus the original** so the
+reconciler can fall back (cross-provider, where EMAIL/PHONE come from a different call).
+A third refusal stops a span whose own surface is identifier-shaped from being widened
+past the reconciler's identifier guard. Five regression tests pin all of it. Measured
+numbers did not change — the corpus never contained the shapes — which is exactly why
+the argument, not the number, was the thing that needed to be right.
+
+**Two bugs the measurement caught, both worth remembering.**
+
+1. **`EntityMatch` is a pydantic model, not a dataclass.** The first implementation used
+   `dataclasses.replace`, which raised `TypeError` on every extended span. The failure
+   policy did exactly its job — the field failed, the original was preserved — so the
+   suite stayed green and the *benchmark* reported leakage 0.089 instead of 0.067. **A
+   silently worse number was the only symptom.** The probe had not caught it because it
+   constructed `EntityMatch` directly. Use `model_copy(update=...)`.
+2. **A debug harness that does not apply `--chain` runs the dataset's default chain.**
+   That briefly looked like "a raising provider is reported as `success`", which would
+   have been a serious defect. It was not: the provider was never called. Verified
+   properly through `run_benchmark`, a raising provider gives `run status=failed` on
+   every affected run. **Do not report a defect found through a harness you have not
+   checked runs the code you think it does.**
+
 **Recorded rather than fixed:** `README.md`'s repository tree is session-0
 aspirational — it marks `configs/`, `src/` and `tests/` "to be implemented" though all
 three shipped, lists a `notebooks/` directory that does not exist, and its docs list
@@ -1761,8 +1829,14 @@ whole-README refresh, not a patch — noted here so the deferral does not become
 permanent by silence.
 
 **Still open, none started:** the distributed-path re-verification whenever Databricks
-fixes the channel; a `MISC`-reaching provider path if Greek is pushed further (scoped
-in ADR-0020, not built); ADR-0019's mechanisms 1 and 3; the README refresh above; and
+fixes the channel; the README refresh above; and
 the parked ideas (`incident_notes` pack, a public transcript corpus to replace
 MultiWOZ, NOTICE emission if a pack is ever published, MLflow trace redaction, GLiNER
 under ADR-0015).
+
+**On Greek specifically, stop reaching for repair rules.** After ADR-0020 and ADR-0021
+the remaining gap is 13 misses of 26, and **12 of them never reach the reconciler as a
+usable span** — 8 the model does not see at all, 4 reported under a refused label. Both are properties of the model and the library, not of span
+boundaries. ADR-0019's mechanisms 1 and 3 are still open but are worth 1 entity and 0
+respectively on this corpus. **A better-licensed Greek model at Phase 7 is the next
+real move**, and the benchmark can now say which of the three mechanisms it fixes.

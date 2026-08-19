@@ -140,6 +140,14 @@ class TestShippedScope:
         assert greek["languages"] == ["el"]
         assert greek["options"]["promote"] == ["LOCATION", "ORGANIZATION"]
 
+    def test_the_span_extension_is_greek_scoped_too(self, shipped: dict[str, Any]) -> None:
+        # ADR-0021, same scoping argument as promotion: applied to every language it
+        # was measured to cost en PERSON recall 0.962 -> 0.885 and de 1.000 -> 0.885.
+        general = shipped["providers"]["presidio"].get("options", {})
+        greek = shipped["providers"]["presidio_el"]["options"]
+        assert not general.get("extend_person_left")
+        assert greek["extend_person_left"] is True
+
     def test_nrp_is_not_enabled(self, shipped: dict[str, Any]) -> None:
         # Promotable, but MISC does not map to it, so it never fires. Enabling it
         # would ship a path nothing measures.

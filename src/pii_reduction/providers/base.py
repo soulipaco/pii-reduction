@@ -5,11 +5,15 @@ base class enforces the provider contract (``docs/10_TESTING_QA.md`` §4) on the
 out — normalized labels, valid offsets, requested entity scope, stable ordering.
 A provider that misbehaves fails loudly here rather than corrupting text downstream.
 
-The base also performs one *repair* rather than only checking: a span of a
-line-bounded entity type that crosses a line break is trimmed back to the line
-(``BaseProvider._bound_to_line``, ADR-0016). Validation runs first, so a genuinely
-malformed span still raises rather than being quietly reshaped, and repair only
-ever narrows a span that was already valid.
+The base also performs *repairs* rather than only checking. A span of a line-bounded
+entity type that crosses a line break is split into one span per line
+(``BaseProvider._bound_to_line``, ADR-0016 — every fragment is kept, not just the
+longest). A PERSON span may additionally be widened over one preceding token, opt-in
+per instance (``BaseProvider._extend_left``, ADR-0021); that is the one repair which
+does not narrow. Validation runs first, so a genuinely malformed span still raises
+rather than being quietly reshaped, and neither repair can invalidate it: splitting
+only narrows, and widening moves ``start`` left within a line without touching
+``end``.
 """
 
 from __future__ import annotations
@@ -22,10 +26,17 @@ from typing import Protocol, runtime_checkable
 from pii_reduction.contracts.entities import EntityMatch
 from pii_reduction.entities.errors import UnknownEntityLabelError
 from pii_reduction.entities.mapping import DropCounter
-from pii_reduction.entities.taxonomy import line_bounded_labels, require_known
+from pii_reduction.entities.taxonomy import PERSON, line_bounded_labels, require_known
+from pii_reduction.patterns import is_identifier_shaped
 from pii_reduction.providers.errors import ProviderError
 
-__all__ = ["LINE_BOUNDED_ENTITIES", "LINE_BREAK_SPLIT_RE", "BaseProvider", "PIIProvider"]
+__all__ = [
+    "LINE_BOUNDED_ENTITIES",
+    "LINE_BREAK_SPLIT_RE",
+    "BaseProvider",
+    "PIIProvider",
+    "extend_person_span_left",
+]
 
 #: Entity types whose surface cannot contain a line break, so a span that crosses one
 #: is a boundary error to repair rather than a detection to keep or drop.
@@ -47,6 +58,72 @@ LINE_BOUNDED_ENTITIES: frozenset[str] = line_bounded_labels()
 #: multilingual text this project handles. The two are deliberately kept in step; a
 #: shared home is warranted if a third consumer appears.
 LINE_BREAK_SPLIT_RE = re.compile("\r\n|\r|\n")
+
+#: The token immediately before a span, and the whitespace separating them.
+_PRECEDING_TOKEN_RE = re.compile(r"(\S+)([ \t]+)$")
+
+#: A preceding token ending in any of these is a boundary, not a name part: a field
+#: label (:), the ano teleia in both codepoints (ADR-0019 mechanism 3), or the end of
+#: a sentence. All structural - none is a word in any language.
+_BOUNDARY_SUFFIXES = (
+    ":",
+    "\u00b7",
+    "\u0387",
+    ".",
+    "!",
+    "?",
+    ";",
+    "\u037e",
+)
+
+
+def extend_person_span_left(text: str, start: int, end: int) -> tuple[int, int]:
+    """Widen a PERSON span over one preceding token, when that is structurally safe.
+
+    ADR-0021. The Greek model sometimes returns only the surname of a two-token name
+    (``Γιώργος Δημητρίου`` comes back as ``Δημητρίου``), which strict matching scores
+    as a miss *and* a false positive, and which redacts half the name — visible in
+    ``fragment_leakage_rate`` and invisible to ``leakage_rate``.
+
+    **This is the mirror of the leading-token trim that was measured and rejected**
+    (plan §8 Q4). Trimming can cut the first token of a genuine three-token name,
+    leaking a name part — the invisible error. Extending can only swallow a
+    neighbouring word, which over-redacts — the visible one. ADR-0016 chose the
+    visible error deliberately; this follows that choice rather than reversing it.
+
+    Four structural refusals, no word lists (ADR-0019 requires a structural rule):
+
+    * **across a line break** — ADR-0016 established that a name does not span lines,
+      so the previous line's last token is never part of this name;
+    * **an identifier-shaped token** — reusing ``is_identifier_shaped``, so this can
+      never swallow the ticket and machine ids the over-redaction gate protects;
+    * **a token ending in a boundary mark** — ``:`` (a field label), the άνω τελεία in
+      both codepoints (ADR-0019 mechanism 3), or sentence-final punctuation. The last
+      is why a name opening a sentence does not absorb the previous sentence's final
+      word;
+    * **an uncased token** — in a cased script a name part is capitalised.
+
+    That last refusal is the one that does not transfer to Arabic, Hebrew, CJK or
+    Thai, which is why the repair is enabled per provider instance rather than
+    globally, and ships for Greek only.
+
+    ``end`` is never moved, which is what keeps the caller's span validation valid.
+    """
+    line_start = 0
+    for separator in LINE_BREAK_SPLIT_RE.finditer(text, 0, start):
+        line_start = separator.end()
+
+    preceding = _PRECEDING_TOKEN_RE.search(text[line_start:start])
+    if preceding is None:
+        return start, end
+    token = preceding.group(1)
+    if token.endswith(_BOUNDARY_SUFFIXES):
+        return start, end
+    if is_identifier_shaped(token):
+        return start, end
+    if not token[:1].isupper():
+        return start, end
+    return start - len(token) - len(preceding.group(2)), end
 
 
 @runtime_checkable
@@ -101,6 +178,9 @@ class BaseProvider(ABC):
             self._drop_counter = counter
         return counter
 
+    #: Opt in to the ADR-0021 PERSON left-extension. See :meth:`_extend_left`.
+    extend_person_left: bool = False
+
     @abstractmethod
     def supported_entities(self) -> frozenset[str]:
         """Normalized labels this provider can produce."""
@@ -108,6 +188,62 @@ class BaseProvider(ABC):
     def supported_languages(self) -> frozenset[str] | None:
         """``None`` means language-independent."""
         return None
+
+    def _extend_left(
+        self, match: EntityMatch, text: str, siblings: Sequence[EntityMatch] = ()
+    ) -> list[EntityMatch]:
+        """Apply the ADR-0021 PERSON extension when this instance opts in.
+
+        Off by default and per instance, not per provider type: the capitalisation
+        test in :func:`extend_person_span_left` assumes a cased script, and applying
+        it to every language was measured to cost English and German recall
+        (0.962 -> 0.885 and 1.000 -> 0.885). Only the Greek instance enables it.
+
+        **Returns the widened span *and* the original**, in that order, rather than
+        replacing one with the other. This is what makes the repair leak-safe, and it
+        is not optional: the reconciler resolves overlaps by entity priority and is
+        greedy without backtracking, so a span widened into overlap with a
+        higher-priority EMAIL or PHONE would be rejected outright and the name would
+        survive in cleartext — under-redaction, the invisible error this repair exists
+        to avoid. Offering both lets the reconciler take the wide span where it fits
+        and fall back to the narrow one where it does not. It costs one extra
+        candidate per firing and nothing else: the two overlap, so at most one is ever
+        accepted.
+
+        ``siblings`` is every candidate from this same call, so the repair can refuse
+        to claim a token another candidate already covers — see the comment at that
+        check. It cannot see candidates from *other* providers in the chain, which is
+        the other half of why both spans are returned.
+
+        A span whose own surface is identifier-shaped is left alone. The reconciler's
+        identifier guard rejects such a span precisely because nothing in it looks like
+        a name; widening it over a capitalised word would make the joined surface
+        name-like, silently unblocking a candidate the guard was holding back and
+        redacting the identifier underneath it.
+        """
+        if not self.extend_person_left or match.entity_type != PERSON:
+            return [match]
+        if is_identifier_shaped(text[match.start : match.end]):
+            return [match]
+        start, _ = extend_person_span_left(text, match.start, match.end)
+        if start == match.start:
+            return [match]
+        if any(
+            other is not match and other.start < match.start and other.end > start
+            for other in siblings
+        ):
+            # The token being claimed is already inside another candidate from this
+            # same call. Widening over it would put two candidates in conflict that
+            # were not before, and the reconciler's length tie-break would hand the
+            # overlap to this one — evicting the neighbour and leaking whatever only
+            # the neighbour covered. Cross-provider conflicts are invisible here and
+            # are handled by returning the narrow span as a fallback below.
+            return [match]
+        self.drop_counter.record_declared(self.name, "person_extended_left")
+        widened = match.model_copy(
+            update={"start": start, "metadata": {**match.metadata, "extended": True}}
+        )
+        return [widened, match]
 
     @abstractmethod
     def _detect(
@@ -137,9 +273,12 @@ class BaseProvider(ABC):
         # Validate before repairing: a span that already runs past the end of the text
         # is a provider bug, and it must surface as an actionable ProviderError naming
         # the provider and offsets rather than as an IndexError from the repair code.
-        # Repair only ever narrows a span, so the validated spans stay valid.
+        # Line-bounding only ever narrows a span, and the ADR-0021 extension moves
+        # `start` left within the same line without touching `end` — so no repair
+        # can push a span past the end of the text it was validated against.
         self._validate(detected, text=text, requested=requested)
         matches = [bounded for match in detected for bounded in self._bound_to_line(match, text)]
+        matches = [candidate for match in matches for candidate in self._extend_left(match, text)]
         return sorted(matches, key=lambda match: (match.start, match.end, match.entity_type))
 
     def detect_batch(

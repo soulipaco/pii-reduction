@@ -36,7 +36,10 @@ measured:
   # commit that follows it, because a commit cannot name its own hash. Checking
   # out this hash, rebuilding the pack from the pinned source and re-running must
   # reproduce the floors below.
-  commit: 4f3716c  # ADR-0020; the deterministic_only floors still reproduce at 96eae02
+  # ADR-0021 changed the Greek provider configuration under these floors and was
+  # re-run against this pack: every gated value is unchanged, so the floors below
+  # stand. `pending` is replaced with its hash in the commit that follows.
+  commit: pending  # ADR-0020 measured them at 4f3716c; deterministic_only at 96eae02
   versions:
     presidio-analyzer: 2.2.364
     spacy: 3.8.15

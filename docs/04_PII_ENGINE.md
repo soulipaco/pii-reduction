@@ -33,30 +33,38 @@ HEALTH_ID
 
 Provider-native labels should never leak throughout the codebase: no span carrying one may cross out of a provider adapter, and nothing under `src/` outside `providers/` may name one. Tests that deliberately characterise a provider or a model *below* that boundary are the one exception, and say so.
 
-One narrow carve-out, stated because the code has always relied on it: `EntityMatch.metadata` may carry a provider's native label under `native_label`, and ADR-0020 adds a `promoted` boolean beside it. This is **provenance, not vocabulary** — no code under `src/` outside `providers/` reads either field, and nothing branches on a native label's value. The rule that matters is unchanged: a span's `entity_type` is always normalized, so no consumer can act on a provider's label set. If a native label is ever promoted into an audit column or a routing decision, that carve-out has been exceeded and needs its own decision.
+One narrow carve-out, stated because the code has always relied on it: `EntityMatch.metadata` may carry a provider's native label under `native_label`, with a `promoted` boolean beside it (ADR-0020) and an `extended` one (ADR-0021). This is **provenance, not vocabulary** — no code under `src/` outside `providers/` reads either field, and nothing branches on a native label's value. The rule that matters is unchanged: a span's `entity_type` is always normalized, so no consumer can act on a provider's label set. If a native label is ever promoted into an audit column or a routing decision, that carve-out has been exceeded and needs its own decision.
 
 ## Provider abstraction
 
 ### Provider output normalization
 
-Two things are normalized before a candidate leaves the provider layer, so no
-downstream layer ever sees a malformed span:
+Three things happen before a candidate leaves the provider layer, so no downstream
+layer ever sees a malformed span:
 
 - **Labels**, in each adapter's own mapping table — provider-native strings never
   cross the boundary (ADR-0004).
 - **Offsets**, in the shared base: spans are validated against the text, and for
   entity types whose surface cannot contain a line break, a span that crosses one is
-  trimmed back to the longest line fragment it covers (ADR-0016). Which entity types
-  those are is a static fact on `EntityDefinition.surface_may_span_lines`, not a
+  split into one span per line and *every* fragment is kept (ADR-0016). Which entity
+  types those are is a static fact on `EntityDefinition.surface_may_span_lines`, not a
   per-layer list; `ADDRESS` is excluded because a postal address written across
   several lines is one address.
+- **Coverage**, optionally and per provider instance: a PERSON span may be widened
+  over one preceding token when that is structurally safe (ADR-0021). This is the one
+  repair that does not narrow, and it is off unless an instance opts in — the shipped
+  configuration enables it for Greek only. It offers the reconciler the widened span
+  *and* the original, because widening a span into a conflict it would lose is how a
+  repair meant to add coverage could remove it.
 
-Trimming is repair, not rejection: an NER model that runs a PERSON span through a line
+Splitting is repair, not rejection: an NER model that runs a PERSON span through a line
 break was right about the entity and wrong about where it stops. Dropping the span
-would leave the name in the output; keeping it destroys the next line's text. The
-*longest* fragment is kept rather than the first, because the name may fall on either
-side of the break — `Customer:` + break + `Peter Novak` is as common as the reverse,
-and keeping the first fragment there would redact the label and leak the name.
+would leave the name in the output; keeping it whole destroys the next line's text.
+*Every* fragment is kept rather than the best one, because the name may fall on either
+side of the break and may be split across it — a hard-wrapped `Jürgen` + break +
+`Müller` is one name in two pieces, and choosing either piece leaks the other. Keeping
+them all can over-redact a neighbouring line instead, which is the direction this
+project measures and gates at 0.000.
 
 Spans trimmed or emptied by this rule are counted into provider drop metrics rather
 than discarded silently.

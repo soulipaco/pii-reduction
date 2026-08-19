@@ -71,6 +71,14 @@ providers:
       models:
         el: xx_ent_wiki_sm
       promote: [LOCATION, ORGANIZATION]
+      # ADR-0021. Promotion fixes the model returning the *wrong label*; this fixes it
+      # returning only the *surname* of a two-token name. Measured whole-corpus against
+      # ADR-0020: strict F1 0.899 -> 0.910, PERSON precision 0.747 -> 0.771 and recall
+      # 0.795 -> 0.821, Greek PERSON 0.423 -> 0.500 on both, and fragment leakage back
+      # to 0.067 where it equals the full-value rate again. Nothing measured got worse.
+      # Global was measured and rejected, as with promotion: en recall 0.962 -> 0.885,
+      # de 1.000 -> 0.885.
+      extend_person_left: true
 
 chains:
   deterministic_only:

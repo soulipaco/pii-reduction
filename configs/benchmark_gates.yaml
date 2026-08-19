@@ -44,11 +44,14 @@ measured:
   # unaffected by these gates.
   splits: all (dev + calibration + test)
   strategy: redact
-  date: 2026-08-19   # hybrid floors re-measured after ADR-0020 label promotion
+  date: 2026-08-19   # hybrid floors re-measured after ADR-0020 and ADR-0021
   # The commit that carries the measured code — d9b01d6, not its parent. Recorded in
   # the commit that follows the one raising these floors, because a commit cannot name
   # its own hash. Checking out this hash and re-running must reproduce the floors.
-  commit: 4f3716c  # ADR-0020; the deterministic floors still reproduce at d9b01d6
+  # `pending` is replaced with the ADR-0021 hash in the commit that follows this one,
+  # per the convention above. The deterministic_only floors are older and still
+  # reproduce at d9b01d6.
+  commit: pending
   # The Presidio numbers move with the model version, by design (ADR-0009 pins the md
   # tier for CI). If a model bump moves them, the nightly job fails loudly and the fix
   # is to re-measure and re-commit this file with the new versions recorded here —
@@ -138,9 +141,12 @@ gate_sets:
       # the privacy side and is now gated below: leakage 0.117 -> 0.067, fragment
       # 0.117 -> 0.078, document clean rate 0.774 -> 0.871, Greek PERSON recall
       # 0.154 -> 0.423, with over-redaction still 0.000 and en/de unchanged.
+      # RAISED BACK 0.899 -> 0.910 by ADR-0021's span extension, above the 0.902 that
+      # preceded promotion. The two changes are a pair: promotion widened coverage and
+      # cost strict precision, extension recovered the boundaries it was losing.
       - name: overall_strict_f1
         metric: strict_f1
-        min: 0.899
+        min: 0.910
         support: 180
       # LOWERED from 0.927, and below the 0.921 that predates span repair. The
       # reason, per CONTRIBUTING.md: 0.927 was measured with a rule that kept only one
@@ -156,12 +162,14 @@ gate_sets:
         metric: relaxed_f1
         min: 0.921
         support: 180
-      # LOWERED 0.935 -> 0.886 (ADR-0020). Promotion accepts LOCATION/ORGANIZATION
-      # spans as PERSON for Greek, and some are not names. This is the cost side of
-      # the trade, stated as a number rather than left to be discovered.
+      # 0.935 -> 0.886 (ADR-0020) -> 0.897 (ADR-0021). Promotion accepts
+      # LOCATION/ORGANIZATION spans as PERSON for Greek and some are not names; the
+      # span extension then recovered part of that by repairing boundaries. Still below
+      # where it started: this is the cost side of the trade, stated as a number rather
+      # than left to be discovered.
       - name: overall_strict_precision
         metric: strict_precision
-        min: 0.886
+        min: 0.897
         support: 180
       # EMAIL and PHONE must stay exactly where the deterministic chain had them:
       # adding a provider is not allowed to disturb what already worked.
@@ -175,21 +183,23 @@ gate_sets:
         entity_type: PHONE
         min: 1.000
         support: 51
-      # LOWERED 0.833 -> 0.747 (ADR-0020) — the largest single cost of promotion, and
+      # 0.833 -> 0.747 (ADR-0020) -> 0.771 (ADR-0021). The largest single cost of
+      # promotion, partly recovered by the span extension fixing the boundaries, and
       # entirely Greek: en PERSON precision stays 0.833 and de stays 0.963, because
-      # promotion is scoped to the `presidio_el` instance. Promoting globally was
-      # measured and rejected: it took en to 0.694, de to 0.839, and over-redaction
-      # off 0.000.
+      # both remedies are scoped to the `presidio_el` instance. Applying either
+      # globally was measured and rejected: promotion took en to 0.694 and de to
+      # 0.839 and over-redaction off 0.000; extension took en recall to 0.885.
       - name: person_strict_precision
         metric: strict_precision
         entity_type: PERSON
-        min: 0.747
+        min: 0.771
         support: 78
-      # RAISED 0.705 -> 0.795 (ADR-0020): the recall the precision above paid for.
+      # RAISED 0.705 -> 0.795 (ADR-0020) -> 0.821 (ADR-0021): the recall the
+      # precision above paid for.
       - name: person_strict_recall
         metric: strict_recall
         entity_type: PERSON
-        min: 0.795
+        min: 0.821
         support: 78
       # TIGHTENED 0.117 -> 0.067 (ADR-0020). This is what the strict-precision floors
       # above were lowered to buy, so it is gated at the new value rather than left
@@ -198,24 +208,26 @@ gate_sets:
         metric: leakage_rate
         max: 0.067
         support: 180
-      # TIGHTENED 0.117 -> 0.078. **This no longer equals the full-value rate**, and
-      # the divergence was investigated before the number was written, as the
-      # deterministic set's note requires. It is not a new partial leak: comparing the
-      # leaked-entity *sets* before and after promotion, no entity leaks that did not
-      # leak before (full or fragment). Seven are fixed outright; two Greek PERSON
-      # values go from fully leaked to partially redacted — the surname is removed and
-      # the given name survives. So the gap between 0.067 and 0.078 is incomplete
-      # progress on two pre-existing leaks, not damage. If this gate ever fails while
-      # leakage_rate holds, that reasoning no longer applies: investigate before
-      # touching the metric (ADR-0013 §5).
+      # 0.117 -> 0.078 (ADR-0020) -> 0.067 (ADR-0021), and **equal to the full-value
+      # rate again**. ADR-0020's promotion opened a gap of 0.011: two Greek PERSON
+      # values went from fully leaked to partially redacted, the surname removed and
+      # the given name left. That was investigated at the time and confirmed to be
+      # incomplete progress rather than new damage — no entity leaked that had not
+      # leaked before. ADR-0021's span extension then completed those two, closing the
+      # gap. The equality is therefore a live property again, not a coincidence: if
+      # this gate fails while leakage_rate holds, a partial leak has reappeared —
+      # investigate before touching the metric (ADR-0013 §5).
       - name: fragment_leakage_rate
         metric: fragment_leakage_rate
-        max: 0.078
+        max: 0.067
         support: 180
       # RAISED 0.774 -> 0.871 (ADR-0020). Derived from *full-surface* leakage, so it
-      # reads "no complete PII value survives", not "nothing identifying survives":
-      # two of the nine newly-clean documents still contain a Greek given name whose
-      # surname was redacted. Those two are exactly the fragment/full gap above.
+      # reads "no complete PII value survives" rather than "nothing identifying
+      # survives". Between ADR-0020 and ADR-0021 that distinction was load-bearing here:
+      # two of the nine newly-clean documents still carried a Greek given name whose
+      # surname had been redacted. ADR-0021 completed both spans, so the two readings
+      # coincide again -- but the definition has not changed, and a future partial
+      # redaction would separate them without moving this number.
       - name: document_clean_rate
         metric: document_clean_rate
         min: 0.871
@@ -236,13 +248,13 @@ gate_sets:
       # Greek PERSON is licence-bound to xx_ent_wiki_sm until roadmap Phase 7
       # (ADR-0007). The floor records where it actually is, so the honest number is
       # protected from silently getting worse.
-      # RAISED 0.222 -> 0.444 (ADR-0020).
+      # RAISED 0.222 -> 0.444 (ADR-0020) -> 0.556 (ADR-0021).
       - name: el_tier1_person_strict_recall
         metric: strict_recall
         entity_type: PERSON
         language: el
         difficulty_tier: 1
-        min: 0.444
+        min: 0.556
         support: 9
       # NEW (ADR-0020). Greek tier 2 is where promotion helps most, 0.111 -> 0.667,
       # so it gets a floor of its own rather than being absorbed into the overall
@@ -254,12 +266,13 @@ gate_sets:
         difficulty_tier: 2
         min: 0.667
         support: 9
-      # Greek tier 3 went 0.000 -> 0.167 with span repair. One entity, but claimed in
-      # three documents, so it is gated rather than left as prose.
+      # Greek tier 3 went 0.000 -> 0.167 with ADR-0016's span repair and 0.167 -> 0.333
+      # with ADR-0021's span extension. Small support, but claimed in prose elsewhere,
+      # so it is gated rather than left to drift.
       - name: el_tier3_person_strict_recall
         metric: strict_recall
         entity_type: PERSON
         language: el
         difficulty_tier: 3
-        min: 0.167
+        min: 0.333
         support: 6

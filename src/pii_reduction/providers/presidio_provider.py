@@ -27,6 +27,13 @@ shipped configuration promotes for Greek only, because promoting globally was
 measured to cost English and German PERSON precision (0.833→0.694 and 0.963→0.839)
 and to destroy a protected identifier.
 
+**Span extension** (``extend_person_left``, ADR-0021) is the other opt-in repair: a
+PERSON span may be widened over one preceding capitalised token when that is
+structurally safe. It addresses the opposite error to promotion — the model returning
+only the *surname* of a two-token Greek name — and like promotion it ships for Greek
+only. The rule itself lives in ``providers/base.py`` because it is not
+Presidio-specific; this adapter only decides whether to switch it on.
+
 **What promotion cannot reach:** spaCy's ``MISC`` label. Measured on the Greek slice,
 ``xx_ent_wiki_sm`` emits ``PER 8, MISC 41, LOC 20, ORG 1``, and Presidio surfaces only
 the first, third and fourth — ``MISC`` has no Presidio entity name and is dropped
@@ -114,6 +121,9 @@ DEFAULT_OPTIONS: dict[str, Any] = {
     #: Native labels normalized to PERSON *and* added to the request (ADR-0020).
     #: Empty by default: promotion is opt-in per instance, never a global default.
     "promote": (),
+    #: Opt in to the ADR-0021 PERSON left-extension. Off by default for the same
+    #: reason as promotion: it was measured to cost English and German recall.
+    "extend_person_left": False,
 }
 
 #: Analyzer engines by model configuration. Building one loads every model, so this
@@ -203,6 +213,7 @@ class PresidioProvider(BaseProvider):
                 f"(promotable: {', '.join(sorted(PROMOTABLE_LABELS))})"
             )
         self.options = merged
+        self.extend_person_left = bool(merged["extend_person_left"])
         self._models = {str(language): str(model) for language, model in models.items()}
         self._promoted = frozenset(promoted)
         # The promoted labels join the table *and* leave the drop set: a label that is

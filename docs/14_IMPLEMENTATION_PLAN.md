@@ -377,7 +377,7 @@ the Greek promotion call taken and shipped (ADR-0020).
 | D (part) | `synthetic/injection.py`, `synthetic/registry.py`, `demo/registry.yaml` | 730 default / 73 integration |
 | D | `synthetic/fetch.py`, `synthetic/public.py`, `synthetic/packs.py`, `fetch-dataset` + `build-pack`, three demo packs and their gate sets (ADR-0017, ADR-0018) | 807 default / 73 integration (799 when D first landed; the audit-fix commit added 8) |
 | Q4 | Greek PERSON diagnosed: span absorption, label confusion, άνω τελεία (ADR-0019). No number moved — the corpus is deliberately not made easier | 809 default / 87 integration |
-| E (part) | ADR-0013 §5's two leakage variants: `fragment_leakage_rate` beside `leakage_rate` (now gated: 0.433 det / 0.078 hybrid), `strategy` in the metric-row grain, `--strategy` on the CLI, `with_reducer`; gates compare the run's strategy to the file's recorded one at the data level | 828 default / 87 integration |
+| E (part) | ADR-0013 §5's two leakage variants: `fragment_leakage_rate` beside `leakage_rate` (now gated: 0.433 det / 0.067 hybrid), `strategy` in the metric-row grain, `--strategy` on the CLI, `with_reducer`; gates compare the run's strategy to the file's recorded one at the data level | 828 default / 87 integration |
 | E | Run provenance (`RunMetadata` + `RuntimeMetric` on the outcome, config hash + rows/s in the summary), threshold calibration reviewed on the calibration split and locked (constants — nothing to tune), the one-time test-split read, and the 10k-document two-chain comparison with its own gate set (`docs/16_BENCHMARK_REPORT_10K.md`, `configs/pack_gates/support_tickets_10k.yaml`) | 838 default / 87 integration |
 | F | `databricks/` package (see the F section below) — parity met on the workspace, distributed path shipped and infra-blocked, audits applied (run identity across warm workers, exact-set audit-schema assertion, schema-drift test, Spark-free guard extended) | 854 default / 90 deselected incl. 3 databricks |
 
@@ -387,13 +387,13 @@ the Greek promotion call taken and shipped (ADR-0020).
 
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
-| strict F1 | 0.723 | 0.899 |
+| strict F1 | 0.723 | 0.910 |
 | relaxed F1 | 0.723 | 0.921 |
 | leakage rate | 0.433 | 0.067 |
-| fragment leakage rate | 0.433 | 0.078 |
+| fragment leakage rate | 0.433 | 0.067 |
 | document clean rate | 0.161 | 0.871 |
 | over-redaction rate | 0.000 | 0.000 |
-| PERSON precision / recall | 0.000 / 0.000 | 0.747 / 0.795 |
+| PERSON precision / recall | 0.000 / 0.000 | 0.771 / 0.821 |
 
 PERSON strict recall by language and tier, hybrid chain:
 
@@ -401,23 +401,24 @@ PERSON strict recall by language and tier, hybrid chain:
 |---|---|---|---|---|
 | en | 1.000 | 0.889 | 1.000 | 1.000 |
 | de | 1.000 | 1.000 | 1.000 | 1.000 |
-| **el** | **0.444** | **0.667** | **0.167** | **0.000** |
+| **el** | **0.556** | **0.667** | **0.333** | **0.000** |
 
 Language detection against the corpus's known language: 99/102 agreement, **zero**
 confident misclassifications, 3 abstentions to `und`.
 
-The hybrid column moved in session 8 with ADR-0020's Greek label promotion; the
+The hybrid column moved in session 8 with ADR-0020's label promotion and ADR-0021's
+span extension; the
 deterministic column has not moved since session 4, when every number here was
 re-measured and reproduced exactly. They are all enforced: `configs/benchmark_gates.yaml`
 holds them as gates, so this table and that file must agree.
 
-**What ADR-0020 traded, in one place:** strict F1 0.902 → 0.899 and PERSON precision
-0.833 → 0.747, against leakage 0.117 → 0.067, document clean rate 0.774 → 0.871
-(read that one carefully: it is derived from *full-surface* leakage, so two of the nine
-newly-clean documents still carry a Greek given name — the same two behind the
-fragment/full gap),
-relaxed F1 0.914 → 0.921, PERSON recall 0.705 → 0.795, and Greek tier 1/2 recall
-0.222 → 0.444 and 0.111 → 0.667. Over-redaction stays 0.000 and **English and German
+**What ADR-0020 and ADR-0021 traded, in one place.** Promotion cost strict F1
+0.902 → 0.899 and PERSON precision 0.833 → 0.747; the span extension then returned
+both and more, to 0.910 and 0.771. Net against the pre-promotion baseline: strict F1
+0.902 → 0.910 and PERSON precision 0.833 → 0.771, against leakage 0.117 → 0.067,
+document clean rate 0.774 → 0.871,
+relaxed F1 0.914 → 0.921, PERSON recall 0.705 → 0.821, and Greek tier 1/2 recall
+0.222 → 0.556 and 0.111 → 0.667. Over-redaction stays 0.000 and **English and German
 are numerically unchanged** — promotion is scoped to the Greek provider instance,
 because the global version was measured and rejected.
 
@@ -467,9 +468,9 @@ Five things these numbers say that the synthetic corpus cannot:
    against.** EMAIL and PHONE hold at 1.000 precision *and* recall on 1,600 entities in
    public prose, in three languages and two scripts, including lower-case unpunctuated
    Greek.
-2. **Greek PERSON recall is 0.727 here against 0.444–0.667 on the synthetic corpus**
-   (session-6 reading: 0.606 against 0.111–0.222; ADR-0020 moved both sides, and the
-   gap narrowed without closing),
+2. **Greek PERSON recall is 0.727 here against 0.556–0.667 on the synthetic corpus**
+   (session-6 reading: 0.606 against 0.111–0.222; ADR-0020 and ADR-0021 moved both
+   sides, and the gap narrowed without closing),
    with the same `xx_ent_wiki_sm` model and the same name pool, while German is 1.000.
    The two corpora are not comparable slice for slice — different phrasing, different
    tier mix, and a pack's names sit in well-formed injected sentences — so this is not
@@ -550,9 +551,9 @@ window of the value, minus windows that occur in the source text outside entity 
 | deterministic | redact | 0.433 | 0.433 | 0.000 |
 | deterministic | mask | 0.433 | **0.922** | 0.000 |
 | deterministic | pseudonymize | 0.433 | 0.433 | 0.000 |
-| hybrid | redact | 0.067 | 0.078 | 0.000 |
-| hybrid | mask | 0.067 | **0.567** | 0.000 |
-| hybrid | pseudonymize | 0.067 | 0.078 | 0.000 |
+| hybrid | redact | 0.067 | 0.067 | 0.000 |
+| hybrid | mask | 0.067 | **0.556** | 0.000 |
+| hybrid | pseudonymize | 0.067 | 0.067 | 0.000 |
 
 Three readings, stated so the table is not misused:
 
@@ -561,23 +562,18 @@ Three readings, stated so the table is not misused:
    becomes visible instead of invisible. Comparing it to redact's rate as one number is
    forbidden (ADR-0013 §5); the gate runner refuses `--gates` with `--strategy` for the
    same reason.
-2. **Redact's fragment rate no longer equals its full rate on the hybrid chain, and
-   that is the mechanism this metric exists to expose.** It was equal until ADR-0020;
-   promotion took it to 0.078 against a full rate of 0.067. A boundary error that
-   leaves half a name pushes the fragment rate above the full rate while the
-   full-surface metric holds still — the exact blind spot session 5 found, so the
-   divergence was investigated before the number was published. **No entity leaks
-   that did not leak before**: comparing the leaked-entity sets across the change,
-   seven are fixed outright and two Greek PERSON values move from fully leaked to
-   partially redacted (surname removed, given name left). Incomplete progress on
-   pre-existing leaks, not new damage. The equality still holds exactly on the
-   deterministic chain, where a test pins it. If the hybrid fragment gate ever fails
-   while `leakage_rate` holds, this reasoning has stopped applying — investigate the
-   leak before touching the metric.
-3. **Pseudonymize retains nothing of its own** at this window length: tokens are
-   digests, so both its rates equal redact's — including redact's two partial Greek
-   spans, which are a detection boundary rather than anything the reducer did. Its
-   leakage still reflects only *undetected* entities.
+2. **Redact's fragment rate equalling its full rate is a finding, not a tautology —
+   and this session proved it by breaking and repairing it.** ADR-0020's promotion
+   separated them (0.078 against 0.067) by detecting two Greek surnames without their
+   given names: a boundary error that leaves half a name pushes the fragment rate above
+   the full rate while the full-surface metric holds still, which is the exact blind
+   spot session 5 found. The divergence was investigated rather than absorbed — no
+   entity leaked that had not leaked before — and ADR-0021's span extension then closed
+   it. Both rates are 0.067 again on both chains, and a test pins the equality on the
+   deterministic one. If either gate fails while `leakage_rate` holds, a partial leak
+   has reappeared: investigate before touching the metric.
+3. **Pseudonymize retains nothing** at this window length: tokens are digests, so both
+   its rates equal redact's. Its leakage still reflects only *undetected* entities.
 
 ### Queue
 
@@ -902,11 +898,22 @@ Environment facts recorded for reuse: dedicated venv (`.venv-dbx17`, Python 3.12
 The `docs/11_ROADMAP.md` build order (…, E, F) is **complete through Phase 6**. What
 remains, none of it sequenced yet:
 
-- ~~**The Greek decision**~~ — **taken and shipped in session 8 (ADR-0020).**
-  Greek-only promotion of `LOCATION`/`ORGANIZATION` to PERSON; token-level surgery
-  measured and deliberately not built. What remains Greek-side is ADR-0019's
-  mechanisms 1 (span absorption — tier 4 stays 0.000) and 3 (the άνω τελεία), plus the
-  hard ceiling the `MISC` finding puts on any further label work through Presidio.
+- ~~**The Greek decision**~~ — **taken and shipped in session 8**, as two ADRs.
+  ADR-0020 promotes `LOCATION`/`ORGANIZATION` to PERSON for Greek (token-level surgery
+  measured and deliberately not built); ADR-0021 extends a PERSON span left over one
+  token when that is structurally safe. Net against the pre-promotion baseline: strict
+  F1 0.902 → 0.910, leakage 0.117 → 0.067, Greek PERSON recall 0.154 → 0.500, PERSON
+  precision 0.833 → 0.771, over-redaction still 0.000, en and de unchanged.
+
+  **What remains is mostly beyond span and label work, which is the useful finding.**
+  Classifying all 26 Greek PERSON entities on the shipped chain: 13 matched, and of the
+  13 misses **8 SILENT** (the model returns no span at all), **4 DROPPED** under a
+  refused label (3 of them `MISC`), **1 ABSORBED**, and **0 PARTIAL** — ADR-0021
+  emptied that bucket. So 12 of the 13 never reach the reconciler as a usable span.
+  Mechanism 1 — the target plan §8 named before this session — is worth one entity of
+  twenty-six now that promotion has converted most absorbed spans into approved ones.
+  **A better-licensed Greek model at Phase 7 is the next real move**, not another
+  repair rule.
 - **Distributed-path re-verification** the day the workspace's serverless sandbox is
   fixed: the databricks-marked test flips from skip to assertion by itself.
 - Two parked ideas with their rationale in the session-3 handoff: MLflow trace
@@ -921,10 +928,11 @@ MultiWOZ's rejection removed (ADR-0018).
 
 - Greek PERSON is licence-bound to `xx_ent_wiki_sm` until Phase 7 (ADR-0007), **the
   gap is diagnosed** (Q4, ADR-0019) as span absorption, `LOC`/`MISC` label confusion
-  and the άνω τελεία, and **the middle one is now acted on** (ADR-0020). Tier 1 and 2
-  moved (0.222 → 0.444, 0.111 → 0.667); tiers 3 and 4 did not, which is the expected
-  shape, since promotion cannot reach a boundary error. The corpus is deliberately not
-  made easier to improve any of these numbers.
+  and the άνω τελεία, and **two of the three are now acted on**: ADR-0020's promotion
+  and ADR-0021's span extension. Greek PERSON recall by tier went 0.222/0.111/0.167/0.000
+  to 0.556/0.667/0.333/0.000. Tier 4 has not moved and is not expected to — it is span
+  absorption, which neither remedy reaches. The corpus is deliberately not made easier
+  to improve any of these numbers.
 - **Presidio drops spaCy's `MISC` label entirely**, before this project's adapter. It
   bounds every future label-level remedy: on the Greek slice the model emits 41 `MISC`
   spans and Presidio surfaces none of them under any requested entity name. Reaching

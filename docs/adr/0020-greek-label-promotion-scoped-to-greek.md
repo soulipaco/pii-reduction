@@ -137,7 +137,9 @@ accepts `LOCATION`/`ORGANIZATION` spans that are not names. Overall strict F1 lo
 0.003 while relaxed F1 gains 0.007 — the signature of a boundary trade rather than a
 detection loss, since promoted spans redact the right name with imprecise edges.
 
-**The fragment-leakage rate no longer equals the full-value rate** (0.078 vs 0.067),
+**The fragment-leakage rate no longer equals the full-value rate** (0.078 vs 0.067) —
+*closed by ADR-0021, which completed both of the partial spans below; the gap this
+paragraph describes existed between the two ADRs.* At the time:
 and ADR-0013 §5 requires that divergence be investigated rather than absorbed. It was,
 by comparing the leaked-entity *sets* before and after: **no entity leaks that did not
 leak before**, in either metric. Seven are fixed outright; two Greek PERSON values move

@@ -56,20 +56,21 @@ pii-reduction benchmark --gates configs/benchmark_gates.yaml
 
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
-| strict F1 | 0.723 | 0.899 |
+| strict F1 | 0.723 | 0.910 |
 | leakage rate | 0.433 | 0.067 |
-| fragment leakage rate | 0.433 | 0.078 |
+| fragment leakage rate | 0.433 | 0.067 |
 | document clean rate | 0.161 | 0.871 |
 | over-redaction rate | 0.000 | 0.000 |
 
-Both leakage metrics are published because they no longer agree. `leakage rate` counts
-an entity leaked only when its *exact full surface* survives; `fragment leakage rate`
-counts any surviving 4-character window. The 0.011 between them is two Greek names
-where a detected span removes the surname and leaves the given name — and by the
-full-surface definition those two documents also count toward `document clean rate`,
-so 0.871 means "no complete PII value survives", not "nothing identifying survives".
+Both leakage metrics are published because agreement between them is a *result*, not a
+tautology. `leakage rate` counts an entity leaked only when its exact full surface
+survives; `fragment leakage rate` counts any surviving 4-character window, so a
+boundary error that redacts half a name shows up in the second and not the first.
+They agree here, which is the claim being made. They briefly did not: ADR-0020 opened a
+0.011 gap by detecting two Greek surnames without their given names, and ADR-0021's
+span extension closed it.
 
-PERSON recall reaches 1.000 for German and 0.889–1.000 for English across every difficulty tier, but **0.000–0.667 for Greek**. The good Greek spaCy models are non-commercial and excluded on licensing grounds (ADR-0007), so Greek routes through a multilingual model — but that is only part of the story. Measured directly (ADR-0019), the model usually *finds* the Greek names and then gets the boundary or the label wrong, so two of the three mechanisms behind that number are not licensing problems at all. Acting on one of them (ADR-0020: Greek-only promotion of `LOCATION`/`ORGANIZATION` spans to PERSON) cut whole-corpus leakage 0.117 → 0.067 and took Greek tier-2 recall 0.111 → 0.667, at a deliberate cost in PERSON precision (0.833 → 0.747) that is entirely Greek — English and German are numerically unchanged. `docs/15_PROVIDERS.md` publishes the gap per language and tier rather than reporting an average that hides it.
+PERSON recall reaches 1.000 for German and 0.889–1.000 for English across every difficulty tier, but **0.000–0.667 for Greek**. The good Greek spaCy models are non-commercial and excluded on licensing grounds (ADR-0007), so Greek routes through a multilingual model — but that is only part of the story. Measured directly (ADR-0019), the model usually *finds* the Greek names and then gets the boundary or the label wrong, so two of the three mechanisms behind that number are not licensing problems at all. Acting on two of them cut whole-corpus leakage 0.117 → 0.067 and took Greek tier-2 recall 0.111 → 0.667: ADR-0020 promotes `LOCATION`/`ORGANIZATION` spans to PERSON for Greek, and ADR-0021 extends a PERSON span over a preceding token when that is structurally safe. Both are Greek-scoped — English and German are numerically unchanged — and the net cost is PERSON precision 0.833 → 0.771. The third mechanism is untouched: the model simply not finding the name is now the majority of what remains, and no boundary or label rule can reach it. `docs/15_PROVIDERS.md` publishes the gap per language and tier rather than reporting an average that hides it.
 
 To regenerate the corpus (same seed gives a byte-identical corpus and manifest):
 
@@ -106,7 +107,7 @@ On the packs, EMAIL and PHONE hold at 1.000 precision and recall across 1,600 en
 in three languages, and the hybrid chain reaches strict F1 0.998–0.999 on English with
 leakage 0.000. The interesting numbers are elsewhere: PERSON *precision* is 0.985–0.995
 because public prose contains names no manifest knows about, and Greek PERSON recall is
-0.727 against 0.444–0.667 on the synthetic corpus with the same model (both sides moved with ADR-0020, from 0.606 and 0.111–0.222) — which is
+0.727 against 0.556–0.667 on the synthetic corpus with the same model (both sides moved with ADR-0020 and ADR-0021, from 0.606 and 0.111–0.222) — which is
 **easier Greek, not better detection**: single short clauses avoid all three of the
 failure modes the synthetic templates trigger (ADR-0019). `docs/14_IMPLEMENTATION_PLAN.md`
 §8 publishes all of it beside the synthetic numbers, with the limitations that keep it
