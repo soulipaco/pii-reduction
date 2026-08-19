@@ -22,7 +22,21 @@ Design constraints, all from ``docs/04_PII_ENGINE.md`` and ``docs/06``:
   raising rather than silently merging two identities. Across processes and Spark
   workers no such check is possible, so `token_length` is configurable and the
   benchmark reports distinct-token counts; treat 6 as a demo default, not a
-  production one.
+  production one. Choose `token_length` from expected cardinality, not taste: the
+  birthday bound is ~sqrt(16^n) — about 4k distinct values at 6 hex, 65k at 8,
+  17M at 12 — and collisions approach certainty as cardinality approaches it, so
+  keep an order of magnitude of headroom: 6 hex for hundreds of distinct values
+  per entity type, 8 for thousands, 12 for about a million. Undersizing on Spark
+  is silent, because cross-worker detection is impossible (above).
+* **Deterministic tokens preserve distributional structure — that is their purpose
+  and their inherent limit.** An adversary without the key can still rank tokens by
+  frequency (the most frequent PERSON token in a support corpus is very likely the
+  most common name in that population) and link tokens that co-occur in the same
+  rows. Keying defeats dictionary attacks on the *values*; nothing defeats
+  frequency and co-occurrence analysis of the *tokens*, because removing that
+  structure would remove exactly the joinability pseudonymization exists to keep.
+  Reduced output with tokens is pseudonymous data and must be governed as such
+  (``docs/09``).
 
 Determinism follows ADR-0011: the value is hashed exactly as it appears, with no
 Unicode or case normalization, so ``Maria`` and ``maria`` are different subjects

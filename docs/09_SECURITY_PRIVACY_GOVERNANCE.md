@@ -227,7 +227,13 @@ Potential lifecycle:
 
 - raw source retained according to source policy,
 - transient normalized segments deleted after successful output,
-- audit metadata retained longer because it excludes raw values,
+- audit metadata governed **at least as strictly as reduced output** — it excludes
+  raw values, but its exact pre-reduction offsets restore the span *lengths* that
+  redaction deliberately removed, and length + position + entity type beside
+  untouched prose is a narrowing signal on short fields. An earlier revision of
+  this list treated audit metadata as lower-sensitivity ("retained longer because
+  it excludes raw values"); the external-review reconciliation (docs/17 §3)
+  corrected that framing,
 - secure debug samples short-lived.
 
 ## Privacy testing

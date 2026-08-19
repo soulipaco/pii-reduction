@@ -1,6 +1,11 @@
 # Databricks PII Reduction Accelerator
 
-> An open-source, multilingual, provider-agnostic accelerator for discovering, detecting, redacting, pseudonymizing, and benchmarking personally identifiable information (PII) on Databricks.
+> An open-source, multilingual, provider-agnostic accelerator for detecting, redacting, pseudonymizing, and benchmarking personally identifiable information (PII) in known free-text columns, locally and on Databricks.
+
+<!-- "discovering" was deliberately removed from this line (session 9): the system
+     detects entities inside columns the operator names — it has no estate or
+     column discovery, and both external reviews independently flagged the word
+     as the one misleading claim in this README (docs/17 §1.8). -->
 
 ## Why this project exists
 

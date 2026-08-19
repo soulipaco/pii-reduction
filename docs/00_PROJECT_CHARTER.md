@@ -56,6 +56,10 @@ Given a multi-turn transcript, preserve timestamps and speaker metadata while tr
 
 Given a field containing multiple ServiceNow-style note blocks, preserve each note header and transform only the note body.
 
+*Status (session 9): unmet — no `note_history` parser exists (plan §5 defers it;
+README's shipped-parser list omits it). Deliberately sequenced after the
+speaker-prefix ADR decision, because both concern prefix semantics (docs/17 D13).*
+
 ### UC-04: Multilingual processing
 
 Detect the likely language of eligible text and route it to a compatible recognition strategy.

@@ -32,7 +32,12 @@ KNOWN_REDUCERS = frozenset({"redact", "mask", "pseudonymize"})
 #: ``deterministic`` lands in A3, ``presidio`` in Increment B.
 KNOWN_PROVIDER_TYPES = frozenset({"deterministic", "presidio"})
 
-#: Increment A5. ``excel`` arrives with Increment D, Spark/Delta with Increment F.
+#: Increment A5. An earlier comment here promised ``excel`` with Increment D and
+#: Spark/Delta with Increment F; both increments landed without adding a source
+#: type — Excel was deferred with the note-history parser, and the Databricks
+#: adapters are deliberately *not* config-buildable (`SparkTableSource` needs a
+#: session, `build_source` takes a path; docs/06 records the same for
+#: destinations). They are constructed by `run_driver`, not named here.
 KNOWN_SOURCE_TYPES = frozenset({"csv", "parquet"})
 KNOWN_DESTINATION_TYPES = frozenset({"csv", "parquet"})
 

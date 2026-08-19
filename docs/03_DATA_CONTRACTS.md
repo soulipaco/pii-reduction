@@ -293,6 +293,10 @@ resolution_rule
 
 Do not store matched raw text by default.
 
+"Privacy-safe" means no raw values — not low-sensitivity: the pre-reduction
+`start`/`end` offsets restore span lengths that redaction removed, so govern the
+audit table at least as strictly as reduced output (`docs/09`, data retention).
+
 If exact text is needed for controlled debugging, use an explicitly enabled secure debug mode with separate storage and retention policy.
 
 ## 13. Benchmark truth schema
