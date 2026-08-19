@@ -1968,3 +1968,18 @@ publication + NOTICE (D14 — owner call). A chip was also raised for the
 pre-existing last-wins row-status edge across multi-column failures
 (`pipeline.py` ~line 253), found by the R1 privacy audit; it is more visible now
 that ADR-0023 makes `pii_status` load-bearing.
+
+### Session 9 addendum — the direction, made official
+
+The owner stated the project's real target (2026-08-19, recorded in plan §8's
+**platform queue** and in project memory): **an internal Databricks-first
+platform** for AI analysis of ServiceNow/case data — PII now, PHI later — with a
+service layer over this engine. Azure Databricks is mandatory, not optional.
+Clarified in the same conversation: data does **not** have to live in Delta —
+UC tables work via `run_driver` today, and Volumes files are plain paths the CSV
+source should read as-is (one verification run owed, queue item P3).
+
+**Next session: start at plan §8 "The platform queue" (P0 → P4, P5 stretch).**
+P0 includes collapsing sessions 1–8 of THIS file into `docs/archive/` — when
+that happens, this addendum and the session-9 block above stay in place as the
+newest live record.

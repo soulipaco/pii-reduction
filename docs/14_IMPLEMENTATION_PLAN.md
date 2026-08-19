@@ -923,6 +923,54 @@ Deferred with conditions, rejected, and disputed items: the decision table in
 `docs/17_EXTERNAL_REVIEW_RECONCILIATION.md` §7 is the record; nothing there is
 re-litigated here.
 
+### The platform queue (session 9 addendum — the owner's stated direction)
+
+**Azure Databricks is the primary deployment target — a must, not a feature.**
+The owner's goal, stated 2026-08-19: an internal platform for analyzing
+ServiceNow / case-description records with AI — PII reduction now, PHI later if
+feasible — with a service layer (Databricks App / API: upload a file or pick a
+table, choose columns, pre-configured parameters) built *over* this engine. The
+library stays the engine; the platform is a shell on top, which is the split
+both external reviews endorsed. **Near-term exit criterion: the owner can run
+real workspace data using only a runbook, one day after this queue starts.**
+
+One increment at a time, same discipline as every queue before it:
+
+- **P0 — repo tidy.** `.claude/SESSION_HANDOFF.md` is ~2,000 lines; collapse
+  sessions 1–8 into a short evidence index (what each established, one link
+  each) and move the full text to `docs/archive/SESSION_HANDOFF_S1-S8.md`.
+  Prune nothing else by default: **ADRs are the decision record and are not
+  deleted or thinned**; numbered docs stay unless demonstrably superseded (then
+  a one-line pointer replaces content, never silent removal). CLAUDE.md's
+  read order must still resolve afterwards.
+- **P1 — ADR-0025: Databricks is the primary deployment target.** Supersedes
+  the "feature among surfaces" framing; amends README positioning, charter and
+  roadmap in the same change. Records the platform ladder and the PHI horizon.
+- **P2 — config-nameable Databricks IO.** `spark_table` source and
+  `delta_table` destination become registrable config types. Design point to
+  resolve in the ADR or a companion: config names the table; the runtime
+  supplies the session (`build_source` takes a path today — `docs/06` records
+  the structural reason; superseding it is deliberate, not a drive-by).
+  Exit: a dataset YAML can name a UC table end to end on the driver path.
+- **P3 — real-data readiness.** Verify UC **Volumes** file ingestion on the
+  workspace (a `/Volumes/...` path through the existing CSV source,
+  databricks-marked test), then write `docs/18_RUNBOOK_DATABRICKS.md`: the
+  ten-minute "run it on your own table" path — profile env var, dedicated
+  venv, dataset config, `run_driver`/CLI invocation, where reduced /
+  reduced-only / audit / metrics land, and the privacy rules for real data
+  (nothing real ever enters the repo, fixtures, or logs — the tooling is
+  fail-closed and metadata-only by construction, ADR-0023 / AGENTS rule 8).
+  Exit: the runbook executed once end to end against the workspace on
+  synthetic data.
+- **P4 — deployment skeleton.** A Databricks Asset Bundle / job definition
+  with zero hard-coded workspace values (names from config/env only).
+- **P5 (stretch) — batching.** Wire `detect_batch` (docs/17 D10 reopens: the
+  platform direction is the condition arriving). Measure rows/s before and
+  after on the 10k pack.
+
+Rules unchanged by urgency: gates never weaken, workspace results only from
+actual workspace runs, real data never becomes a fixture.
+
 ### After the queue
 
 The `docs/11_ROADMAP.md` build order (…, E, F) is **complete through Phase 6**. What
