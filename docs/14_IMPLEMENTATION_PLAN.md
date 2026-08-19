@@ -763,6 +763,29 @@ rest — which trades leakage for over-redaction and needs a measurement before 
 implementation; and a better-licensed Greek model at Phase 7, now with a benchmark that
 can say which of the three it fixed.
 
+**Both of the first two were then measured in this session** (offline simulation of
+the full provider-boundary stack against the committed corpus's Greek slice, using
+the real metric functions; scratchpad only, nothing shipped):
+
+| Greek slice (26 PERSON, 34 protected tokens) | PERSON recall | leakage | over-redaction |
+|---|---|---|---|
+| baseline (PER only, line-bound + guard) | 0.154 | 0.350 | **0.000** |
+| promote `LOC`/`ORG`/`MISC`, naive | 0.385 | 0.133 | 0.706 |
+| … + the identifier guard | 0.385 | 0.133 | 0.324 |
+| … + ADR-0016 line-bounding | 0.423 | 0.133 | 0.206 |
+| … + colon-trim | 0.423 | **0.133** | **0.147** |
+
+**Promotion cuts Greek leakage by 62%** (0.350 → 0.133) **and no measured stack gets
+over-redaction anywhere near the 0.000 gate.** The five remaining destroyers are
+identifiers inside wider promoted spans with no colon or line break to trim at
+(tier-2 noisy text: a Greek word, the machine name, another word, one span). Getting
+to 0.000 needs token-level coverage surgery inside promoted spans — a design decision
+about whether that is still "repair the output" (ADR-0016) or something new, and it
+should be taken deliberately, not overnight. One nuance reverses an earlier note:
+colon-trim alone is a verified no-op (nothing reaches it today), but **inside the
+promotion stack it is load-bearing** (0.206 → 0.147) and a measured no-op on the
+unpromoted path — both facts from the same probe.
+
 **The first of those was scoped in this session and found unshippable as stated.**
 Two structural trim rules were examined at the provider boundary. Colon-trim — a
 PERSON span containing `:`/`·` is trimmed to the value side, safe because no name

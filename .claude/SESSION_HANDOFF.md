@@ -1471,6 +1471,17 @@ inside leaked names, because the pool derives locals from names — as reality d
 Throughput: ~2,147 det vs ~29 hybrid rows/s on ~600-char documents (~74×); context,
 never gates.
 
+**The mechanism-2 measurement is DONE — read plan §8 Q4's follow-ups before any
+Greek work.** Promoting `LOC`/`ORG`/`MISC` to PERSON for Greek cuts leakage 0.350 →
+0.133 and lifts recall 0.154 → 0.423, but the best stack measured (promote →
+line-bound → colon-trim → identifier guard) still destroys 5 of 34 protected
+identifiers (over-redaction 0.147 vs the 0.000 gate). The remaining failure shape is
+an identifier inside a wider promoted span with no separator to trim at. The open
+design question for session 7 — ideally with the user, since it touches the gate
+philosophy — is token-level coverage surgery inside promoted spans. Numbers came
+from an offline simulation of the real provider-boundary stack with the real metric
+functions; nothing shipped.
+
 **Greek span-absorption remedy: scoped, unshippable, recorded (plan §8 Q4
 follow-ups).** Colon-trim fires zero times (absorbed-label spans arrive `MISC`/`LOC`
 and are dropped before PERSON repair sees them); leading-token-trim can always be
