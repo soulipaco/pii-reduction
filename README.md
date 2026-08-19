@@ -20,9 +20,18 @@ The accelerator is designed around five principles:
 
 ## Repository status
 
-This repository skeleton defines the architecture, data contracts, evaluation framework, security model, implementation phases, and contribution rules. It is intentionally implementation-ready but not tied to a single model or dataset.
+**The `docs/11_ROADMAP.md` build order is complete through Phase 6.** Shipped and
+measured: CSV/pandas sources, plain-text and transcript parsers, deterministic
+EMAIL/PHONE and Presidio NER providers, language detection with per-language provider
+routing, entity reconciliation, redact/mask/pseudonymize reducers, local outputs with
+run metrics and run provenance, a seeded synthetic corpus with an injection manifest,
+three public-dataset packs built from pinned checksummed sources, the evaluation
+framework with its gate runner, and a Databricks execution surface whose local/remote
+parity is asserted against a real workspace.
 
-The first vertical slice is implemented and measured (Increments A1–A6, B and C of `docs/14_IMPLEMENTATION_PLAN.md`): CSV/pandas sources, plain-text and transcript parsers, deterministic EMAIL/PHONE and Presidio NER providers, language detection with per-language provider routing, entity reconciliation, redact/mask/pseudonymize reducers, local outputs with run metrics, a seeded synthetic corpus with an injection manifest, and the evaluation framework.
+The architecture, data contracts, security model and contribution rules that framed
+all of it are in `docs/`, and every non-obvious choice has a decision record under
+`docs/adr/`.
 
 Every number published below is enforced rather than only reported: they are locked as regression gates in `configs/benchmark_gates.yaml` and checked by CI on the committed corpus. The public-dataset packs carry their own gate sets under `configs/pack_gates/`, measured on their own corpora — never a reason to loosen the synthetic floors.
 
@@ -123,6 +132,10 @@ Synthetic PII is injected into public-safe text so the project can measure preci
 
 ## What the final accelerator should support
 
+The lists below are the intended scope. Each is annotated with what is **shipped
+today**, so the ambition and the state of the code cannot be confused for one another.
+`docs/14_IMPLEMENTATION_PLAN.md` §8 is the authoritative status.
+
 ### Sources
 
 - Excel workbooks with multiple sheets
@@ -133,6 +146,9 @@ Synthetic PII is injected into public-safe text so the project can measure preci
 - Delta tables
 - fully-qualified Unity Catalog tables
 
+*Shipped: CSV, Parquet, local pandas, and Unity Catalog tables through a Spark session
+(`SparkTableSource`). Excel is not implemented.*
+
 ### Text structures
 
 - plain free text
@@ -141,6 +157,13 @@ Synthetic PII is injected into public-safe text so the project can measure preci
 - key/value case summaries
 - email-like text
 - configurable custom parsers
+
+*Shipped: plain free text and transcript/diarized text, both with byte-exact
+reconstruction, plus a `key_value` parser and a `split_lines` option on the plain
+parser. The last two are registered and configurable but enabled nowhere: both were
+measured against the English key/value problem and lost to a span repair that fixes
+the model's output instead of re-cutting its input (ADR-0016). Work-note histories and
+email-like text are not implemented.*
 
 ### PII entity families
 
@@ -173,6 +196,11 @@ Designed for future extension to:
 - reversible pseudonymization when explicitly configured and appropriately secured
 - drop / suppress for selected entity types
 
+*Shipped: redaction, masking and deterministic pseudonymization, all three measured
+side by side (`--strategy`). Reversible pseudonymization and drop/suppress are not
+implemented; reversibility in particular needs a key-management design this project
+has not taken.*
+
 ### Providers
 
 The pipeline should support a common `PIIProvider` abstraction, allowing implementations such as:
@@ -185,7 +213,16 @@ The pipeline should support a common `PIIProvider` abstraction, allowing impleme
 - Databricks-native AI or model-serving implementations where appropriate
 - hybrid ensembles
 
-No single provider is assumed to be best for every language or entity type.
+*Shipped: a deterministic recognizer (EMAIL, PHONE) and a Presidio/spaCy adapter
+(PERSON), composed as a hybrid chain and routed per language. Two Presidio instances
+serve different languages with different options (ADR-0020, ADR-0021). Transformer NER,
+GLiNER and Databricks-native providers are roadmap Phase 7 — GLiNER subject to the
+CPU-only constraint of ADR-0015.*
+
+No single provider is assumed to be best for every language or entity type. The
+measured numbers in `docs/15_PROVIDERS.md` are the evidence for that claim rather than
+an assertion of it: the deterministic recognizers beat the NER on their own entities,
+and the NER is the only thing that finds names.
 
 ## Conceptual pipeline
 
@@ -238,40 +275,45 @@ Output Adapter
    +---- Delta / Unity Catalog
 ```
 
-## Recommended repository layout
+## Repository layout
+
+As built. Every path below exists; nothing here is aspirational.
 
 ```text
 .
-├── README.md
-├── AGENTS.md
+├── README.md · AGENTS.md · CLAUDE.md · CONTRIBUTING.md · SECURITY.md · LICENSE
+├── pyproject.toml            # src layout, optional extras (ADR-0008)
+├── .github/workflows/        # ci.yml (every push, model-free) + integration.yml (nightly)
 ├── docs/
-│   ├── 00_PROJECT_CHARTER.md
-│   ├── 01_ARCHITECTURE.md
-│   ├── 02_PUBLIC_DATA_STRATEGY.md
-│   ├── 03_DATA_CONTRACTS.md
-│   ├── 04_PII_ENGINE.md
-│   ├── 05_MULTILINGUAL_STRATEGY.md
-│   ├── 06_CONFIGURATION_CONTRACT.md
-│   ├── 07_DATABRICKS_RUNTIME.md
-│   ├── 08_EVALUATION_BENCHMARKING.md
-│   ├── 09_SECURITY_PRIVACY_GOVERNANCE.md
-│   ├── 10_TESTING_QA.md
-│   ├── 11_ROADMAP.md
-│   ├── 12_DEMO_SCENARIOS.md
-│   └── 13_PORTFOLIO_STORY.md
-├── configs/                  # to be implemented
-│   ├── project.yaml
-│   ├── entities.yaml
-│   ├── providers.yaml
-│   ├── languages.yaml
-│   └── datasets/
-├── src/                      # to be implemented
-│   └── pii_reduction/
-├── tests/                    # to be implemented
-├── notebooks/                # thin Databricks entry points only
-├── resources/                # job / bundle / app resources
-└── demo/                     # public-data preparation + synthetic PII injection
+│   ├── 00_PROJECT_CHARTER.md … 13_PORTFOLIO_STORY.md
+│   ├── 14_IMPLEMENTATION_PLAN.md   # §8 is the live status and work queue
+│   ├── 15_PROVIDERS.md             # shipped providers, licences, measured results
+│   ├── 16_BENCHMARK_REPORT_10K.md  # the 10k-document two-chain comparison
+│   └── adr/                        # decision records, indexed in adr/README.md
+├── configs/
+│   ├── project.yaml · entities.yaml · providers.yaml
+│   ├── datasets/             # one dataset contract per file
+│   ├── benchmark_gates.yaml  # the committed corpus's regression floors
+│   └── pack_gates/           # one gate set per public-dataset pack
+├── src/pii_reduction/
+│   ├── contracts/            # typed core objects; imports nothing else in the project
+│   ├── config/ entities/ language/ patterns.py
+│   ├── sources/ parsers/ providers/ reducers/ outputs/
+│   ├── processing/           # the pipeline: parse → language → detect → reconcile → reduce
+│   ├── evaluation/ observability/
+│   ├── synthetic/            # build-time corpus, injection and pack builders
+│   ├── databricks/           # execution surface: Spark source, Delta output, runners
+│   └── cli.py · benchmark.py # entry points
+├── tests/                    # fast tier by default; integration/slow/databricks marked
+├── demo/                     # runnable front doors; the logic lives in synthetic/
+└── data/downloads/           # fetched public datasets, gitignored and checksummed
 ```
+
+Two directories the original plan named are deliberately absent. There is no
+`notebooks/`: the Databricks entry points are importable modules under
+`src/pii_reduction/databricks/`, because a notebook is not testable and `AGENTS.md`
+forbids logic living in one. There is no `resources/`: no job, bundle or app resource
+has been needed yet, and an empty directory is a promise rather than a fact.
 
 ## Implementation philosophy
 
@@ -344,4 +386,15 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 
 ## License
 
-Choose a permissive open-source license only after confirming that all bundled source code, model dependencies, and redistributed demo assets are compatible with it. Dataset licenses must be tracked separately from the repository code license.
+**MIT** (`LICENSE`). The choice is recorded in ADR-0007 and it constrains what may be
+depended on: the good Greek spaCy models are CC BY-NC-SA (non-commercial) and are
+therefore excluded, which is why Greek routes through the multilingual `xx_ent_wiki_sm`
+and why the provider refuses to be configured with them. A test asserts the licence
+file and that exclusion together.
+
+Dataset licences are tracked separately from the code licence, as they must be. No
+public dataset is redistributed here — packs are rebuilt on demand from a pinned
+revision with a recorded checksum (ADR-0017), and each pack's `meta.json` carries its
+source licence, attribution requirement and share-alike flag. Nothing is published
+today, so no attribution is owed yet; that becomes real the moment a built pack is
+distributed.
