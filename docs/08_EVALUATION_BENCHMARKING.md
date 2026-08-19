@@ -100,6 +100,25 @@ Leakage is measured in two variants, and they are deliberately not one number (A
 
 Comparing a mask run's leakage against a redact run's as if they were the same metric is forbidden; the two variants carry distinct names and the strategy travels with every result so the reading cannot be confused. Measured on the committed corpus, hybrid chain: full-value leakage is 0.067 under *both* strategies — masking covers the exact surface just as redaction does — while fragment leakage is 0.067 under `redact` and 0.556 under `mask`, which is the deliberate retention (`last4`, `partial_email`) becoming visible. Redact's equality with its own full-value rate is a result rather than a tautology: ADR-0020 briefly separated them (0.078 vs 0.067) by detecting two Greek surnames without their given names, and ADR-0021's span extension closed the gap.
 
+### Referential consistency (pseudonymize only)
+
+Pseudonymization's claim — same value, same token; distinct values, distinct
+tokens; linkage bounded by scope — is measured, not assumed
+(`evaluation/consistency.py`, session 9):
+
+- **`consistency_rate`** — fraction of distinct values whose occurrences all map
+  to one token. A miss splits one subject across join keys.
+- **`distinctness_rate`** — fraction of tokens standing for exactly one value.
+  A miss silently merges two subjects — the collision failure no cross-worker
+  check can catch.
+
+Measured on the committed corpus (deterministic chain, all 102 EMAIL/PHONE
+occurrences): both rates 1.000 within each dataset scope, and the same value
+receives *different* tokens across the two dataset scopes — scope isolation
+working end to end. Pinned by `tests/test_referential_consistency.py` in the
+default tier; the measurement is test-tier by design because the pipeline
+outcome does not retain per-operation replacements for the benchmark to consume.
+
 ### Over-redaction rate
 
 Measure how often protected negative examples or known non-PII tokens are modified.
