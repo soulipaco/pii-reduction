@@ -2,7 +2,7 @@
 
 Produced by session 2 (2026-08-17) after repository assessment and empirical probes.
 Decisions referenced as `ADR-NNNN` are recorded under `docs/adr/`. Probe evidence is
-summarized in `.claude/SESSION_HANDOFF.md` (session 2 section).
+summarized in `docs/archive/SESSION_HANDOFF_S1-S8.md` (session 2 section).
 
 This plan is the executable input for the implementation sessions. It respects
 `AGENTS.md` (canonical agent policy), `docs/01_ARCHITECTURE.md` (layer boundaries),
@@ -994,7 +994,8 @@ remains, none of it sequenced yet:
   repair rule.
 - **Distributed-path re-verification** the day the workspace's serverless sandbox is
   fixed: the databricks-marked test flips from skip to assertion by itself.
-- Two parked ideas with their rationale in the session-3 handoff: MLflow trace
+- Two parked ideas with their rationale in the session-3 handoff (archived in
+  `docs/archive/SESSION_HANDOFF_S1-S8.md`): MLflow trace
   redaction, and GLiNER for the Greek gap — the latter subject to **ADR-0015
   (CPU-only)**.
 
