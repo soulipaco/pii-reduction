@@ -77,7 +77,7 @@ Overall strict F1 0.723, leakage 0.433, document clean rate 0.161, over-redactio
 |---|---|
 | **Type** | `presidio` |
 | **Entities** | PERSON, EMAIL, PHONE |
-| **Languages** | en, de, el |
+| **Languages** | en, de (Greek is served by a second instance, `presidio_el` — see below) |
 | **Dependencies** | `presidio-analyzer`, `spacy` (extra), plus models installed by command |
 | **Runtime** | engine cached per process/worker; ~8 s to build, 7–30 ms per short text |
 | **Increment** | B |
@@ -118,10 +118,40 @@ model, at the quality cost measured below.
 | `PHONE_NUMBER` | PHONE |
 | `URL`, `LOCATION`, `NRP`, `DATE_TIME`, `IP_ADDRESS` | dropped, and counted |
 
-The adapter requests only the three native labels it maps, so `URL` — which produced
+The adapter requests only the native labels it maps, so `URL` — which produced
 partial-match noise such as `maria.ro` from an email address — never arrives. The drop
 table is a safety net for future Presidio versions, and every drop is counted through
-a shared drop counter rather than silently discarded.
+a shared drop counter rather than silently discarded. Drops are attributed to the
+*configured instance name*, not the provider type, so two instances of this adapter
+cannot pool their counts.
+
+#### Label promotion (`promote`, ADR-0020)
+
+The table above describes an instance with promotion off, which is the default and is
+what the `presidio` instance ships. A `promote` list moves native labels from the drop
+row into the mapping:
+
+| Presidio label | Normalized, with `promote: [LOCATION, ORGANIZATION]` |
+|---|---|
+| `LOCATION` | PERSON |
+| `ORGANIZATION` | PERSON |
+
+Promotion widens the analyzer **request**, not just the table — an unrequested label
+never arrives, so a table-only change would be a silent no-op (ADR-0019 Q4). Promotable
+labels are `LOCATION`, `ORGANIZATION` and `NRP`; anything else is refused, because
+promoting `URL` or `DATE_TIME` is a category error rather than a coverage choice.
+A promoted span carries `promoted: True` in its `EntityMatch.metadata`.
+
+**It is enabled for Greek only.** Applied to every language it was measured to cost
+English PERSON precision 0.833 → 0.694 and German 0.963 → 0.839, and to take
+over-redaction off its 0.000 gate. Scoped to Greek, English and German are numerically
+unchanged. `NRP` is promotable but not enabled: Presidio derives it from spaCy's
+`NORP`, which `xx_ent_wiki_sm` does not emit, so it never fires.
+
+**What promotion cannot reach:** spaCy's `MISC`. On the Greek slice the model emits
+`PER 8, MISC 41, LOC 20, ORG 1` and Presidio surfaces only the first, third and
+fourth — `MISC` has no Presidio entity name and is discarded inside Presidio, before
+this adapter. That is a ceiling on every label-level remedy here.
 
 ### Confidence semantics
 
@@ -138,13 +168,17 @@ A single global threshold of 0.5 would therefore drop every phone number. Thresh
 are per provider and per entity, and are applied **once, by the reconciler**, which
 records what each threshold rejected. The adapter itself does no filtering.
 
+As shipped, two instances of this adapter split the languages between them (ADR-0020).
+`language_scopes` routes each document to exactly one, so this is not a second opinion
+on the same text:
+
 ```yaml
 providers:
   presidio:
     type: presidio
-    languages: [en, de, el]
+    languages: [en, de]
     entities: [PERSON, EMAIL, PHONE]
-    thresholds:      # uncalibrated until Increment E
+    thresholds:
       PERSON: 0.5
       EMAIL: 0.6
       PHONE: 0.3
@@ -152,8 +186,28 @@ providers:
       models:
         en: en_core_web_md
         de: de_core_news_md
+
+  presidio_el:
+    type: presidio
+    languages: [el]
+    entities: [PERSON, EMAIL, PHONE]
+    thresholds:      # must match the instance above; a test asserts it
+      PERSON: 0.5
+      EMAIL: 0.6
+      PHONE: 0.3
+    options:
+      models:
         el: xx_ent_wiki_sm
+      promote: [LOCATION, ORGANIZATION]
+
+chains:
+  deterministic_presidio:
+    providers: [deterministic, presidio, presidio_el]
 ```
+
+One consequence worth knowing: an English-only dataset now never loads
+`xx_ent_wiki_sm` at all, because the chain short-circuits on language before the Greek
+instance's engine is ever built.
 
 ### Known limitations
 
@@ -162,6 +216,10 @@ providers:
   boundary or the label wrong: the preceding verb `Ονομάζομαι` is absorbed into the
   span, and two of the eight pool names come back exactly placed but labelled `ORG`
   or `LOC`. See the diagnosis below; a remedy aimed at detection will move little.
+  **The label half of this shipped** (ADR-0020): promoting `LOCATION`/`ORGANIZATION`
+  took Greek tier 1 from 0.222 to 0.444 and tier 2 from 0.111 to 0.667. The boundary
+  half did not — tiers 3 and 4 are unchanged, and tier 4 remains 0.000, because no
+  label change can repair a span that swallowed the preceding verb.
 - The flat 0.85 NER score means false positives cannot be filtered by confidence. The
   probe found the word "Email" tagged PERSON at 0.85 in one sentence.
 - The default email recognizer rejects `.test` and `.invalid` domains, which is why
@@ -177,7 +235,7 @@ providers:
 |---|---|---|---|---|
 | EMAIL | 1.000 | 1.000 | 1.000 | 51 |
 | PHONE | 1.000 | 1.000 | 1.000 | 51 |
-| PERSON | 0.833 | 0.705 | 0.764 | 78 |
+| PERSON | 0.747 | 0.795 | 0.770 | 78 |
 
 PERSON strict recall by language and tier:
 
@@ -185,29 +243,51 @@ PERSON strict recall by language and tier:
 |---|---|---|---|---|
 | en | 1.000 | 0.889 | 1.000 | 1.000 |
 | de | 1.000 | 1.000 | 1.000 | 1.000 |
-| **el** | **0.222** | **0.111** | **0.167** | **0.000** |
+| **el** | **0.444** | **0.667** | **0.167** | **0.000** |
+
+Greek tiers 1 and 2 moved with ADR-0020's label promotion (from 0.222 and 0.111).
+Tier 3 and tier 4 did not, and that is the expected shape rather than a shortfall:
+promotion addresses ADR-0019's *label confusion* only. Tier 4 is span absorption — the
+model swallows the capitalised verb before the name — which no label change can reach.
 
 Chain comparison, whole corpus:
 
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
-| strict F1 | 0.723 | **0.902** |
-| relaxed F1 | 0.723 | **0.914** |
-| leakage rate | 0.433 | **0.117** |
-| document clean rate | 0.161 | **0.774** |
+| strict F1 | 0.723 | **0.899** |
+| relaxed F1 | 0.723 | **0.921** |
+| leakage rate | 0.433 | **0.067** |
+| fragment leakage rate | 0.433 | **0.078** |
+| document clean rate | 0.161 | **0.871** |
 | over-redaction rate | 0.000 | **0.000** |
+
+`document clean rate` is derived from the full-surface leakage metric, so it means "no
+complete PII value survives", not "nothing identifying survives". Two of the nine
+documents that became clean with ADR-0020 still contain a Greek given name whose
+surname was redacted — the same two behind the fragment/full gap above. Stated here
+because this is the metric most likely to be quoted on its own.
 
 Three things this table says plainly:
 
-1. Adding an NER provider is what moved leakage from 43.3% to 11.7%; deterministic
-   recognizers alone cannot cover names.
+1. Adding an NER provider is what moved leakage from 43.3% to 6.7%; deterministic
+   recognizers alone cannot cover names. (It was 11.7% before ADR-0020 promoted
+   Greek `LOCATION`/`ORGANIZATION` labels to PERSON.)
 2. **The strict–relaxed gap is boundary quality** — spans covering the right name with
    the wrong edges. It was zero while only deterministic spans existed (ADR-0011),
-   opened to 0.886 vs 0.921 the moment a model joined, and is 0.902 vs 0.914 after
-   ADR-0016's span repair. Repair narrowed the *strict* side by fixing boundaries and
-   widened the relaxed side slightly, because keeping every line fragment of a
-   crossing span redacts the occasional neighbouring label. That is the deliberate
-   safe-direction trade; the rest is Greek boundary fuzziness.
+   opened to 0.886 vs 0.921 the moment a model joined, became 0.902 vs 0.914 after
+   ADR-0016's span repair, and is 0.899 vs 0.921 after ADR-0020's promotion. Repair
+   narrowed the *strict* side by fixing boundaries and widened the relaxed side
+   slightly, because keeping every line fragment of a crossing span redacts the
+   occasional neighbouring label. Promotion then moved both the other way — strict
+   down 0.003, relaxed up 0.007 — which is the signature of spans that cover the right
+   name with imprecise edges. Both are deliberate safe-direction trades; the rest is
+   Greek boundary fuzziness.
+
+   **The fragment-leakage rate no longer equals the full-value rate** (0.078 vs 0.067).
+   That gap was investigated rather than absorbed, as ADR-0013 §5 requires: no entity
+   leaks that did not leak before promotion. Seven are fixed outright and two Greek
+   values go from fully leaked to partially redacted, the surname removed and the
+   given name left.
 3. **Greek is the outstanding gap, and it is three bugs rather than one weakness**
    (ADR-0019, plan §8 Q4). It had been read as a pure licensing consequence; the
    diagnosis says otherwise. Probed directly, `xx_ent_wiki_sm` almost always returns a
@@ -226,9 +306,9 @@ Three things this table says plainly:
    labels first. Detection is the smallest of the three: only 4 of 48 probes returned no
    span at all, and tier 4 is 100% boundary error, so better *finding* cannot touch it.
 
-   On the `multilingual_utterances` pack the same model reaches **0.606** over a support
-   of 66. That is not a better Greek result; it is easier Greek — single short clauses
-   with none of the three triggers. It must not be quoted as the Greek number, and the
+   On the `multilingual_utterances` pack the same model reaches **0.727** over a support
+   of 66 (0.606 before ADR-0020). That is not a better Greek result; it is easier Greek
+   — single short clauses with none of the three triggers. It must not be quoted as the Greek number, and the
    synthetic corpus is deliberately **not** made easier to close the difference, because
    that would tune the benchmark to the model.
 

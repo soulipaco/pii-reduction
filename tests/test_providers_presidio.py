@@ -172,3 +172,82 @@ class TestEngineReuse:
         one = PresidioProvider().engine()
         other = PresidioProvider({"models": {"en": "en_core_web_md"}}).engine()
         assert one is not other
+
+
+class TestLabelPromotion:
+    """ADR-0020: promotion changes the *request*, which is why it works at all.
+
+    Q4 established that a label the adapter does not ask for never reaches the
+    mapping table, so a promotion implemented only as a table entry is a silent
+    no-op. These assert the request actually widened, and that the Greek names the
+    baseline drops on a label technicality come back as PERSON.
+    """
+
+    #: Greek sentences whose name `xx_ent_wiki_sm` returns under a non-PER label —
+    #: ADR-0019's mechanism 2. Both names are synthetic and drawn from the committed
+    #: Greek pool in `synthetic/values.py`; the ORGANIZATION one recombines the given
+    #: name of one pool entry with the surname of another, so it matches no entry
+    #: verbatim. The point here is the adapter's response, not the model's behaviour,
+    #: which ADR-0019 already pins.
+    #:
+    #: The two differ in a way worth keeping: the LOCATION case returns the *whole*
+    #: name, the ORGANIZATION case returns the surname only. The second is why the
+    #: fragment-leakage rate no longer equals the full-value rate (ADR-0020) — a
+    #: promoted span can redact half a name.
+    EL_AS_LOCATION = "Ο πελάτης Κώστας Βασιλείου κάλεσε για την παραγγελία."
+    EL_AS_ORGANIZATION = "Ο πελάτης Μαρία Παπαδοπούλου κάλεσε για την παραγγελία."
+
+    def test_promotion_widens_what_is_asked_of_the_model(self) -> None:
+        # The mechanism, asserted directly: LOCATION is absent from the plain
+        # instance's table and present in the promoting one, so it is absent from and
+        # present in the analyzer request respectively.
+        assert "LOCATION" not in PresidioProvider()._mapping.table
+        promoted = PresidioProvider({"promote": ["LOCATION", "ORGANIZATION"]})
+        assert promoted._mapping.table["LOCATION"] == PERSON
+        assert promoted._mapping.table["ORGANIZATION"] == PERSON
+
+    def test_promotion_recovers_greek_names_the_baseline_drops(self) -> None:
+        plain = PresidioProvider({"models": {"el": "xx_ent_wiki_sm"}})
+        promoted = PresidioProvider(
+            {"models": {"el": "xx_ent_wiki_sm"}, "promote": ["LOCATION", "ORGANIZATION"]}
+        )
+        for text in (self.EL_AS_LOCATION, self.EL_AS_ORGANIZATION):
+            before = plain.detect(text, language="el", entities={PERSON})
+            after = promoted.detect(text, language="el", entities={PERSON})
+            assert not before, "the baseline is expected to find nothing here"
+            assert after, (
+                "promotion must return a PERSON span the unpromoted adapter does not; "
+                "if this fails the model's labels changed — re-check ADR-0019"
+            )
+
+    def test_a_promoted_span_may_cover_only_part_of_the_name(self) -> None:
+        # Recorded as behaviour rather than left to be discovered: this is the
+        # mechanism behind ADR-0020's fragment-leakage note, where two Greek values
+        # go from fully leaked to partially redacted.
+        promoted = PresidioProvider(
+            {"models": {"el": "xx_ent_wiki_sm"}, "promote": ["LOCATION", "ORGANIZATION"]}
+        )
+        whole = promoted.detect(self.EL_AS_LOCATION, language="el", entities={PERSON})
+        assert [self.EL_AS_LOCATION[m.start : m.end] for m in whole] == ["Κώστας Βασιλείου"]
+        partial = promoted.detect(self.EL_AS_ORGANIZATION, language="el", entities={PERSON})
+        assert [self.EL_AS_ORGANIZATION[m.start : m.end] for m in partial] == ["Παπαδοπούλου"]
+
+    def test_a_promoted_span_says_so_in_its_metadata(self) -> None:
+        promoted = PresidioProvider(
+            {"models": {"el": "xx_ent_wiki_sm"}, "promote": ["LOCATION", "ORGANIZATION"]}
+        )
+        matches = promoted.detect(self.EL_AS_LOCATION, language="el", entities={PERSON})
+        assert matches, "expected at least one match to inspect"
+        # Every PERSON span must declare whether it is the model's own judgement or a
+        # promotion — an audit row that cannot tell them apart cannot explain a
+        # precision regression.
+        assert all("promoted" in match.metadata for match in matches)
+        assert any(match.metadata["promoted"] for match in matches)
+
+    def test_english_is_unaffected_by_a_greek_scoped_promotion(self) -> None:
+        # The scoping claim, at the provider level: the en/de instance ships without
+        # `promote`, so its behaviour must be identical to the pre-ADR-0020 adapter.
+        plain = PresidioProvider({"models": {"en": "en_core_web_md"}})
+        matches = plain.detect(EN_TEXT, language="en", entities={PERSON})
+        assert [(m.start, m.end) for m in matches] == [(13, 24)]
+        assert all(not m.metadata["promoted"] for m in matches)

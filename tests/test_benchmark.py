@@ -252,9 +252,14 @@ class TestRunProvenance:
         # Prefixed with the provider name: the record describes the configured
         # providers, and this fixture's run uses the deterministic-only chain — the
         # prefix is what stops presidio's note reading as a claim about this run's
-        # own thresholds.
+        # own thresholds. Both Presidio instances appear (ADR-0020 split them by
+        # language), which is why the prefixing exists at all.
         assert all(
-            run.threshold_calibration == "presidio=reviewed-s6-calibration-split-constants-locked"
+            run.threshold_calibration
+            == (
+                "presidio=reviewed-s6-calibration-split-constants-locked; "
+                "presidio_el=reviewed-s6-calibration-split-constants-locked"
+            )
             for run in outcome.runs
         )
 
@@ -309,10 +314,13 @@ class TestStrategyComparison:
     def test_redact_fragment_rate_equals_its_full_rate_on_this_corpus(
         self, outcome: BenchmarkOutcome
     ) -> None:
-        # Nothing partially survives a full redaction of a correct span, and the
-        # ambient exclusion removes the one coincidence (`chne` in `Rechnername`).
-        # If these ever diverge, a partial leak has appeared: investigate before
-        # touching the metric.
+        # On *this* chain. Nothing partially survives a full redaction of a correct
+        # span, and the ambient exclusion removes the one coincidence (`chne` in
+        # `Rechnername`). The hybrid chain no longer satisfies this — ADR-0020's
+        # promotion produces two partially-redacted Greek names — so the claim is
+        # deliberately scoped to the deterministic fixture rather than generalised.
+        # If these ever diverge *here*, a partial leak has appeared: investigate
+        # before touching the metric.
         assert outcome.fragment_leakage.rate == pytest.approx(outcome.leakage.rate)
 
     def test_the_fragment_row_is_published(self, masked: BenchmarkOutcome) -> None:

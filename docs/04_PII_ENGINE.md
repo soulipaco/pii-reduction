@@ -33,6 +33,8 @@ HEALTH_ID
 
 Provider-native labels should never leak throughout the codebase: no span carrying one may cross out of a provider adapter, and nothing under `src/` outside `providers/` may name one. Tests that deliberately characterise a provider or a model *below* that boundary are the one exception, and say so.
 
+One narrow carve-out, stated because the code has always relied on it: `EntityMatch.metadata` may carry a provider's native label under `native_label`, and ADR-0020 adds a `promoted` boolean beside it. This is **provenance, not vocabulary** — no code under `src/` outside `providers/` reads either field, and nothing branches on a native label's value. The rule that matters is unchanged: a span's `entity_type` is always normalized, so no consumer can act on a provider's label set. If a native label is ever promoted into an audit column or a routing decision, that carve-out has been exceeded and needs its own decision.
+
 ## Provider abstraction
 
 ### Provider output normalization

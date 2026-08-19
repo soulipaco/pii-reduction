@@ -1560,11 +1560,24 @@ Q4 follow-ups), the sandbox-incident recheck, docs/01+plan §3 naming `databrick
 as an execution surface (architecture review Q3 — docs lag, code is right), and the
 parked ideas.
 
-## Session 8 — 2026-08-19 — Docs reconciled with Increment F; sandbox re-checked; Greek call still open
+## Session 8 — 2026-08-19 — Docs reconciled with Increment F; sandbox re-checked; **the Greek call taken and shipped (ADR-0020)**
 
-**Start here:** the queue is still empty and the Greek promotion decision is still
-yours to make — it was brought to you with a concrete proposal, not built. Nothing
-about detection, reduction or any published number changed this session.
+**Start here:** the queue is empty. The Greek promotion decision was brought to you,
+taken, and shipped as **ADR-0020** — the second half of this session. Published
+numbers moved for the first time since Increment E, deliberately and in both
+directions; the trade is in ADR-0020 and plan §8.
+
+**The finding worth carrying forward, above all the numbers:** the open question was
+"how do we get token-level surgery to reach over-redaction 0.000?" — and the premise
+was wrong. Measured against the real pipeline instead of the offline simulation plan
+§8 recorded, promotion through the shipped adapter destroys **nothing**, because
+Presidio discards spaCy's `MISC` label before this project's adapter ever sees it, and
+21 of the 22 model spans overlapping a protected token are `MISC`. Surgery was built,
+measured, shown to work on the one arm that has destroyers, and **deliberately not
+shipped**. Two sessions of design pressure had been aimed at a defect that the real
+stack did not have. The harness that established this reproduces the published
+baseline exactly, twice, through independent code paths — that validation is what
+made it safe to contradict a recorded finding.
 
 **What landed:** the documentation half of Increment F. `databricks/` is now named as
 an *execution surface* in `docs/01_ARCHITECTURE.md` and plan §3 — outermost edge,
@@ -1650,8 +1663,94 @@ accumulate instead of being re-derived. Re-run occasionally:
 DATABRICKS_CONFIG_PROFILE=<profile> .venv-dbx17/Scripts/python.exe -m pytest tests/test_databricks_parity.py -m databricks -o addopts=""
 ```
 
-**858 default-tier tests** (854 + 4 new guards), 90 deselected. Unchanged: every
-published number, every gate, the corpus, and all detection behaviour.
+**876 default-tier tests** (854 + 4 layering guards + 18 promotion/scope/attribution), 95
+deselected; **92 integration**; all six gate-set runs green — both benchmark sets on
+both chains, plus `multilingual_utterances` and `support_tickets` on both. The two touched test
+modules also pass with every optional extra hard-blocked, and `mypy src tests` caught
+an untyped fixture that a `mypy src` run would have shipped to CI.
+
+**The corpus is untouched** — ADR-0019's rule holds. What moved is a provider option,
+a chain, and the gate floors that record the trade.
+
+### The Greek work (ADR-0020)
+
+**What shipped.** `PresidioProvider` gains a `promote` option: listed native labels
+join the analyzer *request* and normalize to PERSON. Q4 had already established the
+request is the only place this can work — an unrequested label never reaches the
+mapping table — so a table-only change would have been a silent no-op.
+`configs/providers.yaml` splits Presidio into `presidio` (en, de) and `presidio_el`
+(el, promoting `LOCATION`/`ORGANIZATION`), both in the hybrid chain, routed by
+`language_scopes`.
+
+**Why the split lives in the chain and not in a `languages:` route** — this is a trap
+worth remembering: `benchmark.with_chain` overrides a column's chain but **not** a
+project-level language route, so a route would have applied Presidio to Greek during
+the `deterministic_only` benchmark and quietly corrupted that baseline. Verified
+unchanged afterwards: 0.723 / 0.433 / 0.000 / 0.161. A default-tier test now asserts
+no `languages:` block exists in `configs/project.yaml`, with the reason attached.
+
+**Scoping was not optional.** Promotion applied globally was measured and rejected: en
+PERSON precision 0.833 → 0.694, de 0.963 → 0.839, over-redaction off its 0.000 gate,
+strict F1 0.902 → 0.875. Scoped to Greek, en and de are numerically identical.
+
+**The trade, both directions.** Lowered: strict F1 0.902 → 0.899, overall strict
+precision 0.935 → 0.886, PERSON precision 0.833 → 0.747. Raised or tightened: leakage
+0.117 → 0.067, fragment 0.117 → 0.078, document clean 0.774 → 0.871, PERSON recall
+0.705 → 0.795, relaxed F1 0.914 → 0.921, Greek tier 1 0.222 → 0.444, tier 2
+0.111 → 0.667, plus a new Greek tier-2 floor. Every floor that improved was tightened,
+not left slack — a later change that gives the precision back must give the leakage
+back too. 15/15 hybrid gates and 10/10 deterministic gates pass.
+
+**The fragment-leakage equality broke, and the plan told me not to accept that.**
+Hybrid fragment 0.078 against full 0.067. Investigated by comparing the leaked-entity
+*sets* before and after: **no entity leaks that did not leak before** — seven fixed
+outright, two Greek values downgraded from fully leaked to partially redacted (surname
+removed, given name left). Incomplete progress, not new damage. That reasoning is
+written into the gate file beside the number, so the next person to see the gap does
+not have to re-derive it.
+
+**Not addressed, and now bounded:** ADR-0019's mechanisms 1 (span absorption — Greek
+tier 4 stays 0.000) and 3 (the άνω τελεία). The `MISC` finding is a hard ceiling on
+any further label-level remedy through Presidio; reaching it needs a spaCy recognizer
+registered into Presidio or a separate provider adapter, neither built.
+
+**The auditors found three things the measurement did not, and one was serious.**
+
+1. **A second gate file measures Greek on the same chain.**
+   `configs/pack_gates/multilingual_utterances.yaml` is de+el, half Greek, with two
+   precision floors sitting at exactly their measured value. Promotion broke both. The
+   MASSIVE source was still cached, so the pack was rebuilt and **re-measured** rather
+   than flagged: precision 0.926 → 0.893 and strict F1 0.930 → 0.923 against leakage
+   0.065 → 0.030, clean rate 0.870 → 0.940, PERSON recall 0.805 → 0.865, Greek PERSON
+   0.606 → 0.727. **Independent corroboration on public text, in the same shape.** The
+   English packs were re-run too and are unchanged. Lesson: "which gate files measure
+   this chain?" is a question to ask *before* changing a chain, not after.
+2. **Drop counts were misattributed across the two instances.** `LabelMapping` captured
+   the provider name at construction, but `build_provider` assigns the configured name
+   *after* the constructor returns — so `presidio_el` filed its drops under `presidio`,
+   and `pipeline` merges the counters, so they summed silently. Latent with one
+   instance; a real loss of ADR-0004's signal with two. Fixed by re-stamping the mapping
+   on access; two tests pin it.
+3. **`document_clean_rate` calls two partially-redacted documents clean.** It derives
+   from full-surface leakage, so 0.774 → 0.871 is seven genuinely clean plus two that
+   still carry a Greek given name. The fragment/full divergence was disclosed in five
+   places and this consequence of it in none. Now stated wherever 0.871 appears —
+   README, docs/15, plan §8 and the gate file. **A metric that is honest and a framing
+   that is honest are two different things.**
+
+Also from the audits: the ADR claimed an audit row could distinguish a promoted span,
+which is false (`AUDIT_COLUMNS` is a closed set that no metadata reaches) — reworded
+rather than delivered, since adding the column changes the Delta schema the parity test
+asserts exactly. `docs/15_PROVIDERS.md` still documented the pre-change adapter and
+shipped a yaml snippet reproducing the rejected configuration. And the stated reason
+`NRP` never fires was wrong: it comes from spaCy's `NORP`, which `xx_ent_wiki_sm` does
+not emit — not from `MISC`, which is a separate ceiling.
+
+**One dead branch removed by its own test.** The `promote` validator had an
+"already mapped" rule no input could reach, because `PROMOTABLE_LABELS` and
+`NATIVE_LABELS` are disjoint. The test written to exercise it failed with the wrong
+message, which is how it surfaced; the branch is gone and the disjointness that makes
+it unnecessary is asserted instead.
 
 **Recorded rather than fixed:** `README.md`'s repository tree is session-0
 aspirational — it marks `configs/`, `src/` and `tests/` "to be implemented" though all
@@ -1661,8 +1760,9 @@ surrounding lines are current, which is worse than a visibly dated block. It wan
 whole-README refresh, not a patch — noted here so the deferral does not become
 permanent by silence.
 
-**Still open, none started:** the Greek promotion design call (plan §8 Q4
-follow-ups — the one item that needs a human decision before any code), the
-distributed-path re-verification whenever Databricks fixes the channel, and the parked
-ideas (`incident_notes` pack, a public transcript corpus to replace MultiWOZ, NOTICE
-emission if a pack is ever published, MLflow trace redaction, GLiNER under ADR-0015).
+**Still open, none started:** the distributed-path re-verification whenever Databricks
+fixes the channel; a `MISC`-reaching provider path if Greek is pushed further (scoped
+in ADR-0020, not built); ADR-0019's mechanisms 1 and 3; the README refresh above; and
+the parked ideas (`incident_notes` pack, a public transcript corpus to replace
+MultiWOZ, NOTICE emission if a pack is ever published, MLflow trace redaction, GLiNER
+under ADR-0015).

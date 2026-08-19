@@ -17,6 +17,22 @@ produced partial-match noise such as ``maria.ro`` in the session-2 probes) and
 is a safety net for anything a future Presidio version returns unbidden, and every
 drop is counted rather than silently discarded.
 
+**Label promotion** (``promote`` option, ADR-0020) widens that request for a
+configured instance: a listed native label is asked for *and* normalized to PERSON.
+It exists because ADR-0019 measured Greek names arriving with an exact span and the
+wrong label — the name is found and then dropped — and Q4 established that the fix
+must change the **request**, since an unrequested label never reaches the mapping
+table at all. Promotion is per provider instance and therefore per language: the
+shipped configuration promotes for Greek only, because promoting globally was
+measured to cost English and German PERSON precision (0.833→0.694 and 0.963→0.839)
+and to destroy a protected identifier.
+
+**What promotion cannot reach:** spaCy's ``MISC`` label. Measured on the Greek slice,
+``xx_ent_wiki_sm`` emits ``PER 8, MISC 41, LOC 20, ORG 1``, and Presidio surfaces only
+the first, third and fourth — ``MISC`` has no Presidio entity name and is dropped
+inside Presidio, before this adapter. That caps what any promotion remedy here can
+recover, and it is why ADR-0019's third mechanism is not addressed by ADR-0020.
+
 **Confidence semantics:** Presidio scores are recognizer constants, not calibrated
 probabilities — every spaCy-backed hit is exactly 0.85 whether right or wrong,
 ``EmailRecognizer`` emits 1.0 and ``PhoneRecognizer`` 0.40. Thresholds are therefore
@@ -41,6 +57,7 @@ default email recognizer, which is why the deterministic provider stays in the c
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from pii_reduction.contracts.entities import EntityMatch
@@ -87,8 +104,16 @@ NATIVE_LABELS: dict[str, str] = {
 #: Native labels deliberately discarded if they ever arrive (ADR-0004, ADR-0002).
 DROPPED_LABELS = frozenset({"URL", "LOCATION", "NRP", "DATE_TIME", "IP_ADDRESS"})
 
+#: Native labels the ``promote`` option may map to PERSON (ADR-0020). Restricted to
+#: the three the underlying NER can carry a person's name under; promoting ``URL``,
+#: ``DATE_TIME`` or ``IP_ADDRESS`` would be a category error, not a coverage choice.
+PROMOTABLE_LABELS = frozenset({"LOCATION", "ORGANIZATION", "NRP"})
+
 DEFAULT_OPTIONS: dict[str, Any] = {
     "models": DEFAULT_MODELS,
+    #: Native labels normalized to PERSON *and* added to the request (ADR-0020).
+    #: Empty by default: promotion is opt-in per instance, never a global default.
+    "promote": (),
 }
 
 #: Analyzer engines by model configuration. Building one loads every model, so this
@@ -164,11 +189,49 @@ class PresidioProvider(BaseProvider):
                     "Use xx_ent_wiki_sm for Greek"
                 )
 
+        promote = merged["promote"] or ()
+        if isinstance(promote, str):
+            raise ProviderError(
+                f"provider {self.name!r}: promote must be a list of native labels, not a "
+                f"string; got {promote!r}"
+            )
+        promoted = tuple(str(label) for label in promote)
+        unknown = sorted(set(promoted) - PROMOTABLE_LABELS)
+        if unknown:
+            raise ProviderError(
+                f"provider {self.name!r}: cannot promote {', '.join(unknown)} "
+                f"(promotable: {', '.join(sorted(PROMOTABLE_LABELS))})"
+            )
         self.options = merged
         self._models = {str(language): str(model) for language, model in models.items()}
-        self._mapping = LabelMapping(
-            provider=self.name, table=NATIVE_LABELS, dropped=DROPPED_LABELS
+        self._promoted = frozenset(promoted)
+        # The promoted labels join the table *and* leave the drop set: a label that is
+        # still "dropped" would be counted as an unbidden arrival on every hit, which
+        # is the drop_counter reporting a fault where a configured behaviour occurred.
+        # Built here so an invalid table fails at construction rather than at first
+        # detection; re-stamped with the instance name on access, see `_mapping`.
+        self._label_mapping = LabelMapping(
+            provider=self.name,
+            table={**NATIVE_LABELS, **dict.fromkeys(promoted, PERSON)},
+            dropped=DROPPED_LABELS - self._promoted,
         )
+
+    @property
+    def _mapping(self) -> LabelMapping:
+        """The label mapping, carrying *this instance's* configured name.
+
+        ``build_provider`` assigns ``name`` after the constructor returns, so a
+        mapping built in ``__init__`` keeps the class default. With one Presidio
+        instance that was invisible; with two (ADR-0020) it files every dropped label
+        under ``presidio`` regardless of which instance dropped it, and
+        ``pipeline`` merges the per-provider counters into one ``Counter`` — so the
+        Greek instance's drops would silently sum into the English one's key. That
+        defeats the reason drops are counted at all: ADR-0004 keeps them so a provider
+        upgrade that starts emitting an unmapped label cannot lose coverage quietly.
+        """
+        if self._label_mapping.provider != self.name:
+            self._label_mapping = replace(self._label_mapping, provider=self.name)
+        return self._label_mapping
 
     @property
     def models(self) -> dict[str, str]:
@@ -192,8 +255,11 @@ class PresidioProvider(BaseProvider):
             # still runs, and the run metrics record the language distribution.
             return []
 
+        # The instance table, not NATIVE_LABELS: a promoted label has to be *asked
+        # for*. Q4 measured that an unrequested label never arrives, so promotion
+        # implemented only in the mapping table would be a silent no-op (ADR-0020).
         native_requested = sorted(
-            {native for native, normalized in NATIVE_LABELS.items() if normalized in entities}
+            {native for native, normalized in self._mapping.table.items() if normalized in entities}
         )
         if not native_requested:
             return []
@@ -219,7 +285,14 @@ class PresidioProvider(BaseProvider):
                     provider=self.name,
                     recognizer=_recognizer_name(result),
                     language=language,
-                    metadata={"native_label": result.entity_type},
+                    metadata={
+                        "native_label": result.entity_type,
+                        # In-process provenance only: `AUDIT_COLUMNS` is a closed,
+                        # metadata-only set and no audit row carries this today. It
+                        # is here so the distinction exists at the boundary that
+                        # knows it, for a future audit column or a debugging session.
+                        "promoted": result.entity_type in self._promoted,
+                    },
                 )
             )
         return matches

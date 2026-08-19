@@ -26,3 +26,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0017](0017-dataset-retrieval-by-pinned-fetch.md) | Public datasets fetched as pinned files with recorded checksums, not via `datasets` |
 | [0018](0018-bitext-supplies-both-packs-after-multiwoz-rejection.md) | MultiWOZ rejected for real PII; Bitext renders both the ticket and conversation packs |
 | [0019](0019-greek-person-three-failure-modes.md) | Greek PERSON is span absorption + label confusion + the άνω τελεία; the corpus is not made easier |
+| [0020](0020-greek-label-promotion-scoped-to-greek.md) | Greek-only LOC/ORG promotion to PERSON; strict precision traded for 43% less leakage; no surgery |

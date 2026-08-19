@@ -15,7 +15,11 @@ providers:
   # docs/15_PROVIDERS.md. Nothing loads a model unless a chain in use names it.
   presidio:
     type: presidio
-    languages: [en, de, el]
+    # en and de only. Greek is served by `presidio_el` below, which promotes labels
+    # this instance must not (ADR-0020): promoting globally was measured to cost
+    # English PERSON precision 0.833 -> 0.694 and German 0.963 -> 0.839, and to
+    # destroy a protected identifier that the Greek-scoped version leaves intact.
+    languages: [en, de]
     entities: [PERSON, EMAIL, PHONE]
     # Per entity, never global: PhoneRecognizer emits a constant 0.40, so one
     # threshold of 0.5 would silently drop every phone number (ADR-0005).
@@ -39,8 +43,34 @@ providers:
       models:
         en: en_core_web_md
         de: de_core_news_md
-        # el_core_news_* is CC BY-NC-SA and must never appear here (ADR-0007).
+
+  # Greek only. Same adapter, same model, one option different: ADR-0019 measured
+  # that the Greek model returns an *exact span* for a name and labels it LOC or ORG,
+  # so the name is found and then dropped by ADR-0004's mapping. Promotion asks for
+  # those labels and normalizes them to PERSON, which is the only place the fix can
+  # live — an unrequested label never reaches the mapping table (Q4).
+  #
+  # Measured whole-corpus against the shipped baseline (ADR-0020): Greek PERSON
+  # recall 0.154 -> 0.423, leakage 0.117 -> 0.067, over-redaction still 0.000, en and
+  # de numerically unchanged. NRP is promotable but deliberately not listed: Presidio
+  # derives it from spaCy's NORP, which xx_ent_wiki_sm does not emit, so it never fires
+  # and enabling it would ship a path nothing measures. (Separately, spaCy's MISC has
+  # no Presidio entity name at all and is dropped inside Presidio — that is the ceiling
+  # on label-level Greek work, not the reason NRP is off.)
+  presidio_el:
+    type: presidio
+    languages: [el]
+    entities: [PERSON, EMAIL, PHONE]
+    thresholds:
+      PERSON: 0.5
+      EMAIL: 0.6
+      PHONE: 0.3
+    calibration: reviewed-s6-calibration-split-constants-locked
+    options:
+      # el_core_news_* is CC BY-NC-SA and must never appear here (ADR-0007).
+      models:
         el: xx_ent_wiki_sm
+      promote: [LOCATION, ORGANIZATION]
 
 chains:
   deterministic_only:
@@ -50,5 +80,11 @@ chains:
   # Deterministic first so its exact EMAIL/PHONE spans win ties over Presidio's
   # (the reconciler orders by entity priority, then score, then chain position).
   deterministic_presidio:
-    providers: [deterministic, presidio]
+    # Two Presidio instances, disjoint by language: `language_scopes` routes each
+    # document to exactly one of them, so this is not a second opinion on the same
+    # text. Keeping the split inside the chain rather than in a project-level
+    # `languages:` route is deliberate — `benchmark.with_chain` overrides a column's
+    # chain but not a language route, so a route would silently apply Presidio to
+    # Greek during the `deterministic_only` benchmark and corrupt that baseline.
+    providers: [deterministic, presidio, presidio_el]
     overlap_policy: priority_score_length

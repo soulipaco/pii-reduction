@@ -27,13 +27,16 @@ measured:
   seed: 42
   splits: all (dev + calibration + test)
   strategy: redact
-  date: 2026-08-18
-  session: 6
+  date: 2026-08-19
+  session: 8
+  # The deterministic_presidio floors were re-measured in session 8 after ADR-0020
+  # changed the chain under them. The deterministic_only set is untouched and still
+  # reproduces at the session-6 commit below.
   # The commit carrying the code these floors were measured on — recorded in the
   # commit that follows it, because a commit cannot name its own hash. Checking
   # out this hash, rebuilding the pack from the pinned source and re-running must
   # reproduce the floors below.
-  commit: 96eae02
+  commit: 96eae02  # session-6 code; session-8 hash recorded in the commit that follows ADR-0020
   versions:
     presidio-analyzer: 2.2.364
     spacy: 3.8.15
@@ -74,27 +77,45 @@ gate_sets:
   deterministic_presidio:
     description: >
       The hybrid chain, and the pack's headline result. **Greek PERSON strict recall is
-      0.606 here against 0.111-0.222 on the committed synthetic corpus** with the same
-      `xx_ent_wiki_sm` model and the same name pool. The two corpora are not comparable
-      slice for slice — different phrasing, different tier mix — so this is not a claim
-      that Greek detection improved. It is evidence that the synthetic Greek templates,
-      not the model alone, account for part of the gap that has been treated as a hard
-      licensing limit since ADR-0007. Worth a diagnosis before more model work.
+      0.727 here against 0.444/0.667 on the committed synthetic corpus** (tiers 1 and 2;
+      this pack is tier 2 throughout). Both sides of that comparison moved in session 8:
+      the pack from 0.606 and the synthetic corpus from 0.111-0.222, because ADR-0020
+      promoted Greek LOCATION/ORGANIZATION labels to PERSON on both. The two corpora are
+      still not comparable slice for slice — different phrasing, different tier mix — so
+      this is not a claim about detection quality in the abstract.
+
+      The gap narrowed but did not close, which keeps the session-6 reading intact: the
+      synthetic Greek templates, not the model alone, account for part of a gap that had
+      been treated as a hard licensing limit since ADR-0007.
+
+      **This pack independently corroborates ADR-0020 on text nobody wrote for us**, and
+      in the same shape: strict precision 0.926 -> 0.893 and strict F1 0.930 -> 0.923,
+      against leakage 0.065 -> 0.030, document clean rate 0.870 -> 0.940, PERSON recall
+      0.805 -> 0.865 and Greek PERSON 0.606 -> 0.727. Half this pack is Greek, against a
+      third of the synthetic corpus, so the precision cost lands harder here — which is
+      the expected direction and the reason these floors were re-measured rather than
+      assumed to hold.
 
       German PERSON is 1.000 on the same text, so the gap is Greek-specific rather than
       a property of lower-case public utterances.
     gates:
+      # LOWERED 0.930 -> 0.923 (ADR-0020), the same trade the committed corpus made.
       - name: overall_strict_f1
         metric: strict_f1
-        min: 0.930
+        min: 0.923
         support: 400
+      # RAISED 0.935 -> 0.955 (ADR-0020).
       - name: overall_strict_recall
         metric: strict_recall
-        min: 0.935
+        min: 0.955
         support: 400
+      # LOWERED 0.926 -> 0.893 (ADR-0020). Larger than the committed corpus's
+      # 0.935 -> 0.886 in absolute terms is not the comparison to make: half this pack
+      # is Greek against a third of the corpus, so the same per-language cost shows up
+      # bigger here.
       - name: overall_strict_precision
         metric: strict_precision
-        min: 0.926
+        min: 0.893
         support: 400
       - name: email_strict_f1
         metric: strict_f1
@@ -106,10 +127,11 @@ gate_sets:
         entity_type: PHONE
         min: 1.000
         support: 133
+      # RAISED 0.805 -> 0.865 (ADR-0020): the recall the precision floors paid for.
       - name: person_strict_recall
         metric: strict_recall
         entity_type: PERSON
-        min: 0.805
+        min: 0.865
         support: 133
       - name: german_person_strict_recall
         metric: strict_recall
@@ -118,18 +140,22 @@ gate_sets:
         difficulty_tier: "2"
         min: 1.000
         support: 67
+      # RAISED 0.606 -> 0.727 (ADR-0020). This floor is the pack's whole reason for
+      # existing, so it moves with the measurement rather than being left slack.
       - name: greek_person_strict_recall
         metric: strict_recall
         entity_type: PERSON
         language: el
         difficulty_tier: "2"
-        min: 0.606
+        min: 0.727
         support: 66
+      # TIGHTENED 0.065 -> 0.030 (ADR-0020).
       - name: leakage_rate
         metric: leakage_rate
-        max: 0.065
+        max: 0.030
         support: 400
+      # RAISED 0.870 -> 0.940 (ADR-0020).
       - name: document_clean_rate
         metric: document_clean_rate
-        min: 0.870
+        min: 0.940
         support: 200
