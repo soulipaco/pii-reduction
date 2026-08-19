@@ -56,7 +56,7 @@ processing:
   preserve_original: true
   output_suffix: _pii_redacted
   default_parser: plain_text
-  failure_mode: preserve_original_and_record_error
+  failure_mode: quarantine_row  # fail-closed default, ADR-0023
 
 language:
   mode: detect

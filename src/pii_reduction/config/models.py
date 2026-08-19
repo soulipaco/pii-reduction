@@ -83,7 +83,10 @@ class ProcessingSettings(ConfigModel):
     default_parser: str = "plain_text"
     default_reducer: str = "redact"
     default_provider_chain: str | None = None
-    failure_mode: FailureMode = FailureMode.PRESERVE_ORIGINAL_AND_RECORD_ERROR
+    # Fail-closed by default (ADR-0023): an unconfigured failure mode quarantines the
+    # field rather than passing raw source text into a column named "reduced".
+    # `preserve_original_and_record_error` remains available as an explicit opt-in.
+    failure_mode: FailureMode = FailureMode.QUARANTINE_ROW
 
 
 class ProcessingOverrides(ConfigModel):

@@ -27,6 +27,7 @@ from tests.pipeline_fixtures import (
     PROJECT_YAML,
     ROWS,
     build_frame,
+    project_yaml_with_failure_mode,
     write_dataset_csv,
 )
 
@@ -275,6 +276,12 @@ class TestFailurePolicy:
     def test_one_failing_row_does_not_fail_the_run_and_is_counted(
         self, pipeline: Pipeline, dataset: SourceDataset, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """The fixture configures no failure mode, so this runs the default: fail-closed.
+
+        ADR-0023: the failing field carries no reduced value and the raw source text
+        must not appear anywhere in the reduced column — the property the default
+        exists to guarantee.
+        """
         processor = pipeline._processors[0]
         original_parse = processor.parser.parse
         failing_text = str(dataset.frame.loc[0, "body"])
@@ -293,7 +300,37 @@ class TestFailurePolicy:
         assert outcome.detail["error_categories"] == {"RuntimeError": 1}
 
         failed_row = outcome.frame.iloc[0]
-        # preserve_original_and_record_error: the source text passes through.
+        # quarantine_row (the ADR-0023 default): no reduced value, visible status.
+        assert failed_row["body_pii_redacted"] is None
+        assert failed_row[STATUS_COLUMN] == ProcessingStatus.FAILED.value
+        # And the fail-open shape can never reach the reduced artifact by default:
+        # the raw text of the failed field appears in no reduced value of any row.
+        reduced_values = [value for value in outcome.frame["body_pii_redacted"] if value]
+        assert all(failing_text not in value for value in reduced_values)
+
+    def test_preserve_original_is_an_explicit_opt_in(
+        self, tmp_path: Path, dataset: SourceDataset, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`preserve_original_and_record_error` still works — when asked for by name.
+
+        ADR-0023 changed the default, not the mode: a demo that wants best-effort
+        pass-through opts in and the row still says `partial_failure`.
+        """
+        project = project_yaml_with_failure_mode("preserve_original_and_record_error")
+        preserving = build_pipeline(make_config(tmp_path, project_yaml=project))
+        processor = preserving._processors[0]
+        failing_text = str(dataset.frame.loc[0, "body"])
+        original_parse = processor.parser.parse
+
+        def explode(text: str):  # type: ignore[no-untyped-def]
+            if text == failing_text:
+                raise RuntimeError("synthetic parser failure")
+            return original_parse(text)
+
+        monkeypatch.setattr(processor.parser, "parse", explode)
+
+        outcome = preserving.process(dataset)
+        failed_row = outcome.frame.iloc[0]
         assert failed_row["body_pii_redacted"] == failing_text
         assert failed_row[STATUS_COLUMN] == ProcessingStatus.PARTIAL_FAILURE.value
 
@@ -322,9 +359,7 @@ class TestFailurePolicy:
             assert secret not in str(field_result.model_dump())
 
     def test_fail_fast_stops_the_run(self, tmp_path: Path, dataset: SourceDataset) -> None:
-        project = PROJECT_YAML.replace(
-            "failure_mode: preserve_original_and_record_error", "failure_mode: fail_fast"
-        )
+        project = project_yaml_with_failure_mode("fail_fast")
         strict = build_pipeline(make_config(tmp_path, project_yaml=project))
         processor = strict._processors[0]
 
@@ -339,9 +374,9 @@ class TestFailurePolicy:
     def test_quarantine_row_writes_no_reduced_value(
         self, tmp_path: Path, dataset: SourceDataset, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        project = PROJECT_YAML.replace(
-            "failure_mode: preserve_original_and_record_error", "failure_mode: quarantine_row"
-        )
+        # Explicitly configured, though it is also the ADR-0023 default — an explicit
+        # `quarantine_row` must keep working if the default ever moves again.
+        project = project_yaml_with_failure_mode("quarantine_row")
         quarantining = build_pipeline(make_config(tmp_path, project_yaml=project))
         processor = quarantining._processors[0]
         failing_text = str(dataset.frame.loc[0, "body"])

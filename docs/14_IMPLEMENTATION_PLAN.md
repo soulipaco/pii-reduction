@@ -207,7 +207,8 @@ hold.
 ### A5 — Pipeline, sources, outputs, observability
 - pandas + CSV source adapters; local parquet/pandas output adapter; pipeline
   builder `build_pipeline(config)`; failure mode
-  `preserve_original_and_record_error`; run metrics (rows, fields, entities
+  `preserve_original_and_record_error` (default changed to `quarantine_row` by
+  ADR-0023 — the mode itself remains); run metrics (rows, fields, entities
   detected/reduced, failures, fallbacks, timing) as metadata only.
 - **Tests:** null input → null output; empty string deterministic; row count
   preserved; originals unchanged; output column created; duplicate row-id detection;
@@ -356,9 +357,11 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 8 (2026-08-19) — Increment F recorded, `databricks/` named as an
-execution surface in §3 and `docs/01_ARCHITECTURE.md`, sandbox incident re-checked, and
-the Greek promotion call taken and shipped (ADR-0020).
+Last updated: session 9 (2026-08-19) — two independent external reviews reconciled
+(`docs/17_EXTERNAL_REVIEW_RECONCILIATION.md`: every load-bearing claim verified
+against the code, decision table of 6 ACCEPT / 14 DEFER / 4 REJECT / 3 DISPUTED, the
+R1–R6 sequence approved by the owner), and the R increments started landing — see
+the session-9 rows in the Complete table and the queue below.
 
 ### Complete
 
@@ -380,6 +383,8 @@ the Greek promotion call taken and shipped (ADR-0020).
 | E (part) | ADR-0013 §5's two leakage variants: `fragment_leakage_rate` beside `leakage_rate` (now gated: 0.433 det / 0.067 hybrid), `strategy` in the metric-row grain, `--strategy` on the CLI, `with_reducer`; gates compare the run's strategy to the file's recorded one at the data level | 828 default / 87 integration |
 | E | Run provenance (`RunMetadata` + `RuntimeMetric` on the outcome, config hash + rows/s in the summary), threshold calibration reviewed on the calibration split and locked (constants — nothing to tune), the one-time test-split read, and the 10k-document two-chain comparison with its own gate set (`docs/16_BENCHMARK_REPORT_10K.md`, `configs/pack_gates/support_tickets_10k.yaml`) | 838 default / 87 integration |
 | F | `databricks/` package (see the F section below) — parity met on the workspace, distributed path shipped and infra-blocked, audits applied (run identity across warm workers, exact-set audit-schema assertion, schema-drift test, Spark-free guard extended) | 854 default / 90 deselected incl. 3 databricks |
+| Review | `docs/17_EXTERNAL_REVIEW_RECONCILIATION.md` — two external assessments reconciled against the code; both factually reliable, three claims disputed with evidence, five findings both missed surfaced from inside | no code changed by the reconciliation itself |
+| R1 | Fail-closed default: `failure_mode` defaults to `quarantine_row` in the model and the shipped config (ADR-0023); pass-through is an explicit opt-in; fixture runs the true default; fail-closed property pinned by test | 919 default (917 before), 41/41 gates re-run before and after — no published number moved |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -896,6 +901,28 @@ tier against the workspace):
 Environment facts recorded for reuse: dedicated venv (`.venv-dbx17`, Python 3.12,
 `databricks-connect` 16.4) per ADR-0006's isolation; profile via
 `DATABRICKS_CONFIG_PROFILE` only; the extra pins `databricks-connect>=15.4`.
+
+### The review queue (session 9, from docs/17 §8 — approved sequence)
+
+One increment at a time, measure before and after, own commit each:
+
+- **R1 — fail-closed default (ADR-0023)** — **complete**, see the Complete table.
+- **R2 — run provenance**: real provider/library/model versions,
+  `language_detector_version`, `source_version` where available, non-secret
+  pseudonymization key id in `RunMetadata`.
+- **R3 — reduced-only projection (ADR-0024)**: opt-in reduced-only artifact locally
+  + separate destination prefix in `run_driver`, so `docs/09`'s grant model becomes
+  realisable.
+- **R4 — docs honesty sweep**: README tagline ("discovering"), docs/09
+  audit-sensitivity framing, pseudonymize frequency/token-length guidance, UC-03
+  pointer, stale `registries.py` comment.
+- **R5 — referential-consistency metric**: token-consistency measurement for the
+  `pseudonymize` strategy over the committed corpus.
+- **R6 — CLI `run` command** (optional): wire `Pipeline.run()` to a CLI front door.
+
+Deferred with conditions, rejected, and disputed items: the decision table in
+`docs/17_EXTERNAL_REVIEW_RECONCILIATION.md` §7 is the record; nothing there is
+re-litigated here.
 
 ### After the queue
 

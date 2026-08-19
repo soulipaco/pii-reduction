@@ -502,7 +502,15 @@ Every dataset should configure one of:
 - `quarantine_row`
 - `preserve_original_and_record_error`
 
-For portfolio demos, `preserve_original_and_record_error` is often the safest default.
+The default is `quarantine_row` (ADR-0023): on failure the field carries no reduced
+value, so nothing unreviewed can be mistaken for reduced output. An earlier revision
+of this document recommended `preserve_original_and_record_error` as a portfolio-demo
+default; ADR-0023 supersedes that advice — under it, any provider, parser, or model
+error writes the raw original text into the reduced column, which is the wrong
+default for a privacy boundary. `preserve_original_and_record_error` remains
+available as an explicit per-dataset or per-column opt-in for demos that want a
+best-effort pass-through, and the row still carries `pii_status = partial_failure`
+when it is used.
 
 ## Idempotency strategy
 

@@ -25,6 +25,7 @@ __all__ = [
     "PROJECT_YAML",
     "ROWS",
     "build_frame",
+    "project_yaml_with_failure_mode",
     "write_dataset_csv",
 ]
 
@@ -100,7 +101,6 @@ processing:
   default_reducer: redact
   default_provider_chain: deterministic_only
   output_suffix: _pii_redacted
-  failure_mode: preserve_original_and_record_error
 
 language:
   mode: column
@@ -120,6 +120,21 @@ chains:
   deterministic_only:
     providers: [deterministic]
 """
+
+
+def project_yaml_with_failure_mode(mode: str) -> str:
+    """``PROJECT_YAML`` with an explicit failure mode.
+
+    The fixture itself configures no ``failure_mode``, so pipelines built from it run
+    under the model default (``quarantine_row``, ADR-0023) — which is exactly what the
+    default-behaviour tests must exercise. Tests for the two non-default modes opt in
+    through this helper; the marker assertion means a fixture reshuffle cannot turn
+    the injection into a silent no-op.
+    """
+    marker = "  output_suffix: _pii_redacted\n"
+    assert marker in PROJECT_YAML, "pipeline_fixtures.PROJECT_YAML changed shape"
+    return PROJECT_YAML.replace(marker, f"{marker}  failure_mode: {mode}\n")
+
 
 DATASET_YAML = """
 dataset:

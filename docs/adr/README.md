@@ -29,3 +29,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0020](0020-greek-label-promotion-scoped-to-greek.md) | Greek-only LOC/ORG promotion to PERSON; strict precision traded for 43% less leakage; no surgery |
 | [0021](0021-person-span-left-extension.md) | Extend a PERSON span left over one token (Greek only) — the visible error, not the trim that leaks |
 | [0022](0022-incident-notes-as-an-over-redaction-stress-corpus.md) | `incident_notes` is a generated over-redaction stress corpus, not a public pack |
+| [0023](0023-fail-closed-default-failure-mode.md) | Default failure mode is `quarantine_row`; raw-text pass-through is an explicit opt-in |

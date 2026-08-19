@@ -28,6 +28,19 @@ def resolve(tmp_path: Path, *, project: str | None = None, dataset: str | None =
     return load_resolved_dataset(configs, "demo_smoke")
 
 
+class TestShippedProjectConfig:
+    def test_the_shipped_default_is_fail_closed(self) -> None:
+        """ADR-0023: `configs/project.yaml` must not re-open the fail-open default.
+
+        `preserve_original_and_record_error` writes raw source text into the reduced
+        column on any error; it is an explicit per-dataset opt-in, never the shipped
+        project default.
+        """
+        repo_root = Path(__file__).resolve().parents[1]
+        shipped = load_yaml_mapping(repo_root / "configs" / "project.yaml")
+        assert shipped["processing"]["failure_mode"] == "quarantine_row"
+
+
 class TestYamlLoading:
     def test_missing_file_names_the_path(self, tmp_path: Path) -> None:
         with pytest.raises(ConfigurationError) as exc_info:
@@ -258,7 +271,8 @@ class TestLayeredMerge:
         assert policy.reducer == "redact"
         assert policy.provider_chain == "deterministic_only"
         assert policy.providers == ("deterministic",)
-        assert policy.failure_mode is FailureMode.PRESERVE_ORIGINAL_AND_RECORD_ERROR
+        # ADR-0023: the unconfigured default is fail-closed.
+        assert policy.failure_mode is FailureMode.QUARANTINE_ROW
         assert policy.language.mode is LanguageMode.STATIC
         assert policy.language.static_language == "en"
 

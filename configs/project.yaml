@@ -11,7 +11,9 @@ processing:
   default_parser: plain_text
   default_reducer: redact
   default_provider_chain: deterministic_only
-  failure_mode: preserve_original_and_record_error
+  # Fail-closed (ADR-0023): a failing field writes no reduced value instead of
+  # passing the raw source text through under a reduced-looking column name.
+  failure_mode: quarantine_row
 
 language:
   # Detection is the product default: real datasets do not come with a language
