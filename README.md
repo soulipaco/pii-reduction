@@ -68,6 +68,18 @@ Either chain can be checked against its locked floors, which is what CI does —
 pii-reduction benchmark --gates configs/benchmark_gates.yaml
 ```
 
+To run an actual reduction over a dataset you configured (session 9 — previously
+the Python API was the only front door):
+
+```bash
+pii-reduction run <dataset-name> --configs configs
+```
+
+It loads the source, processes, writes the configured artifacts, prints a
+metadata-only summary, and exits 1 if any field failed — partial output must
+look like a failure to a scripted caller (ADR-0023's fail-closed default writes
+no reduced value for failed fields).
+
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
 | strict F1 | 0.723 | 0.910 |

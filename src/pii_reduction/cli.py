@@ -1,8 +1,10 @@
 """Command line entry points.
 
+``pii-reduction run`` executes one configured reduction end to end;
 ``pii-reduction build-corpus`` regenerates the synthetic corpus; ``pii-reduction
-benchmark`` runs the pipeline over it and prints the metrics table. Both are thin:
-the work lives in :mod:`pii_reduction.synthetic` and :mod:`pii_reduction.benchmark`.
+benchmark`` runs the pipeline over it and prints the metrics table. All are thin:
+the work lives in :mod:`pii_reduction.processing`, :mod:`pii_reduction.synthetic`
+and :mod:`pii_reduction.benchmark`.
 """
 
 from __future__ import annotations
@@ -14,8 +16,10 @@ from pathlib import Path
 
 from pii_reduction import __version__
 from pii_reduction.benchmark import BenchmarkOutcome, run_benchmark, summarise
+from pii_reduction.config import load_resolved_dataset
 from pii_reduction.config.registries import KNOWN_REDUCERS
 from pii_reduction.contracts.errors import PiiReductionError
+from pii_reduction.contracts.results import ProcessingStatus
 from pii_reduction.evaluation.gates import (
     GateConfigurationError,
     GateReport,
@@ -24,6 +28,7 @@ from pii_reduction.evaluation.gates import (
     load_measured_strategy,
 )
 from pii_reduction.evaluation.report import render_markdown
+from pii_reduction.processing.pipeline import build_pipeline
 from pii_reduction.synthetic.corpus import build_corpus, write_corpus
 from pii_reduction.synthetic.fetch import DEFAULT_CACHE_DIR
 from pii_reduction.synthetic.incidents import incident_templates
@@ -60,6 +65,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pii-reduction", description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    run_command = subparsers.add_parser(
+        "run", help="run one configured reduction end to end: load, process, write"
+    )
+    run_command.add_argument("dataset", help="dataset name under <configs>/datasets/")
+    run_command.add_argument("--configs", type=Path, default=DEFAULT_CONFIGS_DIR)
 
     corpus = subparsers.add_parser(
         "build-corpus", help="generate the deterministic synthetic corpus and its manifest"
@@ -148,7 +159,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Exit codes: 0 success, 1 a gate failed, 2 the command could not run.
+    """Exit codes: 0 success, 1 a gate failed or a run had failing fields, 2 the
+    command could not run.
 
     A failing gate and a malformed gate file are different events and must not look
     the same to whoever reads the CI log — one is a regression to investigate, the
@@ -166,6 +178,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _run(argv: Sequence[str] | None) -> int:
     args = _build_parser().parse_args(argv)
+
+    if args.command == "run":
+        return _run_dataset(args)
 
     if args.command in {"build-corpus", "build-incidents"}:
         incidents = args.command == "build-incidents"
@@ -211,6 +226,34 @@ def _run(argv: Sequence[str] | None) -> int:
     print()
     print(report.render())
     return 0 if report.passed else 1
+
+
+def _run_dataset(args: argparse.Namespace) -> int:
+    """Run one configured reduction end to end: load, process, write.
+
+    The front door the Python API always had (`build_pipeline(config).run()`),
+    now reachable without writing Python (docs/17 D6 — one external review
+    assumed this command existed; the other's capability matrix listed the gap
+    without naming it). Prints metadata only, never text. Exit 0 when every
+    field processed (fallbacks included), 1 when any field failed — a scripted
+    caller must see partial output the way a gate failure is seen, not as
+    success with a footnote.
+    """
+    config = load_resolved_dataset(args.configs, args.dataset)
+    outcome = build_pipeline(config).run()
+    run = outcome.run
+    print(
+        f"dataset={config.dataset.name} run_id={run.run_id} status={run.status.value}\n"
+        f"rows read={run.rows_read} written={run.rows_written} · fields "
+        f"processed={run.fields_processed} failed={run.fields_failed}\n"
+        f"entities detected={run.entities_detected} reduced={run.entities_reduced} "
+        f"config={run.config_hash[:12]}"
+    )
+    for name, path in sorted(outcome.written.items()):
+        print(f"  {name}: {path}")
+    if run.status in (ProcessingStatus.PARTIAL_FAILURE, ProcessingStatus.FAILED):
+        return 1
+    return 0
 
 
 def _fetch_dataset(args: argparse.Namespace) -> int:

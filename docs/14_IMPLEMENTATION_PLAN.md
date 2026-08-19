@@ -389,6 +389,7 @@ the session-9 rows in the Complete table and the queue below.
 | R3 | Reduced-only projection (ADR-0024): opt-in `destination.projection: reduced_only` writes the artifact without the configured raw text columns; `run_driver(reduced_only_prefix=...)` writes `<dataset>_reduced_only` to a separate `catalog.schema` — docs/09's grant model is now realisable with shipped code. In-memory processing unchanged (rule 4 holds); the confused combination with in-place replacement is refused at config validation; parity test asserts the projection on its next workspace run | 944 default (+7), 41/41 gates — no published number moved |
 | R4 | Docs honesty sweep (docs/17 D4): README tagline no longer claims "discovering"; docs/09 and docs/03 §12 now state the audit table's span-length disclosure and govern it like reduced output; pseudonymize documents the frequency/co-occurrence limit and correct birthday-bound sizing (both auditors independently caught a wrong first draft of the 12-hex figure — fixed before commit); charter UC-03 carries its unmet status; the stale registries comment is corrected | docs/comments only — 944 default unchanged, no behavior change |
 | R5 | Referential consistency of pseudonymization, **measured** (docs/17 D5): `evaluation/consistency.py` + an end-to-end test over the committed corpus, deterministic chain, `pseudonymize` strategy. **Result: consistency 1.000, distinctness 1.000 over all 102 EMAIL/PHONE occurrences, per dataset scope — and the same value gets different tokens across the two dataset scopes, so scope isolation holds end to end.** Test-tier by design (the pipeline outcome retains no per-operation replacements for the benchmark to consume); pinned on every push by the default tier | 951 default (+7), docs/08 records the metric |
+| R6 | `pii-reduction run <dataset>` — the reduction finally has a CLI front door over the existing `Pipeline.run()` (one external review's capability matrix asserted this command existed; it did not). Metadata-only summary; exit 1 when any field failed, so partial output looks like a failure to a scripted caller | 956 default (+5) incl. metadata-only stderr guards on the failure path |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -915,7 +916,8 @@ One increment at a time, measure before and after, own commit each:
 - **R3 — reduced-only projection (ADR-0024)** — **complete**, see the Complete table.
 - **R4 — docs honesty sweep** — **complete**, see the Complete table.
 - **R5 — referential-consistency metric** — **complete**, see the Complete table.
-- **R6 — CLI `run` command** (optional): wire `Pipeline.run()` to a CLI front door.
+- **R6 — CLI `run` command** — **complete**, see the Complete table. The R queue
+  is finished: every increment the owner approved from docs/17 §8 has landed.
 
 Deferred with conditions, rejected, and disputed items: the decision table in
 `docs/17_EXTERNAL_REVIEW_RECONCILIATION.md` §7 is the record; nothing there is
