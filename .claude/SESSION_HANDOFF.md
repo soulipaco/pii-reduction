@@ -1896,3 +1896,75 @@ usable span** — 8 the model does not see at all, 4 reported under a refused la
 boundaries. ADR-0019's mechanisms 1 and 3 are still open but are worth 1 entity and 0
 respectively on this corpus. **A better-licensed Greek model at Phase 7 is the next
 real move**, and the benchmark can now say which of the three mechanisms it fixes.
+
+---
+
+## Session 9 — 2026-08-19 — Two external reviews reconciled; the R1–R6 sequence shipped
+
+**Start here:** the external-review work is **done** — reconciliation, decision,
+and all six approved increments. The queue in plan §8 is empty again. The next
+real decisions are the ones docs/17's decision table deferred: the next major
+phase (residual verification vs the Phase-7 Greek model — D7 vs D18), the
+speaker-prefix ADR (still the most serious open design item), and the
+distributed path whenever the sandbox incident closes.
+
+**What this session was.** Two independent external assessments existed
+(`..\pii_reduction_review_claude`, reviewed through `985e8ea`;
+`..\pii_reduction_review_codex`, reviewed at `2b9c64d`), neither author with
+commit access, neither having executed anything. The brief: decide what the
+repository should do about them — not implement their lists.
+
+**Phase 1–2 (`docs/17_EXTERNAL_REVIEW_RECONCILIATION.md`).** Every load-bearing
+claim verified against the code before classification. Both reviews proved
+factually reliable; they converged independently on the same top findings, which
+is the strongest signal either produced. Decision table: **6 ACCEPT, 14 DEFER
+with named reopening conditions, 4 REJECT, 3 DISPUTED.** Three claims were
+factually wrong (the largest: codex's capability matrix asserts a CLI `run`
+entry point that did not exist). Five findings both reviews missed were surfaced
+from inside, including that the fail-open default was pinned by a test as
+intended behaviour, and that a future residual scanner can be validated against
+the manifests this repo already owns. Where the reviews disagreed, the code
+settled it in docs/17 §2 — read that section before re-litigating anything.
+
+**Phase 3 — six commits, every one through /qa and both auditors:**
+
+| commit | increment | what changed |
+|---|---|---|
+| `d85fa46` | R1 + docs/17 | **Fail-closed default** (ADR-0023): `quarantine_row` in model + shipped config; pass-through is explicit opt-in; no-fail-open-row property pinned by test. 41/41 gates before and after — no number moved. |
+| `5d65aa8` | R2 | **Run provenance**: real library+model versions via importlib.metadata (degrades to the old bare type string without the extra), detector version, `delta_v<N>` source version (fake-session tested; parity asserts it next workspace run), HMAC-derived non-secret `pseudonymization_key_id`. |
+| `a687f61` | R3 | **Reduced-only projection** (ADR-0024): `destination.projection: reduced_only` locally, `run_driver(reduced_only_prefix=...)` on Databricks — docs/09's grant model is realisable with shipped code. In-place-replacement combination refused at validation. |
+| `f73f5ee` | R4 | **Docs honesty**: "discovering" out of the tagline; audit-table span-length disclosure stated and governance tightened (docs/09 + docs/03 §12); pseudonymize frequency/co-occurrence limit + correct birthday-bound sizing; UC-03 status; stale registries comment. |
+| `c98caf8` | R5 | **Referential consistency measured**: consistency 1.000, distinctness 1.000 over all 102 EMAIL/PHONE occurrences per dataset scope, and scope isolation verified end to end (same value, different tokens across the two dataset configs). Test-tier by design; docs/08 defines the metric. |
+| `a216935` | R6 | **`pii-reduction run <dataset>`**: the reduction's first CLI front door; metadata-only output pinned on stdout and stderr, both paths; exit 1 on any failed field. |
+
+**State:** 956 default-tier tests (917 at session start), 95 deselected; ruff and
+`mypy src tests` clean; all 41 benchmark/incident gates green after every
+increment; **no published benchmark number moved, and none was allowed to** —
+the R sequence changed what the system can honestly claim, not what it scores.
+Two new numbers were published (R5's consistency pair). Not pushed in this
+session.
+
+**Working lessons this session paid for:**
+
+1. **The auditors caught something real on every single increment**, including a
+   numerically wrong birthday bound in the docs-honesty increment itself (both
+   caught it independently), a silent bad composition between the projection and
+   the rule-4 replacement workflow, and ADR-0021-style sizing undercounts.
+   Session 5's rule stands: run them every time, even on docs-only diffs.
+2. **Parallel edits to one file race the ruff autofix hook** — it strips
+   just-added imports as unused between edits. Sequential edits, or add the
+   using code before the import.
+3. **Verify a reviewer's claim before classifying it, even when it flatters the
+   repo.** Both reviews were reliable, but three claims were wrong, and one of
+   the wrong ones (the phantom CLI command) pointed at the most useful small
+   gap this session closed.
+
+**Deferred with conditions (docs/17 §7 is the record):** residual verification
+(D7 — reopens when the owner picks the next major phase), distributed evidence
+fan-out (D8 — sandbox), key rotation/KMS (D9 — first real pseudonymize
+consumer), batching (D10 — Phase 7), rejected-candidates audit (D11), long-text
+guard (D12), note-history parser (D13 — after the speaker-prefix ADR),
+publication + NOTICE (D14 — owner call). A chip was also raised for the
+pre-existing last-wins row-status edge across multi-column failures
+(`pipeline.py` ~line 253), found by the R1 privacy audit; it is more visible now
+that ADR-0023 makes `pii_status` load-bearing.
