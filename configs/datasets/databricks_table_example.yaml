@@ -1,0 +1,43 @@
+# A dataset that names a Unity Catalog table end to end (ADR-0025, plan §8 P2).
+#
+# This file is the shape the Databricks runbook (docs/18, queued as P3) will tell an
+# operator to copy.
+# The catalog, schema and table below are placeholders and are NOT a workspace this
+# project has ever touched: `workspace` is the generic default catalog name on a
+# serverless workspace, and the rest is example text. Point them at your own objects
+# — never commit a real one back (AGENTS.md Databricks rules).
+#
+# It is not exercised by the benchmark: it exists to be validated (the config loader
+# resolves every field here in the default test tier) and to be copied.
+dataset:
+  name: databricks_table_example
+  row_id: document_id
+
+source:
+  type: spark_table
+  table: workspace.pii_reduction_demo.support_tickets
+
+# Everything a run writes lands under one catalog.schema: `<dataset>_reduced`,
+# `<dataset>_pii_audit` and `<dataset>_run_metrics`. With the default
+# `projection: full` the reduced table still carries the ORIGINAL text columns, and
+# the audit table discloses span offsets and lengths — so grant this schema like the
+# raw one, not like an analytics schema. For broader consumers write the projection
+# instead: `projection: reduced_only` here, or `--reduced-only-prefix` to put it in a
+# separately-granted schema (ADR-0024, docs/09).
+destination:
+  type: delta_table
+  catalog: workspace
+  schema: pii_reduction_demo
+  # Refuses to touch an existing table. Choose `overwrite` deliberately, never as a
+  # fallback (docs/07).
+  mode: errorifexists
+  # projection: reduced_only   # write the artifact without the raw text column
+  #                            # (ADR-0024); default is full
+
+columns:
+  text:
+    parser: plain_text
+    entities: [PERSON, EMAIL, PHONE]
+    output_column: text_pii_redacted
+    language:
+      mode: detect

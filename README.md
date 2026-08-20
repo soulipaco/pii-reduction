@@ -99,6 +99,21 @@ metadata-only summary, and exits 1 if any field failed — partial output must
 look like a failure to a scripted caller (ADR-0023's fail-closed default writes
 no reduced value for failed fields).
 
+On the deployment target, the same reduction runs from a dataset config that names
+a Unity Catalog table (session 10, ADR-0025):
+
+```bash
+pii-reduction-databricks run <dataset-name> --configs configs
+```
+
+Run it from the venv that has the `databricks` extra — Databricks Connect couples
+client and server versions, so it lives in its own environment rather than the core
+one (ADR-0006). It is a separate console script rather than a flag, because the core
+CLI must stay importable with no Spark installed. Configuration names the table and the
+`catalog.schema` written to; the runtime supplies the session from your
+`DATABRICKS_CONFIG_PROFILE`. `configs/datasets/databricks_table_example.yaml` is
+the shape to copy — the placeholders in it are not a real workspace.
+
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
 | strict F1 | 0.723 | 0.910 |

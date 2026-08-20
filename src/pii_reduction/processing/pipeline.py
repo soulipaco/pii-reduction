@@ -176,10 +176,14 @@ class Pipeline:
     # -- execution ---------------------------------------------------------------
 
     def load(self) -> SourceDataset:
+        # `getattr` rather than attribute access: a table-typed source (ADR-0025)
+        # carries `table`, not `path`, and must reach the registry's refusal — which
+        # names the Databricks driver path — instead of dying on an AttributeError
+        # here. The registry owns that message so there is exactly one of it.
         source = build_source(
             self.config.source.type,
             name=self.config.dataset.name,
-            path=self.config.source.path,
+            path=getattr(self.config.source, "path", None),
             options=dict(self.config.source.options),
         )
         return source.load()
@@ -390,7 +394,12 @@ class Pipeline:
     def write(self, outcome: ProcessingOutcome) -> ProcessingOutcome:
         """Persist the reduced dataset, the run metrics, and optionally the audit rows."""
         destination = self.config.destination
-        adapter = build_output(destination.type, path=destination.path, mode=destination.mode)
+        # See `load` — a delta_table destination has a catalog and schema, no path,
+        # and `build_output` refuses it with the driver-path instruction. Reading the
+        # path once means the metrics sidecar below cannot be reached with a
+        # destination that has none.
+        destination_path = getattr(destination, "path", None)
+        adapter = build_output(destination.type, path=destination_path, mode=destination.mode)
         name = self.config.dataset.name
         dataset_frame = (
             self.reduced_only_projection(outcome.frame)
@@ -399,7 +408,14 @@ class Pipeline:
         )
         written = {"dataset": adapter.write(dataset_frame, name=name)}
 
-        base = Path(destination.path)
+        if destination_path is None:  # pragma: no cover - build_output refused it above
+            # Unreachable while every buildable destination is file-backed; stated
+            # rather than assumed, so a future table destination that reaches this
+            # method fails loudly instead of skipping the run metrics in silence.
+            raise ProcessingError(
+                f"destination type {destination.type!r} has no path to write run metrics beside"
+            )
+        base = Path(destination_path)
         directory = base.parent if base.suffix else base
         written["run_metrics"] = write_json(
             directory / f"{name}_run_metrics.json", outcome.metrics_payload()

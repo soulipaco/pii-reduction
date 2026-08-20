@@ -406,3 +406,349 @@ class TestSourceVersionCapture:
         spark = _FakeSpark(_FakeQuery([object()]))
         dataset = SparkTableSource(spark, "cat.sch.tbl").load()
         assert dataset.source_version is None
+
+
+def table_config(**overrides: object) -> ResolvedDataset:
+    """`benchmark_plain`, re-pointed at Unity Catalog objects (ADR-0025).
+
+    Built by copy rather than by loading `databricks_table_example.yaml` on purpose:
+    that file uses language `mode: detect`, and building its pipeline would need the
+    `language` extra, which the default tier does not have (ADR-0009). The example
+    file is validated by `TestTheShippedExample` below, which resolves it without
+    building anything.
+    """
+    from pii_reduction.config.models import DeltaTableDestination, SparkTableSource
+
+    base = resolved_config()
+    source = SparkTableSource(type="spark_table", table="cat.raw.tickets")
+    destination = DeltaTableDestination.model_validate(
+        {"type": "delta_table", "catalog": "cat", "schema": "reduced", **overrides}
+    )
+    return base.model_copy(update={"source": source, "destination": destination})
+
+
+class TestConfigNamedTables:
+    """P2's exit criterion: a dataset YAML names a UC table end to end.
+
+    Fake sessions throughout — no workspace, no Spark, default tier. The parity test
+    asserts the same wiring against the real workspace on its next run.
+    """
+
+    def _spark(self) -> _FakeWritableSpark:
+        return _FakeWritableSpark(_FakeQuery([_HistoryRow(7)]))
+
+    def test_run_driver_takes_both_names_from_configuration(self) -> None:
+        from pii_reduction.databricks.runner import run_driver
+
+        spark = self._spark()
+        result = run_driver(spark, table_config())
+
+        assert result.reduced_table == "cat.reduced.benchmark_corpus_plain_reduced"
+        assert result.audit_table == "cat.reduced.benchmark_corpus_plain_pii_audit"
+        assert result.metrics_table == "cat.reduced.benchmark_corpus_plain_run_metrics"
+        # The configured table is what was read, not a default or a session guess.
+        assert any("cat.raw.tickets" in query for query in spark.queries)
+
+    def test_an_explicit_argument_still_wins(self) -> None:
+        # What lets one committed config be pointed at a throwaway schema — the
+        # parity test depends on exactly this.
+        from pii_reduction.databricks.runner import run_driver
+
+        spark = self._spark()
+        result = run_driver(
+            spark,
+            table_config(),
+            source_table="cat.other.src",
+            destination_prefix="cat.scratch",
+        )
+        assert result.reduced_table.startswith("cat.scratch.")
+        assert any("cat.other.src" in query for query in spark.queries)
+
+    def test_the_configured_write_mode_is_used(self) -> None:
+        from pii_reduction.databricks.output import DeltaTableOutput
+        from pii_reduction.databricks.runner import _resolve_destination
+
+        prefix, mode = _resolve_destination(table_config(mode="overwrite"), None, None)
+        assert (prefix, mode) == ("cat.reduced", "overwrite")
+        # An unconfigured destination keeps the fail-safe default rather than
+        # inheriting a mode from somewhere.
+        assert _resolve_destination(resolved_config(), "cat.scratch", None)[1] == "errorifexists"
+        assert DeltaTableOutput(object(), prefix, mode=mode) is not None
+
+    def test_a_configured_projection_applies_on_databricks_too(self) -> None:
+        """ADR-0024's projection is a property of the artifact, not of the runtime."""
+        from pii_reduction.databricks.runner import run_driver
+
+        spark = self._spark()
+        result = run_driver(spark, table_config(projection="reduced_only"))
+        written = spark.tables[result.reduced_table]
+        configured = [policy.column for policy in resolved_config().columns]
+        for column in configured:
+            assert column not in written.columns
+        assert "text_pii_redacted" in written.columns
+
+    def test_a_config_without_a_table_says_what_to_add(self) -> None:
+        from pii_reduction.databricks.runner import run_driver
+
+        with pytest.raises(DatabricksError) as exc_info:
+            run_driver(self._spark(), resolved_config(), destination_prefix="cat.scratch")
+        message = str(exc_info.value)
+        assert "spark_table" in message and "source_table=" in message
+
+    def test_a_config_without_a_destination_prefix_says_what_to_add(self) -> None:
+        from pii_reduction.databricks.runner import run_driver
+
+        with pytest.raises(DatabricksError) as exc_info:
+            run_driver(self._spark(), resolved_config(), source_table="cat.raw.src")
+        message = str(exc_info.value)
+        assert "delta_table" in message and "destination_prefix=" in message
+
+
+class TestTheShippedExample:
+    def test_the_example_dataset_resolves(self) -> None:
+        """`configs/datasets/databricks_table_example.yaml` is what the runbook copies.
+
+        Resolution only — no pipeline is built, so this stays inside the default
+        tier's no-model, no-Spark budget while still failing if the example drifts
+        out of the config contract.
+        """
+        config = load_resolved_dataset(REPO_ROOT / "configs", "databricks_table_example")
+        assert config.source.type == "spark_table"
+        assert config.destination.type == "delta_table"
+        assert config.destination.prefix.count(".") == 1
+
+
+class TestDatabricksCli:
+    """The front door, wired against a fake session (no workspace, no Spark)."""
+
+    def _main(self, argv: list[str], spark: object) -> int:
+        from pii_reduction.databricks.cli import main
+
+        return main(argv, session_factory=lambda _profile=None: spark)
+
+    def test_run_reports_metadata_only(self, capsys: pytest.CaptureFixture[str]) -> None:
+        import pii_reduction.databricks.cli as cli_module
+
+        spark = _FakeWritableSpark(_FakeQuery([_HistoryRow(1)]))
+        config = table_config()
+        # The CLI's job under test is argument wiring, so the config load is the one
+        # thing stubbed: a real dataset file cannot both name a UC table and stay
+        # inside the default tier's no-model budget (see `table_config`).
+        original = cli_module.load_resolved_dataset
+        cli_module.load_resolved_dataset = lambda *_args, **_kwargs: config  # type: ignore[assignment]
+        try:
+            code = self._main(["run", "any_dataset"], spark)
+        finally:
+            cli_module.load_resolved_dataset = original  # type: ignore[assignment]
+
+        assert code == 0
+        captured = capsys.readouterr()
+        assert "cat.reduced.benchmark_corpus_plain_reduced" in captured.out
+        # AGENTS.md rule 8: no source text and no detected value on either stream.
+        source_text = spark.tables["cat.reduced.benchmark_corpus_plain_reduced"].iloc[0]
+        assert str(source_text["text"]) not in captured.out
+        assert str(source_text["text"]) not in captured.err
+        assert "@" not in captured.out
+
+    def test_a_missing_dataset_exits_two_with_a_readable_error(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        spark = _FakeWritableSpark(_FakeQuery([]))
+        code = self._main(
+            ["run", "no_such_dataset", "--configs", str(REPO_ROOT / "configs")], spark
+        )
+        assert code == 2
+        assert "not found" in capsys.readouterr().err
+
+
+class TestDestructiveWritesAreRefused:
+    """AGENTS.md rule 4 at the table level, not just the column level."""
+
+    @pytest.mark.parametrize("suffix", ["reduced", "pii_audit", "run_metrics"])
+    def test_a_run_cannot_write_over_the_table_it_reads(self, suffix: str) -> None:
+        from pii_reduction.databricks.runner import run_driver
+
+        spark = _FakeWritableSpark(_FakeQuery([_HistoryRow(2)]))
+        source = f"cat.reduced.benchmark_corpus_plain_{suffix}"
+        with pytest.raises(DatabricksError, match="write over the table it reads"):
+            run_driver(
+                spark,
+                table_config(mode="overwrite"),
+                source_table=source,
+                destination_prefix="cat.reduced",
+            )
+        # Refused before anything was read or written, not part-way through.
+        assert spark.tables == {}
+
+    def test_the_projection_target_is_checked_too(self) -> None:
+        from pii_reduction.databricks.runner import run_driver
+
+        spark = _FakeWritableSpark(_FakeQuery([_HistoryRow(2)]))
+        with pytest.raises(DatabricksError, match="write over the table it reads"):
+            run_driver(
+                spark,
+                table_config(),
+                source_table="cat.consumers.benchmark_corpus_plain_reduced_only",
+                destination_prefix="cat.operator",
+                reduced_only_prefix="cat.consumers",
+            )
+
+
+class TestUnexpectedFailuresStayQuiet:
+    def test_a_third_party_exception_reaches_stderr_as_its_class_only(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A Connect failure quotes the workspace URL and profile in its message.
+
+        The core CLI lets an unexpected exception keep its traceback, which is right
+        for a local run. This front door's output lands in a job log, so the message
+        is replaced by the exception class (AGENTS.md rules 1 and 8).
+        """
+        from pii_reduction.databricks.cli import main
+
+        secret_shaped = "cannot reach https://example-workspace.invalid with profile FIELD_TEAM"
+
+        def explode(_profile: str | None = None) -> object:
+            raise RuntimeError(secret_shaped)
+
+        # A dataset that resolves, so the run reaches the session factory: the
+        # config load happens first and would otherwise fail before the crossing
+        # under test.
+        code = main(
+            ["run", "databricks_table_example", "--configs", str(REPO_ROOT / "configs")],
+            session_factory=explode,
+        )
+        captured = capsys.readouterr()
+        assert code == 2
+        assert "RuntimeError" in captured.err
+        assert secret_shaped not in captured.err
+        assert "example-workspace" not in captured.err
+        assert captured.out == ""
+
+
+class TestTableNameShapesAgree:
+    """The config pattern and the SQL-boundary validator must accept the same names.
+
+    Two validators exist on purpose — one fails a typo at config load with a readable
+    message, the other guards SQL interpolation — but if they disagreed, a name could
+    pass configuration and then be refused at the first query, or worse, the reverse.
+    """
+
+    @pytest.mark.parametrize(
+        "table",
+        ["workspace.demo.table_1", "cat.sch.tbl", "_a._b._c"],
+    )
+    def test_both_accept_the_same_good_names(self, table: str) -> None:
+        from pii_reduction.config.models import SparkTableSource as SparkTableSourceConfig
+
+        assert require_table_name(table) == table
+        assert SparkTableSourceConfig(type="spark_table", table=table).table == table
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "table",
+            "schema.table",
+            "c.s.t; DROP TABLE x",
+            "c.s.`t`",
+            "c..t",
+            "",
+            "cat.sch.tbl\n",  # the trailing-newline case `\Z` exists for
+        ],
+    )
+    def test_both_refuse_the_same_bad_names(self, bad: str) -> None:
+        from pydantic import ValidationError
+
+        from pii_reduction.config.models import SparkTableSource as SparkTableSourceConfig
+
+        with pytest.raises(DatabricksError):
+            require_table_name(bad)
+        with pytest.raises(ValidationError):
+            SparkTableSourceConfig(type="spark_table", table=bad)
+
+
+class TestTheLocalPipelineRefusesTableTypes:
+    """The routing that turns a table-typed config into guidance, not a crash.
+
+    `Pipeline.load`/`write` read `path` with `getattr` precisely so these configs
+    reach the registry's message. Without these tests, reverting to direct attribute
+    access would break nothing in the suite — `run_driver` never calls either method.
+    """
+
+    def test_load_names_the_driver_path(self) -> None:
+        from pii_reduction.processing.pipeline import build_pipeline
+        from pii_reduction.sources.errors import SourceError
+
+        with pytest.raises(SourceError, match="run_driver"):
+            build_pipeline(table_config()).load()
+
+    def test_write_names_the_driver_path(self) -> None:
+        from pii_reduction.outputs.errors import OutputError
+        from pii_reduction.processing.pipeline import build_pipeline
+        from pii_reduction.sources.local import PandasSource
+
+        pipeline = build_pipeline(table_config())
+        frame = load_corpus(REPO_ROOT / "tests" / "fixtures" / "corpus").to_frame()
+        batch = frame[frame["document_type"] == "plain"].head(2).reset_index(drop=True)
+        outcome = pipeline.process(PandasSource(batch, name="x").load())
+        with pytest.raises(OutputError, match="run_driver"):
+            pipeline.write(outcome)
+
+
+class TestDriverRunStatus:
+    def test_a_clean_run_reports_success_and_no_failed_fields(self) -> None:
+        from pii_reduction.databricks.runner import run_driver
+
+        result = run_driver(_FakeWritableSpark(_FakeQuery([_HistoryRow(1)])), table_config())
+        assert result.status == "success"
+        assert result.fields_failed == 0
+
+    def test_the_cli_exits_one_when_fields_failed(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """A scheduler must not read a partial reduction as green (ADR-0025 rung 3)."""
+        import pii_reduction.databricks.cli as cli_module
+        from pii_reduction.databricks.runner import DriverRunResult
+
+        failed = DriverRunResult(
+            run_id="r",
+            config_hash="c" * 16,
+            rows=3,
+            reduced_table="cat.reduced.d_reduced",
+            audit_table="cat.reduced.d_pii_audit",
+            metrics_table="cat.reduced.d_run_metrics",
+            status="partial_failure",
+            fields_failed=2,
+        )
+        original_load = cli_module.load_resolved_dataset
+        original_run = cli_module.run_driver
+        cli_module.load_resolved_dataset = lambda *_a, **_k: table_config()  # type: ignore[assignment]
+        cli_module.run_driver = lambda *_a, **_k: failed  # type: ignore[assignment]
+        try:
+            code = cli_module.main(["run", "d"], session_factory=lambda _p=None: object())
+        finally:
+            cli_module.load_resolved_dataset = original_load  # type: ignore[assignment]
+            cli_module.run_driver = original_run  # type: ignore[assignment]
+
+        assert code == 1
+        assert "fields_failed=2" in capsys.readouterr().out
+
+
+class TestReducedOnlyPrefixOnTheCli:
+    def test_the_flag_reaches_the_runner(self, capsys: pytest.CaptureFixture[str]) -> None:
+        import pii_reduction.databricks.cli as cli_module
+
+        spark = _FakeWritableSpark(_FakeQuery([_HistoryRow(1)]))
+        original = cli_module.load_resolved_dataset
+        cli_module.load_resolved_dataset = lambda *_a, **_k: table_config()  # type: ignore[assignment]
+        try:
+            code = cli_module.main(
+                ["run", "d", "--reduced-only-prefix", "cat.consumers"],
+                session_factory=lambda _p=None: spark,
+            )
+        finally:
+            cli_module.load_resolved_dataset = original  # type: ignore[assignment]
+
+        assert code == 0
+        out = capsys.readouterr().out
+        assert "reduced_only: cat.consumers.benchmark_corpus_plain_reduced_only" in out
+        projected = spark.tables["cat.consumers.benchmark_corpus_plain_reduced_only"]
+        assert "text" not in projected.columns

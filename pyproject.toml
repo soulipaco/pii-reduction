@@ -30,6 +30,10 @@ dependencies = [
 
 [project.scripts]
 pii-reduction = "pii_reduction.cli:main"
+# The Databricks front door is its own script, not a flag on the one above: the core
+# CLI must stay importable without Spark, and `tests/test_package.py` pins that
+# statically (ADR-0025).
+pii-reduction-databricks = "pii_reduction.databricks.cli:main"
 
 [project.optional-dependencies]
 # spaCy models are installed by documented command, never declared here: they are

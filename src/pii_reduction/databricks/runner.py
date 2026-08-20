@@ -29,7 +29,10 @@ from typing import Any
 import pandas as pd
 
 from pii_reduction.config.fingerprint import config_fingerprint
+from pii_reduction.config.registries import DATABRICKS_DESTINATION_TYPES
 from pii_reduction.config.resolved import ResolvedDataset
+from pii_reduction.contracts.results import ProcessingStatus
+from pii_reduction.databricks.errors import DatabricksError
 from pii_reduction.databricks.output import DeltaTableOutput
 from pii_reduction.databricks.source import SparkTableSource
 from pii_reduction.processing.field_processor import AUDIT_COLUMNS
@@ -64,23 +67,106 @@ class DriverRunResult:
     #: The reduced-only projection (ADR-0024), written only when the caller gave
     #: `reduced_only_prefix` — the artifact meant for a different grant boundary.
     reduced_only_table: str | None = None
+    #: The run's own verdict, carried out of the driver so a *caller* can fail on it.
+    #: Without these two a scheduled job (ADR-0025 rung 3) would see a completed
+    #: write and report green, while `pii_status` inside the table said otherwise —
+    #: the local CLI has exited 1 on this since R6 and the deployment target must
+    #: not be the weaker signal.
+    status: str = ProcessingStatus.SUCCESS.value
+    fields_failed: int = 0
+
+
+def _resolve_source_table(config: ResolvedDataset, source_table: str | None) -> str:
+    """Explicit argument first, then what the dataset config names (ADR-0025).
+
+    The argument survives because tests and one-off runs legitimately point the same
+    config at a throwaway table; configuration is the path a runbook uses.
+    """
+    if source_table is not None:
+        return source_table
+    table = getattr(config.source, "table", None)
+    if table is None:
+        raise DatabricksError(
+            f"dataset {config.dataset.name!r}: no source table. Either pass "
+            "source_table=, or give the dataset a 'spark_table' source naming a "
+            "catalog.schema.table (this dataset's source type is "
+            f"{config.source.type!r}; see configs/datasets/databricks_table_example.yaml)"
+        )
+    return str(table)
+
+
+def _resolve_destination(
+    config: ResolvedDataset, destination_prefix: str | None, mode: str | None
+) -> tuple[str, str]:
+    """The ``catalog.schema`` to write under, and the write mode, in that order."""
+    destination = config.destination
+    configured_prefix = getattr(destination, "prefix", None)
+    prefix = destination_prefix if destination_prefix is not None else configured_prefix
+    if prefix is None:
+        raise DatabricksError(
+            f"dataset {config.dataset.name!r}: no destination prefix. Either pass "
+            "destination_prefix=, or give the dataset a 'delta_table' destination "
+            "with a catalog and schema (this dataset's destination type is "
+            f"{destination.type!r}; see configs/datasets/databricks_table_example.yaml)"
+        )
+    if mode is not None:
+        return str(prefix), mode
+    # Only a Databricks destination's mode may reach the Delta writer. A local
+    # `mode: overwrite` means "replace a file", which is cheap and reversible; the
+    # same word against a Delta table replaces a governed dataset. Inheriting it
+    # across that boundary would make a destructive write the *default* for any
+    # config whose destination was written for local runs — refused here, so an
+    # unconfigured run keeps `errorifexists` and overwriting stays deliberate.
+    if destination.type in DATABRICKS_DESTINATION_TYPES:
+        return str(prefix), str(destination.mode)
+    return str(prefix), "errorifexists"
+
+
+def _refuse_writing_over_the_source(
+    table: str, prefix: str, base: str, reduced_only_prefix: str | None
+) -> None:
+    """Refuse a run whose output table is the table it reads (AGENTS.md rule 4).
+
+    The driver reads with ``toPandas()`` and writes afterwards, so a target equal to
+    the source under ``mode: overwrite`` would replace the original text with the
+    reduced frame — destructive, and invisible until someone looks for the raw column.
+    ``errorifexists`` already fails this closed by default; this refuses it under
+    every mode, because "the default protects you" is not the same as "it cannot
+    happen". Names only in the message — they are configuration values, not data.
+    """
+    targets = {f"{prefix}.{base}_{suffix}" for suffix in ("reduced", "pii_audit", "run_metrics")}
+    if reduced_only_prefix is not None:
+        targets.add(f"{reduced_only_prefix}.{base}_reduced_only")
+    if table in targets:
+        raise DatabricksError(
+            f"dataset {base!r} would write over the table it reads ({table}): the "
+            "reduced output must land somewhere other than the source. Give the "
+            "destination a different catalog.schema, or rename the dataset"
+        )
 
 
 def run_driver(
     spark: Any,
     config: ResolvedDataset,
     *,
-    source_table: str,
-    destination_prefix: str,
+    source_table: str | None = None,
+    destination_prefix: str | None = None,
     reduced_only_prefix: str | None = None,
     run_id: str | None = None,
-    mode: str = "errorifexists",
+    mode: str | None = None,
 ) -> DriverRunResult:
     """Read from a table, run the pipeline on the driver, write Delta tables.
 
     The pipeline call is byte-for-byte the local one — that is the parity claim, and
     the parity test holds an output-hash equality over it. Table names are built from
     the caller's configuration; nothing here knows a workspace.
+
+    **Where the names come from (ADR-0025).** ``source_table``, ``destination_prefix``
+    and ``mode`` all default to what the dataset configuration names — a
+    ``spark_table`` source and a ``delta_table`` destination — so a dataset YAML can
+    name a Unity Catalog table end to end and a runbook needs no Python. An explicit
+    argument still wins, which is what keeps the parity test able to point the
+    committed config at a throwaway schema.
 
     ``reduced_only_prefix`` (ADR-0024) additionally writes the reduced-only
     projection — the frame without the configured raw text columns — to a
@@ -89,16 +175,29 @@ def run_driver(
     projection can live in a schema those consumers can read while the full
     frame, audit and metrics stay behind the operator boundary.
     """
-    dataset = SparkTableSource(spark, source_table, name=config.dataset.name).load()
+    table = _resolve_source_table(config, source_table)
+    prefix, write_mode = _resolve_destination(config, destination_prefix, mode)
+    base = config.dataset.name
+    _refuse_writing_over_the_source(table, prefix, base, reduced_only_prefix)
+
+    dataset = SparkTableSource(spark, table, name=config.dataset.name).load()
     pipeline = build_pipeline(config, run_id=run_id)
     outcome = pipeline.process(dataset)
 
-    output = DeltaTableOutput(spark, destination_prefix, mode=mode)
-    base = config.dataset.name
-    reduced = output.write(outcome.frame, name=f"{base}_reduced")
+    output = DeltaTableOutput(spark, prefix, mode=write_mode)
+    # `destination.projection` shapes the dataset artifact wherever it is written, so
+    # a config that asks for reduced_only gets it on Databricks too — the local
+    # `Pipeline.write` applies the same rule (ADR-0024). `reduced_only_prefix` is a
+    # separate question: a second copy, for a different grant boundary.
+    dataset_frame = (
+        pipeline.reduced_only_projection(outcome.frame)
+        if getattr(config.destination, "projection", "full") == "reduced_only"
+        else outcome.frame
+    )
+    reduced = output.write(dataset_frame, name=f"{base}_reduced")
     reduced_only: str | None = None
     if reduced_only_prefix is not None:
-        reduced_only = DeltaTableOutput(spark, reduced_only_prefix, mode=mode).write(
+        reduced_only = DeltaTableOutput(spark, reduced_only_prefix, mode=write_mode).write(
             pipeline.reduced_only_projection(outcome.frame), name=f"{base}_reduced_only"
         )
     audit = output.write(
@@ -123,6 +222,8 @@ def run_driver(
         audit_table=audit,
         metrics_table=metrics,
         reduced_only_table=reduced_only,
+        status=outcome.run.status.value,
+        fields_failed=outcome.run.fields_failed,
     )
 
 
@@ -204,6 +305,12 @@ def distributed_frame(
 
     Returns the transformed (lazy) frame plus the run id stamped on every row; the
     caller decides where the frame lands.
+
+    **This path ignores ``destination.projection``** (ADR-0024): it returns the
+    processed frame, and the caller decides what to write. ``run_driver`` and the
+    local ``Pipeline.write`` both apply the projection because both own the write;
+    this function does not, so a config asking for ``reduced_only`` still gets every
+    column here.
 
     **This path produces the reduced frame only.** Per-partition audit rows and run
     metrics are computed inside each worker's ``process`` call and discarded —

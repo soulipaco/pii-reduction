@@ -25,6 +25,7 @@ __all__ = [
     "CsvSource",
     "DatasetConfig",
     "DatasetIdentity",
+    "DeltaTableDestination",
     "DestinationConfig",
     "EntityOverride",
     "FailureMode",
@@ -42,6 +43,7 @@ __all__ = [
     "ProviderSettings",
     "ReducerSettings",
     "SourceConfig",
+    "SparkTableSource",
     "ValidationSettings",
 ]
 
@@ -236,7 +238,39 @@ class ParquetSource(ConfigModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
-SourceConfig = Annotated[CsvSource | ParquetSource, Field(discriminator="type")]
+#: ``catalog.schema.table``, plain identifiers only. Shape validation lives here so
+#: a typo fails at configuration load with a readable message rather than at the
+#: first query; ``databricks.source.require_table_name`` validates again at the SQL
+#: interpolation boundary, which is a security check rather than a duplicate —
+#: `tests/test_databricks_adapters.py::TestTableNameShapesAgree` pins the two against
+#: the same cases, including the trailing-newline one.
+#:
+#: The anchor differs from `databricks/source.py`'s ``\Z`` on purpose and the two
+#: still agree: pydantic compiles this with the Rust regex engine, where ``$`` means
+#: end of haystack, while Python's ``re`` lets ``$`` match before a final newline —
+#: which is why the hand-written validator needs ``\Z`` and this one cannot use it
+#: (the Rust engine rejects the escape outright).
+_QUALIFIED_TABLE = r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){2}$"
+#: ``catalog.schema`` — the table name is appended per write by the Delta adapter.
+_QUALIFIED_PREFIX = r"^[A-Za-z_][A-Za-z0-9_]*$"
+
+
+class SparkTableSource(ConfigModel):
+    """A Unity Catalog table, read through a Spark session (ADR-0025).
+
+    Configuration names the table; the **runtime** supplies the session. That split
+    is the resolution of the open design point `docs/06_CONFIGURATION_CONTRACT.md`
+    recorded: a session cannot come from a dataset file (it is not a value, and
+    `sources/` may not depend on Spark — `docs/01_ARCHITECTURE.md`), so the adapter
+    is constructed by `databricks.runner.run_driver`, which has one.
+    """
+
+    type: Literal["spark_table"]
+    table: str = Field(min_length=1, pattern=_QUALIFIED_TABLE)
+    options: dict[str, Any] = Field(default_factory=dict)
+
+
+SourceConfig = Annotated[CsvSource | ParquetSource | SparkTableSource, Field(discriminator="type")]
 
 
 #: What the dataset artifact contains (ADR-0024). ``full`` keeps the source
@@ -264,7 +298,39 @@ class ParquetDestination(ConfigModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
-DestinationConfig = Annotated[CsvDestination | ParquetDestination, Field(discriminator="type")]
+class DeltaTableDestination(ConfigModel):
+    """Delta tables under a ``catalog.schema`` prefix (ADR-0025).
+
+    ``schema`` is the YAML key because that is the Unity Catalog word; the field is
+    ``db_schema`` because ``schema`` shadows a ``BaseModel`` attribute and pydantic
+    warns about it at class-definition time. ``populate_by_name`` keeps
+    ``model_dump()`` → ``model_validate()`` round-tripping, which the distributed
+    path relies on when it ships the config payload to workers.
+
+    There is no ``table``: one prefix serves a run's reduced, audit and metrics
+    tables, each named from the dataset (``<dataset>_reduced`` and friends), which is
+    what keeps them in one schema by construction (`docs/07` lakehouse layout).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
+
+    type: Literal["delta_table"]
+    catalog: str = Field(min_length=1, pattern=_QUALIFIED_PREFIX)
+    db_schema: str = Field(alias="schema", min_length=1, pattern=_QUALIFIED_PREFIX)
+    #: The Delta writer's modes, not the local file ones: ``errorifexists`` is the
+    #: default everywhere and refuses to touch an existing table.
+    mode: Literal["overwrite", "append", "errorifexists"] = "errorifexists"
+    projection: ProjectionMode = "full"
+
+    @property
+    def prefix(self) -> str:
+        """``catalog.schema`` — what ``DeltaTableOutput`` takes."""
+        return f"{self.catalog}.{self.db_schema}"
+
+
+DestinationConfig = Annotated[
+    CsvDestination | ParquetDestination | DeltaTableDestination, Field(discriminator="type")
+]
 
 
 class ColumnConfig(ConfigModel):

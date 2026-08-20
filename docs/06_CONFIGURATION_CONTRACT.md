@@ -107,7 +107,9 @@ source:
     delimiter: ","
 ```
 
-Folder mode:
+Folder mode — **not implemented.** `csv_folder` is not in `KNOWN_SOURCE_TYPES`, so
+the loader rejects it; the block below is the intended shape, kept because the type
+is still wanted, not because it works:
 
 ```yaml
 source:
@@ -126,23 +128,34 @@ source:
 
 ### Databricks table
 
-**Not yet config-buildable — this block is the intended shape, not a shipped one.**
-As of Increment F the Spark adapters are constructed directly by
-`databricks.runner.run_driver`, never through `sources.registry.build_source`, whose
-registered types are `csv` and `parquet` only. The reason is structural rather than an
-omission: `build_source` takes a `path`, while `SparkTableSource` needs a live Spark
-session, and giving the registry one would put a Databricks dependency on the runtime
-path (`docs/01_ARCHITECTURE.md`, *Package dependency direction*). The shipped adapter's
-`source_type` is **`spark_table`**, not `databricks_table`. Wiring it to configuration
-needs a session-injection design that has not been taken.
+**Shipped (session 10, ADR-0025).** The type is `spark_table` — the adapter's own
+`source_type`, not the `databricks_table` earlier drafts of this document guessed at:
 
 ```yaml
 source:
-  type: databricks_table
-  table: pii_demo.raw.support_transcripts
+  type: spark_table
+  table: catalog.schema.table
 ```
 
-Credentials and workspace details must remain outside dataset files.
+**How the session gets there — the design point this document used to leave open.**
+Configuration names the **table**; the **runtime** supplies the **session**. The two
+cannot arrive together: a session is not a value a YAML file can hold, and a
+`sources/` module that accepted one would put a Databricks dependency on the runtime
+path (`docs/01_ARCHITECTURE.md`, *Package dependency direction*, pinned by three
+tests). So the name is validated by the config layer like any other, and the adapter
+is built by the one execution surface that has a session —
+`databricks.runner.run_driver`, reachable from a shell as
+`pii-reduction-databricks run <dataset>`.
+
+`sources.registry.build_source` therefore still builds `csv` and `parquet` only, and
+**refuses `spark_table` with an instruction rather than a "not registered"**: the
+adapter exists, it is simply built elsewhere. A test pins that refusal set to exactly
+the Databricks types, so a type cannot go missing from the registry and be explained
+away.
+
+Credentials and workspace details must remain outside dataset files. The table name
+is a configuration value; the profile is an environment variable
+(`DATABRICKS_CONFIG_PROFILE`).
 
 ## Destination configuration
 
@@ -156,19 +169,33 @@ destination:
   #                            # text columns (ADR-0024); default is full
 ```
 
-Databricks — same caveat as the Databricks source above: `delta_table` *is* the shipped
-`DeltaTableOutput.destination_type`, but it is not registered in
-`outputs.registry.build_output` (`csv` and `parquet` only) and `run_driver` constructs
-it directly:
+Databricks — same shape and same split as the source above:
 
 ```yaml
 destination:
   type: delta_table
-  catalog: pii_demo
-  schema: reduced
-  table: support_transcripts
-  mode: overwrite
+  catalog: <catalog>
+  schema: <schema>
+  mode: errorifexists      # or overwrite / append — deliberately, never as a fallback
+  # projection: reduced_only
 ```
+
+There is **no `table` key**: one `catalog.schema` prefix serves a run's reduced,
+audit and run-metrics tables, each named from the dataset (`<dataset>_reduced`,
+`<dataset>_pii_audit`, `<dataset>_run_metrics`), which keeps them in one schema by
+construction (`docs/07`).
+
+**Field-level failure is not signalled by the process exit code alone.** A run that
+completes with failed fields writes the table and exits 1 from
+`pii-reduction-databricks run`; the durable record is `pii_status` on the row and
+`fields_failed` in the run-metrics table (ADR-0023). A scheduler should read the exit
+code; an analyst should read `pii_status`.
+
+The write modes are the Delta writer's, not the local file ones, and they are **not
+inherited across that boundary**: a local `mode: overwrite` means "replace a file",
+while the same word against a Delta table replaces a governed dataset. A run whose
+destination is not a `delta_table` falls back to `errorifexists` rather than
+borrowing the local mode.
 
 For production-like jobs, prefer a controlled merge/replace strategy rather than unconstrained append.
 
@@ -182,8 +209,8 @@ dataset:
   row_id: conversation_id
 
 source:
-  type: databricks_table          # not config-buildable yet - see the caveat above
-  table: pii_demo.raw.support_transcripts
+  type: spark_table
+  table: catalog.schema.support_transcripts
 
 columns:
   transcript:

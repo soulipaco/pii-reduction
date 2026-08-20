@@ -7,7 +7,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from pii_reduction.config.registries import KNOWN_DESTINATION_TYPES, KNOWN_SOURCE_TYPES
+from pii_reduction.config.registries import (
+    DATABRICKS_DESTINATION_TYPES,
+    DATABRICKS_SOURCE_TYPES,
+    KNOWN_DESTINATION_TYPES,
+    KNOWN_SOURCE_TYPES,
+)
 from pii_reduction.contracts.language import UNKNOWN_LANGUAGE
 from pii_reduction.language import (
     ColumnLanguageResolver,
@@ -23,6 +28,7 @@ from pii_reduction.outputs import (
     build_output,
     write_json,
 )
+from pii_reduction.outputs.registry import BUILT_ELSEWHERE as DESTINATIONS_BUILT_ELSEWHERE
 from pii_reduction.sources import (
     CsvSource,
     PandasSource,
@@ -31,17 +37,34 @@ from pii_reduction.sources import (
     available_source_types,
     build_source,
 )
+from pii_reduction.sources.registry import BUILT_ELSEWHERE as SOURCES_BUILT_ELSEWHERE
 from tests.pipeline_fixtures import build_frame, write_dataset_csv
 
 pytestmark = pytest.mark.unit
 
 
 class TestRegistries:
-    def test_source_registry_matches_configuration(self) -> None:
-        assert available_source_types() == KNOWN_SOURCE_TYPES
+    """Configuration may name more types than these registries can build (ADR-0025).
 
-    def test_destination_registry_matches_configuration(self) -> None:
-        assert available_destination_types() == KNOWN_DESTINATION_TYPES
+    The gap is exactly the Databricks adapters: they need a live Spark session, and a
+    `sources/`/`outputs/` module that took one would put a Databricks dependency on
+    the runtime path. These tests pin the gap to that exact set, so a type can never
+    go quietly missing from a registry and be explained away as "Databricks".
+    """
+
+    def test_the_local_source_registry_covers_every_non_databricks_type(self) -> None:
+        assert available_source_types() == KNOWN_SOURCE_TYPES - DATABRICKS_SOURCE_TYPES
+
+    def test_the_local_destination_registry_covers_every_non_databricks_type(self) -> None:
+        assert (
+            available_destination_types() == KNOWN_DESTINATION_TYPES - DATABRICKS_DESTINATION_TYPES
+        )
+
+    def test_the_source_guidance_map_covers_exactly_the_databricks_types(self) -> None:
+        assert set(SOURCES_BUILT_ELSEWHERE) == DATABRICKS_SOURCE_TYPES
+
+    def test_the_destination_guidance_map_covers_exactly_the_databricks_types(self) -> None:
+        assert set(DESTINATIONS_BUILT_ELSEWHERE) == DATABRICKS_DESTINATION_TYPES
 
     def test_unknown_source_type_is_actionable(self) -> None:
         with pytest.raises(SourceError) as exc_info:
@@ -49,8 +72,29 @@ class TestRegistries:
         assert "not registered" in str(exc_info.value)
 
     def test_unknown_destination_type_is_actionable(self) -> None:
-        with pytest.raises(OutputError):
-            build_output("delta_table", path="x")
+        with pytest.raises(OutputError) as exc_info:
+            build_output("excel", path="x")
+        assert "not registered" in str(exc_info.value)
+
+    def test_a_databricks_source_says_where_it_is_built_instead(self) -> None:
+        # "not registered" would read as "unsupported", which is wrong and would send
+        # someone to implement an adapter that already exists.
+        with pytest.raises(SourceError) as exc_info:
+            build_source("spark_table", name="demo")
+        message = str(exc_info.value)
+        assert "not registered" not in message
+        assert "run_driver" in message and "spark_table" in message
+
+    def test_a_databricks_destination_says_where_it_is_built_instead(self) -> None:
+        with pytest.raises(OutputError) as exc_info:
+            build_output("delta_table")
+        message = str(exc_info.value)
+        assert "not registered" not in message
+        assert "run_driver" in message and "delta_table" in message
+
+    def test_a_path_source_still_requires_its_path(self) -> None:
+        with pytest.raises(SourceError, match="requires a path"):
+            build_source("csv", name="demo")
 
 
 class TestSources:

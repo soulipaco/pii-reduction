@@ -12,6 +12,8 @@ dependency direction: ``config`` stays free of ``parsers``/``providers``/``sourc
 from __future__ import annotations
 
 __all__ = [
+    "DATABRICKS_DESTINATION_TYPES",
+    "DATABRICKS_SOURCE_TYPES",
     "KNOWN_DESTINATION_TYPES",
     "KNOWN_LANGUAGE_DETECTORS",
     "KNOWN_OVERLAP_POLICIES",
@@ -32,14 +34,22 @@ KNOWN_REDUCERS = frozenset({"redact", "mask", "pseudonymize"})
 #: ``deterministic`` lands in A3, ``presidio`` in Increment B.
 KNOWN_PROVIDER_TYPES = frozenset({"deterministic", "presidio"})
 
-#: Increment A5. An earlier comment here promised ``excel`` with Increment D and
-#: Spark/Delta with Increment F; both increments landed without adding a source
-#: type — Excel was deferred with the note-history parser, and the Databricks
-#: adapters are deliberately *not* config-buildable (`SparkTableSource` needs a
-#: session, `build_source` takes a path; docs/06 records the same for
-#: destinations). They are constructed by `run_driver`, not named here.
-KNOWN_SOURCE_TYPES = frozenset({"csv", "parquet"})
-KNOWN_DESTINATION_TYPES = frozenset({"csv", "parquet"})
+#: Types whose adapters need a live Spark session and therefore ship under
+#: ``databricks/`` rather than ``sources/``/``outputs/`` (`docs/01_ARCHITECTURE.md`,
+#: *Package dependency direction*). Configuration may **name** them — a name is a
+#: string, so this module still imports nothing — but only an execution surface that
+#: has a session can build them: `databricks.runner.run_driver`. The local
+#: registries refuse them with that instruction rather than a bare "not registered".
+#:
+#: This is the resolution of the design point docs/06 left open (ADR-0025 P2):
+#: config names the table, the runtime supplies the session.
+DATABRICKS_SOURCE_TYPES = frozenset({"spark_table"})
+DATABRICKS_DESTINATION_TYPES = frozenset({"delta_table"})
+
+#: Increment A5, extended in session 10. Excel is still deferred with the
+#: note-history parser.
+KNOWN_SOURCE_TYPES = frozenset({"csv", "parquet"}) | DATABRICKS_SOURCE_TYPES
+KNOWN_DESTINATION_TYPES = frozenset({"csv", "parquet"}) | DATABRICKS_DESTINATION_TYPES
 
 #: The reconciler policy of ``docs/04_PII_ENGINE.md`` (Increment A4).
 KNOWN_OVERLAP_POLICIES = frozenset({"priority_score_length"})
