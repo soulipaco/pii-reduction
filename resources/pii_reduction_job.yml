@@ -1,4 +1,4 @@
-# The reduction job (plan §8 P4). NOT VALIDATED — never deployed or run.
+# The reduction job (plan §8 P4). Validated by `bundle validate`; never deployed.
 #
 # One task, one entry point: the same `pii-reduction-databricks run` a person types
 # in the runbook. There is deliberately no notebook here — `AGENTS.md` rule 3 keeps
@@ -53,7 +53,10 @@ resources:
           # compute — so no token, profile or host is configured anywhere in this
           # file. `get_session` reuses the session the runtime already built.
 
-      # A partially-failed reduction exits 1, so the job fails. Add a recipient and
+      # A partially-failed reduction exits 1, so the job fails — but only because
+      # the entry point raises rather than returns; a wheel task ignores a returned
+      # code, and a real run on 2026-08-21 was recorded green over a failure before
+      # `pii_reduction/databricks/cli.py::cli` fixed it. Add a recipient and
       # uncomment — an address is personal data and does not belong in a committed
       # file, and the Jobs API rejects an empty one, so this cannot ship enabled:
       #

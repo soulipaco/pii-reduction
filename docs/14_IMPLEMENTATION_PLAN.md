@@ -391,6 +391,7 @@ the session-9 rows in the Complete table and the queue below.
 | R3 | Reduced-only projection (ADR-0024): opt-in `destination.projection: reduced_only` writes the artifact without the configured raw text columns; `run_driver(reduced_only_prefix=...)` writes `<dataset>_reduced_only` to a separate `catalog.schema` — docs/09's grant model is now realisable with shipped code. In-memory processing unchanged (rule 4 holds); the confused combination with in-place replacement is refused at config validation; parity test asserts the projection on its next workspace run | 944 default (+7), 41/41 gates — no published number moved |
 | R4 | Docs honesty sweep (docs/17 D4): README tagline no longer claims "discovering"; docs/09 and docs/03 §12 now state the audit table's span-length disclosure and govern it like reduced output; pseudonymize documents the frequency/co-occurrence limit and correct birthday-bound sizing (both auditors independently caught a wrong first draft of the 12-hex figure — fixed before commit); charter UC-03 carries its unmet status; the stale registries comment is corrected | docs/comments only — 944 default unchanged, no behavior change |
 | R5 | Referential consistency of pseudonymization, **measured** (docs/17 D5): `evaluation/consistency.py` + an end-to-end test over the committed corpus, deterministic chain, `pseudonymize` strategy. **Result: consistency 1.000, distinctness 1.000 over all 102 EMAIL/PHONE occurrences, per dataset scope — and the same value gets different tokens across the two dataset scopes, so scope isolation holds end to end.** Test-tier by design (the pipeline outcome retains no per-operation replacements for the benchmark to consume); pinned on every push by the default tier | 951 default (+7), docs/08 records the metric |
+| P3/P4 hardening | Three real job runs found what no unit test could: a wheel task **ignores the entry point's return value** (a failed reduction was reported as a green job), raising `SystemExit` unconditionally then broke the opposite direction (Databricks runs the task under IPython, where `SystemExit(0)` is also an error, so a successful run was marked failed), and `run_driver` refused non-table sources so the front door could not run the volume config the runbook publishes. All three fixed and both exit directions re-confirmed against real jobs | 1027 default (+12); databricks tier 3 passed / 2 skipped; `bundle validate` OK |
 | R6 | `pii-reduction run <dataset>` — the reduction finally has a CLI front door over the existing `Pipeline.run()` (one external review's capability matrix asserted this command existed; it did not). Metadata-only summary; exit 1 when any field failed, so partial output looks like a failure to a scripted caller | 956 default (+5) incl. metadata-only stderr guards on the failure path |
 | P0 | Handoff sessions 1–8 archived to `docs/archive/SESSION_HANDOFF_S1-S8.md` behind a per-session evidence index; two stale plan pointers retargeted. Nothing else pruned, no ADR touched | 956 default, unchanged — docs only |
 | P1 | **ADR-0025: Azure Databricks is the primary deployment target.** README gains a Deployment target section, the charter's *Portability* quality is amended in place, the roadmap records that it is no longer the live sequence, docs/07 sharpens "for larger workloads". Records the platform ladder and the PHI horizon as a horizon, not a promise | 956 default, unchanged — docs only |
@@ -992,9 +993,21 @@ in its local half. Status of each below; the shipped detail is in the Complete t
   summary; read back as 20 rows with the source column intact beside the reduced one,
   every row `success`, 16 of 20 carrying placeholders, the audit table's column set
   exactly `AUDIT_COLUMNS`, and `run_rows_read=20` / `run_source_version=delta_v0`.
-  **Deterministic chain only** — EMAIL and PHONE — because `.venv-dbx17` carries the
-  databricks extra alone: this run does **not** demonstrate PERSON detection, which
-  under `deterministic_only` is silently absent by design.
+  That first run was deterministic-chain only. **Repeated on 2026-08-21 with the
+  hybrid chain**, after performing the runbook's step-1 install for the first time:
+  30 rows, exit 0, audit recording **PERSON 28 / EMAIL 15 / PHONE 15**, 28
+  `<PERSON>` placeholders written, 27 of 30 rows changed, and run provenance carrying
+  real library *and* model versions (`presidio-analyzer 2.2.364, spacy 3.8.15,
+  en_core_web_md 3.8.0`) — R2's provenance working end to end for the first time,
+  since every earlier run lacked the models. **PERSON detection is therefore
+  demonstrated on the workspace**, and step 1 is no longer untested.
+
+  Step 1 has a trap worth carrying: `python -m spacy download` shells out to an
+  installer, and a `uv` venv has no `pip`, so spaCy falls back to `uv pip install` —
+  which targets `$VIRTUAL_ENV`, or the `.venv` it discovers in the current directory
+  when that is unset. Run from the repository root, three models "downloaded" for
+  `.venv-dbx17` landed in the core `.venv` while the command reported success. The
+  runbook (§1) carries the mechanism and the remedy.
   All created objects were dropped. The dataset config lived outside the repository
   because it names real catalog/schema values.
 
@@ -1030,14 +1043,14 @@ in its local half. Status of each below; the shipped detail is in the Complete t
 
   **Not yet verified at that point.** The parity suite drives `run_driver` with
   explicit table arguments, so the runbook's own path had not yet run against a
-  workspace — that invocation is what the end-to-end run above then performed. Also
-  outstanding at the time, and still: Volumes ingestion (skipped as expected on a local client — though
+  workspace — that invocation is what the end-to-end run above then performed. Also outstanding at
+  the time — Volumes ingestion has since been verified (see above), leaving: Volumes ingestion (skipped as expected on a local client — though
   the guard is a local filesystem check, so the skip proves nothing about the
   workspace; it needs a notebook or job) and the distributed path
   (skipped — `ISOLATION_STARTUP_FAILURE`, unchanged since session 7). The local half
   of the runbook was executed as written; step 1's combined
   `[databricks,presidio,language]` install has never been performed in any
-  environment here, and the runbook says so.
+  environment here — performed on 2026-08-21, see above.
 
   **Authentication no longer assumes the Databricks CLI**, which the owner raised
   mid-session: their organisation blocks it and they authenticate with a token. The
@@ -1051,16 +1064,43 @@ in its local half. Status of each below; the shipped detail is in the Complete t
   process that already has a session through Connect. ADR-0006 amended. Still no
   host or token parameter in any signature, pinned by a test.
 
-  **What remains outside this criterion:** Volumes ingestion (needs a notebook or
-  job — the mount is server-side), the distributed path (`ISOLATION_STARTUP_FAILURE`,
-  unchanged since session 7), the bundle deploy (P4, never validated), and step 1's
-  combined extras install. None blocks the runbook's documented path, which now
-  works.
+  **Volumes ingestion is now verified too (2026-08-21), on compute.** The wheel and
+  a dataset config were uploaded to a volume and the console entry point was
+  submitted as a serverless job: it read `/Volumes/.../tickets.csv` through the
+  ordinary CSV source, reduced 25 rows, wrote three Delta tables (source column
+  intact, 20 of 25 changed, `PHONE 13 / EMAIL 12`, audit column set exact,
+  `run_rows_read=25`, `run_source_version` null as a file has no Delta version), and
+  everything was dropped. The configs directory was read from the volume as well.
+
+  **That run found two defects, both invisible to every other kind of test:**
+
+  1. **A failed reduction was reported as a green job.** Databricks calls a
+     `python_wheel_task` entry point as a *function* and ignores what it returns, so
+     the CLI's exit code — the whole point of R6 and of ADR-0023's fail-closed
+     posture — never reached the scheduler. The entry point is now a wrapper that
+     raises `SystemExit` on a failing code.
+  2. **…and raising unconditionally broke the opposite direction.** Databricks runs
+     the task under IPython, where *any* `SystemExit` including `SystemExit(0)` is an
+     error, so a successful reduction was marked failed after it had already written
+     its tables. The wrapper now raises only on a non-zero code. Both directions were
+     then confirmed against real jobs: failure → task failed, success → task SUCCESS.
+
+  **A third finding was a capability gap, not a defect:** `run_driver` refused any
+  source that was not a `spark_table`, so the Databricks front door could not execute
+  the volume config this runbook publishes in §6. A file source is now read through
+  the ordinary local adapter — which on compute is what makes a volume path work —
+  and the destination stays Delta. This is the "upload a file, reduce it" half of the
+  platform's rung-4 story, and it now runs.
+
+  **What remains:** the distributed path (`ISOLATION_STARTUP_FAILURE`, unchanged
+  since session 7) and `bundle deploy` itself. Neither blocks the runbook.
 - **P4 — deployment skeleton. Complete as a skeleton; never deployed.**
   `databricks.yml` + `resources/`, one task calling the same entry point, plus a
-  CLI-free path (UI or Jobs API) since `bundle deploy` *is* the CLI. Exit criterion
-  for the next session that has a workspace: `databricks bundle validate` run once
-  and its result recorded here. Three things in it would have broken a first run and
+  CLI-free path (UI or Jobs API) since `bundle deploy` *is* the CLI. **Exit criterion
+  met (2026-08-21): `databricks bundle validate -t dev` → Validation OK**, against a
+  real workspace with CLI v0.280.0. That proves the file is well-formed and its
+  variables resolve; it does not prove a deploy, a run, or that this workspace serves
+  the serverless `client` version the environments block names. Three things in it would have broken a first run and
   were fixed in review — a `configs_path` a wheel task cannot resolve, a dependency
   list that cannot install spaCy models (so PERSON would be missed silently), and an
   empty notification recipient the Jobs API rejects — but **none of that is a
@@ -1068,10 +1108,11 @@ in its local half. Status of each below; the shipped detail is in the Complete t
 - **P5 (stretch) — batching. Not started, deliberately.** Wire `detect_batch`
   (docs/17 D10 reopens: the platform direction is the condition arriving). Measure
   rows/s before and after on the 10k pack. The work order gated this on everything
-  else being done *and verified*. P3's workspace half is now partly done — parity
-  passed on 2026-08-20 — but its config-named CLI path is still unrun, so the gate
-  holds and starting a performance increment would have meant leaving a correctness
-  one unfinished.
+  else being done *and verified*. P3 is now met and P4's validate criterion with it,
+  so the original reason has expired; what still holds the gate is the distributed
+  path (`ISOLATION_STARTUP_FAILURE`) and `bundle deploy`, neither of which a
+  batching increment would help. Measure rows/s before and after on the 10k pack when
+  it is picked up.
 
 Rules unchanged by urgency: gates never weaken, workspace results only from
 actual workspace runs, real data never becomes a fixture. All three held: no

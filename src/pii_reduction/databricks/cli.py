@@ -37,7 +37,7 @@ from pii_reduction.contracts.errors import PiiReductionError
 from pii_reduction.databricks.runner import run_driver
 from pii_reduction.databricks.session import get_session
 
-__all__ = ["main"]
+__all__ = ["cli", "main"]
 
 DEFAULT_CONFIGS_DIR = Path("configs")
 
@@ -151,5 +151,29 @@ def _run(argv: Sequence[str] | None, session_factory: Callable[..., Any]) -> int
     return 0
 
 
+def cli() -> None:
+    """Console-script and job entry point: turn the exit code into a real exit.
+
+    ``main`` returns an ``int`` so tests can assert on it. A terminal invocation
+    would exit correctly either way — setuptools' console-script wrapper calls
+    ``sys.exit(main())`` for us — but **a Databricks `python_wheel_task` calls the
+    entry point as a plain function and ignores what it returns.** Measured on the
+    workspace 2026-08-21: a run that printed `error: ...` and returned 2 was recorded
+    by the job as `SUCCESS`. A scheduler would have seen green over a failed
+    reduction, which is the exact outcome the exit code exists to prevent, so the
+    entry point has to raise rather than return.
+
+    **Only a failing code raises.** Databricks runs the wheel task under IPython,
+    where *any* ``SystemExit`` — including ``SystemExit(0)`` — is reported as a task
+    error. Raising unconditionally therefore turned a successful reduction into a red
+    job, which the same 2026-08-21 run showed immediately: 25 rows read from a volume
+    and three Delta tables written, and the task still marked failed. Success must
+    return normally; only a non-zero code may raise.
+    """
+    code = main()
+    if code:
+        raise SystemExit(code)
+
+
 if __name__ == "__main__":  # pragma: no cover - module entry point
-    sys.exit(main())
+    cli()

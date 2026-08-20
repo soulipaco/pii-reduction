@@ -1,9 +1,11 @@
 # Databricks Asset Bundle — the deployment skeleton (plan §8 P4, ADR-0025 rung 3).
 #
-# NOT VALIDATED. This bundle has never been deployed or run: no workspace run has
-# been made from this repository since session 8, and none was made for this file.
-# It is a skeleton to adapt, not a tested artifact — `resources/README.md` says what
-# would have to happen to change that.
+# VALIDATED, NOT DEPLOYED (2026-08-21). `databricks bundle validate -t dev` returns
+# Validation OK against a real workspace, so this file is well-formed and its
+# variables resolve. It has never been deployed, and the job it declares has never run
+# *as deployed by this bundle* — though a job of the same shape (the same wheel task
+# calling the same console entry point) did run on serverless compute that day.
+# `resources/README.md` carries the exact split.
 #
 # Zero workspace values live here: no host, no catalog, no schema, no table, no
 # cluster or warehouse id. This file is therefore safe to commit and useless to

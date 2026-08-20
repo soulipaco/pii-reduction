@@ -76,23 +76,23 @@ class DriverRunResult:
     fields_failed: int = 0
 
 
-def _resolve_source_table(config: ResolvedDataset, source_table: str | None) -> str:
-    """Explicit argument first, then what the dataset config names (ADR-0025).
+def _resolve_source_table(config: ResolvedDataset, source_table: str | None) -> str | None:
+    """The table to read, or ``None`` when this dataset reads a file instead.
 
-    The argument survives because tests and one-off runs legitimately point the same
+    Explicit argument first, then what the dataset config names (ADR-0025). The
+    argument survives because tests and one-off runs legitimately point the same
     config at a throwaway table; configuration is the path a runbook uses.
+
+    **A file source is not an error here.** A `csv` or `parquet` source is read by the
+    ordinary local adapter, which on Databricks compute includes a Unity Catalog
+    volume — a volume path is a filesystem path, which is the whole of runbook §6's
+    claim. Refusing it made the Databricks front door unable to run the very config
+    that section publishes; found by running the CLI as a job on 2026-08-21.
     """
     if source_table is not None:
         return source_table
     table = getattr(config.source, "table", None)
-    if table is None:
-        raise DatabricksError(
-            f"dataset {config.dataset.name!r}: no source table. Either pass "
-            "source_table=, or give the dataset a 'spark_table' source naming a "
-            "catalog.schema.table (this dataset's source type is "
-            f"{config.source.type!r}; see configs/datasets/databricks_table_example.yaml)"
-        )
-    return str(table)
+    return None if table is None else str(table)
 
 
 def _resolve_destination(
@@ -161,6 +161,11 @@ def run_driver(
     the parity test holds an output-hash equality over it. Table names are built from
     the caller's configuration; nothing here knows a workspace.
 
+    **Sources.** A ``spark_table`` source is read through Spark. A ``csv`` or
+    ``parquet`` source is read by the ordinary local adapter — on Databricks compute
+    that includes a Unity Catalog volume, so "upload a file and reduce it" needs no
+    volume-aware code. The destination is Delta either way.
+
     **Where the names come from (ADR-0025).** ``source_table``, ``destination_prefix``
     and ``mode`` all default to what the dataset configuration names — a
     ``spark_table`` source and a ``delta_table`` destination — so a dataset YAML can
@@ -178,10 +183,18 @@ def run_driver(
     table = _resolve_source_table(config, source_table)
     prefix, write_mode = _resolve_destination(config, destination_prefix, mode)
     base = config.dataset.name
-    _refuse_writing_over_the_source(table, prefix, base, reduced_only_prefix)
+    if table is not None:
+        _refuse_writing_over_the_source(table, prefix, base, reduced_only_prefix)
 
-    dataset = SparkTableSource(spark, table, name=config.dataset.name).load()
     pipeline = build_pipeline(config, run_id=run_id)
+    # A table goes through Spark; a file goes through the same local adapter the
+    # local runtime uses, which is what makes a `/Volumes/...` path work with no
+    # volume-aware code anywhere (runbook §6).
+    dataset = (
+        SparkTableSource(spark, table, name=config.dataset.name).load()
+        if table is not None
+        else pipeline.load()
+    )
     outcome = pipeline.process(dataset)
 
     output = DeltaTableOutput(spark, prefix, mode=write_mode)

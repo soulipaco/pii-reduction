@@ -502,13 +502,27 @@ class TestConfigNamedTables:
             assert column not in written.columns
         assert "text_pii_redacted" in written.columns
 
-    def test_a_config_without_a_table_says_what_to_add(self) -> None:
+    def test_a_file_source_is_read_locally_and_still_writes_delta(self) -> None:
+        """A `csv` source is not an error on the Databricks path (2026-08-21).
+
+        On compute the local adapter's "filesystem path" includes a Unity Catalog
+        volume, so this is what makes runbook §6 — upload a file, reduce it, land it
+        in Delta — actually run. Refusing it meant the Databricks front door could not
+        execute the config that section publishes, which only surfaced when the CLI
+        was run as a job.
+        """
         from pii_reduction.databricks.runner import run_driver
 
-        with pytest.raises(DatabricksError) as exc_info:
-            run_driver(self._spark(), resolved_config(), destination_prefix="cat.scratch")
-        message = str(exc_info.value)
-        assert "spark_table" in message and "source_table=" in message
+        spark = self._spark()
+        # `benchmark_plain` reads the committed corpus CSV from disk.
+        result = run_driver(spark, resolved_config(), destination_prefix="cat.scratch")
+
+        assert result.rows > 0
+        assert result.reduced_table == "cat.scratch.benchmark_corpus_plain_reduced"
+        # Read through the file adapter, so no table was queried for its version.
+        assert not any("DESCRIBE HISTORY" in query for query in spark.queries)
+        written = spark.tables[result.reduced_table]
+        assert "text_pii_redacted" in written.columns
 
     def test_a_config_without_a_destination_prefix_says_what_to_add(self) -> None:
         from pii_reduction.databricks.runner import run_driver
@@ -1031,3 +1045,43 @@ class TestConfigModesAndWriterModesCannotDrift:
 
         annotation = DeltaTableDestination.model_fields["mode"].annotation
         assert set(get_args(annotation)) == _KNOWN_MODES
+
+
+class TestTheEntryPointRaisesRatherThanReturns:
+    """A Databricks wheel task ignores a returned exit code (measured 2026-08-21).
+
+    The job called the entry point as a function, the CLI returned 2 after printing
+    an error, and the run was recorded as SUCCESS — a scheduler would have seen green
+    over a failed reduction. `console_scripts` hides this locally by wrapping in
+    `sys.exit`, so only a real job run could surface it.
+    """
+
+    def test_a_failure_exit_code_becomes_a_systemexit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import pii_reduction.databricks.cli as cli_module
+
+        monkeypatch.setattr(cli_module, "main", lambda *_a, **_k: 2)
+        with pytest.raises(SystemExit) as exc_info:
+            cli_module.cli()
+        assert exc_info.value.code == 2
+
+    def test_success_returns_without_raising(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`SystemExit(0)` would fail the job too — Databricks runs it under IPython.
+
+        Measured the same day: raising unconditionally marked a task failed after it
+        had read 25 rows from a volume and written three Delta tables.
+        """
+        import pii_reduction.databricks.cli as cli_module
+
+        monkeypatch.setattr(cli_module, "main", lambda *_a, **_k: 0)
+        cli_module.cli()  # must simply return; raising would fail the job
+
+    def test_the_console_script_points_at_the_raising_wrapper(self) -> None:
+        # The wheel task names this entry point; pointing it back at `main` would
+        # silently restore the green-on-failure behaviour.
+        import tomllib
+
+        with (REPO_ROOT / "pyproject.toml").open("rb") as handle:
+            scripts = tomllib.load(handle)["project"]["scripts"]
+        assert scripts["pii-reduction-databricks"].endswith(":cli")

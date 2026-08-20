@@ -52,10 +52,17 @@ dataset config plus one command.
 > new **workspace** test writes under the *default* mode and asserts that a second
 > write refuses. That test passes — the marked tier is now **3 passed, 2 skipped**.
 >
-> Still untested: step 1's combined `[databricks,presidio,language]` install, which
-> has never been performed in any environment here. The run above used the
-> deterministic chain (EMAIL and PHONE only) because `.venv-dbx17` carries the
-> databricks extra alone — so it does **not** demonstrate PERSON detection.
+> **Step 1 has now been performed, and PERSON detection is demonstrated on the
+> workspace** (2026-08-21). The combined `[databricks,presidio,language]` install plus
+> the three spaCy models went into `.venv-dbx17` — see the model-install trap in §1 below,
+> which is real and cost a cycle — and the end-to-end run was repeated with
+> `provider_chain: deterministic_presidio` over 30 rows: exit 0, and the audit table
+> recorded **PERSON 28, EMAIL 15, PHONE 15**, with 28 `<PERSON>` placeholders in the
+> output and 27 of 30 rows changed. Run provenance carried real model versions for
+> the first time (`presidio-analyzer 2.2.364, spacy 3.8.15, en_core_web_md 3.8.0`),
+> which is what R2 was built to record — though that config used `language: mode:
+> column`, so the detector-version column was null and `mode: detect` is still
+> unexercised on the workspace. Everything created was dropped.
 
 ---
 
@@ -87,7 +94,28 @@ VIRTUAL_ENV=.venv-dbx uv pip install -e ".[databricks,presidio,language]"
 ```
 
 **Take all three extras, and install the spaCy models** per `docs/15_PROVIDERS.md`.
-They are not optional for the configuration in §2, and the two ways of skipping them
+
+> **`python -m spacy download` can install into the wrong environment, silently.**
+> It shells out to an installer, and a `uv`-created venv has no `pip` — so spaCy
+> falls back to **`uv pip install`**, and uv targets `$VIRTUAL_ENV` or, when that is
+> unset, the `.venv` it discovers in the current directory. Run from the repository
+> root against `.venv-dbx17`, that means the models land in the core `.venv` while
+> the command reports success; `spacy.load` then fails in the venv that needed them.
+> Verified 2026-08-21. Either set `VIRTUAL_ENV` for the command, or install the
+> wheels directly — the latter is unambiguous:
+>
+> ```bash
+> VIRTUAL_ENV=.venv-dbx uv pip install "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl"
+> ```
+>
+> Point `VIRTUAL_ENV` at whichever venv you built in this step — the name is yours;
+> this repository happens to carry `.venv-dbx17`. **Verify the download**:
+> `.github/spacy-models.sha256` pins the SHA-256 of exactly these wheels, and a model
+> fetched over plain HTTPS with no integrity check is a dependency nobody reviewed.
+> Then confirm it loads where you need it:
+> `python -c "import spacy; spacy.load('en_core_web_md')"`.
+
+The models are not optional for the configuration in §2, and the two ways of skipping them
 both fail quietly:
 
 - **Without `presidio` and its models, nothing detects PERSON.** The deterministic
@@ -284,16 +312,30 @@ source:
   path: /Volumes/my_catalog/my_schema/my_volume/tickets.csv
 ```
 
+Keep §2's `delta_table` destination underneath it — this block replaces the *source*
+only. A file source with no Delta destination fails with `no destination prefix`,
+because the Databricks front door always writes Delta.
+
 **This works where the volume is mounted, which is on Databricks compute** — a
 notebook or a job. A local Databricks Connect client has no `/Volumes` on its own
 filesystem, so the same config run from your laptop will not find the file. The
 `databricks`-marked test `tests/test_databricks_parity.py::TestVolumeIngestion`
 asserts the read and skips with that explanation when the mount is absent.
 
-**Status: unverified.** Skipped as expected on the 2026-08-20 workspace run, but note
-what that proves: the guard is a local `Path("/Volumes").exists()` check, so it would
-skip identically with no workspace at all. The server-side-mount explanation below is
-still untested. To close it,
+**Status: VERIFIED on compute (2026-08-21).** The wheel and a dataset config were
+uploaded to a volume, and `pii-reduction-databricks run <dataset> --configs
+/Volumes/.../configs` was submitted as a **serverless job**: it read
+`/Volumes/.../tickets.csv` through the ordinary CSV source, reduced 25 rows, and wrote
+three Delta tables. Read back: source column intact beside the reduced one, all rows
+`success`, 20 of 25 changed, `PHONE 13 / EMAIL 12` in the audit table with its exact
+column set, `run_rows_read=25`. `run_source_version` is null, correctly — a file has
+no Delta version. Everything created was dropped.
+
+So the claim holds exactly as written: **no volume-aware code anywhere**, and the
+configs directory was read from the volume too. The local `databricks`-marked test
+still skips on a laptop — the guard is a local `Path("/Volumes").exists()` check,
+which proves nothing about the workspace either way. To run that test where it can
+assert,
 run the `databricks`-marked tests where a volume is actually mounted — that means on
 Databricks compute, since the mount is server-side:
 
@@ -402,8 +444,10 @@ value.
 
 - **Scheduling.** `databricks.yml` and `resources/` hold an Asset Bundle and job
   skeleton, with a CLI-free path (UI or Jobs API) for workspaces where policy blocks
-  the Databricks CLI — see `resources/README.md`. It has never been deployed, and it
-  ships without a schedule on purpose.
+  the Databricks CLI — see `resources/README.md`. `databricks bundle validate` passes;
+  the bundle has never been *deployed*, and it ships without a schedule on purpose.
+  The job **shape** is proven: the same `python_wheel_task` calling the same console
+  entry point ran on serverless compute, twice, on 2026-08-21.
 - **The distributed path.** `distributed_frame` (`mapInPandas`) is shipped and
   unit-tested but has never executed on a workspace — see plan §8 F. The driver path
   is what this runbook uses, and it processes on the driver, so very large tables

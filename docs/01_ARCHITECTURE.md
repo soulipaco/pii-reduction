@@ -459,9 +459,10 @@ The difference is the source/output adapter and execution strategy, not the enti
 As shipped (Increment F), `databricks/` offers two execution strategies over that one
 pipeline:
 
-- `run_driver` — read a table through Spark, run `pipeline.process` on the driver,
-  write the reduced rows, the privacy-safe audit spans and the run metrics back as
-  Delta. Works on any compute that can run SQL, including serverless-only workspaces.
+- `run_driver` — read a table through Spark, *or* a configured file through the
+  ordinary local adapter (which on Databricks compute includes a `/Volumes` path),
+  run `pipeline.process` on the driver, write the reduced rows, the privacy-safe
+  audit spans and the run metrics back as Delta. Works on any compute that can run SQL, including serverless-only workspaces.
 - `distributed_frame` — the `mapInPandas` strategy, with the pipeline built once per
   worker from a cache keyed on the driver-generated run id *plus* the config hash. The
   run-id half is load-bearing: keyed on config alone, a warm worker would stamp a

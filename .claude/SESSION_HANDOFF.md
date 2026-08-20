@@ -160,16 +160,33 @@ them into the command instead of concluding they are absent.)
 **P3's exit criterion is now MET.** The runbook's own path ran end to end on the
 workspace: synthetic table staged, dataset config pointed at it,
 `pii-reduction-databricks run` → exit 0, three Delta tables, verified on read-back,
-everything dropped afterwards. It used the **deterministic chain only** (EMAIL and
-PHONE; `.venv-dbx17` has no presidio), so it proves the path, not PERSON detection. **It found a defect no test could have**: the shipped
+everything dropped afterwards. First with the deterministic chain, then — after
+performing the runbook's step-1 install for the first time — **again with the hybrid
+chain: PERSON 28 / EMAIL 15 / PHONE 15 on the workspace**, with real model versions
+in the run provenance. Step 1's trap: `python -m spacy download` installs into
+whichever `pip` is on PATH, and a `uv` venv has none, so it reported success while
+the models landed in the core venv. **It found a defect no test could have**: the shipped
 default write mode `errorifexists` is rejected by Databricks Connect, so every
 config-driven Delta write had been failing — invisible because the parity suite, the
 only workspace test, overrides the mode. Fixed by translating to Spark's `error`
 alias, pinned by a default-tier test **and** by a new workspace test that exercises
-the default mode end to end (tier: 2 passed → 3 passed). Volumes ingestion still needs a notebook; the
-distributed path is still `ISOLATION_STARTUP_FAILURE`.
+the default mode end to end (tier: 2 passed → 3 passed). **Volumes ingestion is verified too**, on compute:
+the console entry point ran as a serverless job, read a `/Volumes` CSV through the
+ordinary CSV source, and wrote three Delta tables. `databricks bundle validate`
+passes. The distributed path is still `ISOLATION_STARTUP_FAILURE`.
 
-**Five commits, each through the gate, and each reviewed by both auditors** (P0–P3
+That job run paid for itself twice over. **Databricks calls a wheel-task entry point
+as a function and ignores its return value**, so a failed reduction was reported as a
+green job — the exit code that R6 and ADR-0023 exist to produce never reached the
+scheduler. Raising `SystemExit` fixed it and immediately broke the other direction,
+because the task runs under IPython where `SystemExit(0)` is also an error: a
+successful run was marked failed after writing its tables. Raise only on non-zero;
+both directions then confirmed against real jobs. And `run_driver` refused non-table
+sources, so the Databricks front door could not run the volume config the runbook
+publishes — file sources now go through the ordinary local adapter.
+
+**Six commits (the last three after the queue closed), each through the gate, and
+each reviewed by both auditors** (P0–P3
 record the verdict in their commit messages; P4's records the findings it fixed but
 not the verdict — noted so the evidence and the claim match):
 
@@ -181,10 +198,10 @@ not the verdict — noted so the evidence and the claim match):
 | `f0481fe` | P3 (part) | `docs/18_RUNBOOK_DATABRICKS.md`, and **auth that does not require the Databricks CLI**. |
 | `0f1c6bc` | P4 | `databricks.yml` + `resources/` — bundle and job skeleton, CLI-free path documented, never deployed. |
 
-**State:** 1015 default-tier tests (956 at session start), 96 deselected; the
-`databricks` tier **2 passed / 2 skipped on the workspace** (owner's run,
-2026-08-20; plan §8 F's re-check log carries the row — pytest reported 5 skipped
-because 3 are module-level presidio/language collection skips outside the tier);
+**State:** 1027 default-tier tests (956 at session start), 97 deselected; the
+`databricks` tier **3 passed / 2 skipped on the workspace** (plan §8 F's re-check log
+carries the rows — pytest reports 5 skipped because 3 are module-level
+presidio/language collection skips outside the tier); `bundle validate` OK;
 ruff clean;
 **`mypy src tests` clean** — see lesson 1. No published benchmark number was touched,
 so none moved. Not pushed at the time this section was written; the push is the last

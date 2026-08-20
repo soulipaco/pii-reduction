@@ -4,11 +4,12 @@ Two ways to run the reduction on a schedule. Both invoke the **same** entry poin
 with the same parameters — `pii-reduction-databricks run <dataset> --configs <path>` —
 so neither is a second implementation (`AGENTS.md` rule 10).
 
-> **Status: skeleton, never deployed.** Nothing here has been applied to a workspace.
-> The bundle is syntactically checked by a default-tier test (it parses, and it
-> contains no workspace-identifying value), which is a different and much weaker
-> claim than "it works". Treat the first deploy as the validation, and record the
-> result in `docs/14_IMPLEMENTATION_PLAN.md` §8 when it happens.
+> **Status: validated, not deployed** (2026-08-21). `databricks bundle validate -t
+> dev` returns **Validation OK** against a real workspace with CLI v0.280.0 — so the
+> file is well-formed and its variables resolve, which is more than the default-tier
+> test can show (that only proves it parses and names no workspace). Still unproven:
+> `bundle deploy`, the job actually running, and the serverless `environments` block,
+> whose `client` version is workspace-dependent. Record those here when they happen.
 
 ## Path A — Asset Bundle (needs the Databricks CLI)
 
