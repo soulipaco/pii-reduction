@@ -17,9 +17,16 @@ Spark-free, and nothing on the runtime path may import `pyspark`.
 
 The intended shape is a ladder, each rung depending only on the ones below it:
 the engine (this library) → a runbook-driven workspace run → a scheduled job or
-Asset Bundle → a service layer over the engine. This repository is the engine and
-the rungs beneath the service layer; reduction logic never moves upward into a
-notebook or a UI (`AGENTS.md` rule 3). PHI is a recorded horizon for the same
+Asset Bundle → a service layer over the engine. **All four rungs now exist in this
+repository — which is not the same as all four being deployed: rung 3's bundle has
+never been deployed and rung 4 has never been hosted as an App, both blocked on the
+same Databricks CLI issue.** Rung 4 is a thin HTTP API (ADR-0026) under
+`src/pii_reduction/service/`, served by `pii-reduction-service`; a Databricks App
+is how it gets hosted rather than a second surface to build. Reduction logic never
+moves upward into a notebook or a UI (`AGENTS.md` rule 3), and the service cannot
+even import a provider or a reducer — an import allowlist says so, and a test
+enforces it. No endpoint accepts or returns text of any kind
+(`docs/19_SERVICE_LAYER.md`). PHI is a recorded horizon for the same
 platform, not a claim about what is detected today — the shipped taxonomy is
 `PERSON`/`EMAIL`/`PHONE`/`ADDRESS`, and `ADDRESS` is not yet detected at all
 (ADR-0002).
@@ -345,10 +352,13 @@ As built. Every path below exists; nothing here is aspirational.
 │   ├── 14_IMPLEMENTATION_PLAN.md   # §8 is the live status and work queue
 │   ├── 15_PROVIDERS.md             # shipped providers, licences, measured results
 │   ├── 16_BENCHMARK_REPORT_10K.md  # the 10k-document two-chain comparison
+│   ├── 18_RUNBOOK_DATABRICKS.md    # run it on your own table, in ten minutes
+│   ├── 19_SERVICE_LAYER.md         # rung 4: the HTTP API, and what it refuses
 │   └── adr/                        # decision records, indexed in adr/README.md
 ├── databricks.yml · resources/  # Asset Bundle + job skeleton (never deployed)
 ├── configs/
-│   ├── project.yaml · entities.yaml · providers.yaml
+│   ├── project.yaml · providers.yaml   # entities.yaml/languages.yaml optional
+│   ├── service_templates.yaml # what the service layer offers, and what it fixes
 │   ├── datasets/             # one dataset contract per file
 │   ├── benchmark_gates.yaml  # the committed corpus's regression floors
 │   └── pack_gates/           # one gate set per public-dataset pack
@@ -360,6 +370,7 @@ As built. Every path below exists; nothing here is aspirational.
 │   ├── evaluation/ observability/
 │   ├── synthetic/            # build-time corpus, injection and pack builders
 │   ├── databricks/           # execution surface: Spark source, Delta output, runners
+│   ├── service/              # rung 4: the HTTP API. Owns no reduction logic
 │   └── cli.py · benchmark.py # entry points
 ├── tests/                    # fast tier by default; integration/slow/databricks marked
 ├── demo/                     # runnable front doors; the logic lives in synthetic/
@@ -444,6 +455,7 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 - **Build sequence and increments:** `docs/14_IMPLEMENTATION_PLAN.md`
 - **Shipped providers, licences and measured results:** `docs/15_PROVIDERS.md`
 - **Running it on your own Databricks table:** `docs/18_RUNBOOK_DATABRICKS.md`
+- **The service layer (rung 4) and what it refuses to do:** `docs/19_SERVICE_LAYER.md`
 - **Decision records:** `docs/adr/`
 
 ## License

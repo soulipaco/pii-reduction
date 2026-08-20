@@ -29,6 +29,7 @@ configs/
 ├── languages.yaml
 ├── providers.yaml
 ├── benchmark_gates.yaml   ← not part of this contract; see below
+├── service_templates.yaml ← the service layer's menus; see below
 └── datasets/
     ├── demo_support_tickets.yaml
     ├── demo_transcripts.yaml
@@ -41,6 +42,22 @@ sit in one versioned file, and is **not** read by `config/loader.py` — the loa
 merges `project.yaml` plus the three side files above and ignores everything else.
 Its schema and semantics belong to `docs/08_EVALUATION_BENCHMARKING.md`, not to this
 contract.
+
+## Files in `configs/` that the loader does not read
+
+Two files live beside the dataset contracts and are **not** part of the layered
+merge, so `config/loader.py` never sees them:
+
+- `benchmark_gates.yaml` and `pack_gates/*.yaml` — regression floors, read by
+  `evaluation/gates.py`.
+- `service_templates.yaml` — the service layer's dataset templates (ADR-0026,
+  `docs/19_SERVICE_LAYER.md`). Unlike the gate files this one *is* inside this
+  contract's model surface: a template embeds a `SourceConfig`, a
+  `DestinationConfig`, and `ProcessingOverrides`/`LanguageOverrides` from
+  `config/models.py`, so the fields below govern it and it cannot drift from them.
+  What it adds is service policy — which columns, entity labels, parsers, chains and
+  reducers a caller may choose — and the rule that a caller may choose *nothing*
+  else. `docs/19` is the operator-facing description.
 
 ## `project.yaml`
 

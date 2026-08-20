@@ -91,8 +91,16 @@ structure or of an absent capability rather than a filter that can be wrong:
 2. **No endpoint returns, streams, redirects to, or vends a URL for text.** The
    transport matters as much as the field: a download, a 302 to a volume path and a
    signed URL are the same disclosure as a string in a response body.
-3. **The run store holds `ProcessingOutcome.metrics_payload()` and `RunMetadata`,
-   never the `ProcessingOutcome`.** That object carries `frame` — the full pandas
+3. **The run store holds a service-owned metadata record, never an engine or
+   adapter object.** *(Amended during implementation: this originally named
+   `ProcessingOutcome.metrics_payload()` and `RunMetadata`. What shipped is narrower
+   — a `RunSummary` the runtime builds at the boundary, carrying the run id, config
+   hash, status, row/field/entity counts and the configured destinations. It
+   deliberately drops `provider_versions`, `pipeline_version`,
+   `pseudonymization_key_id`, `dropped_labels` and the `detail` distributions: those
+   are provenance the engine already writes to its own metrics artifact, and a
+   service-side copy would be a second record to keep true. The reason below is
+   unchanged and is what forced the boundary conversion.)* That object carries `frame` — the full pandas
    frame, source text included — and `row_results`, whose `ProcessedFieldResult`
    carries `output_text` (the reduced text) and a relayed error message. Retaining it
    would put Class B and Class C text in the service process, one careless

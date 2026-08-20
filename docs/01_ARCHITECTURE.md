@@ -465,8 +465,11 @@ that is enforced rather than asserted: no module under `service/` may import
 `providers/`, `reducers/`, `parsers/`, `language/`, `entities/`, `evaluation/`,
 `sources/` or `outputs/`. What is left to it is `config/`, `processing/`
 (`build_pipeline`), `contracts/`, `observability/`, and the one Databricks file. A
-service that cannot name a provider or a reducer cannot quietly reimplement one, and
-a capability it needs that the engine lacks becomes a change to the engine — the
+service that cannot name a provider or a reducer cannot quietly *reuse* one, and any
+attempt to reimplement one is visible in the diff rather than hidden behind an
+import. (The guard bounds what the service may name; it cannot stop somebody writing
+a regex inside `service/`, and does not claim to.) A capability the service needs
+that the engine lacks becomes a change to the engine — the
 entity taxonomy a column picker must enumerate is the first such case, and it is met
 by `config/` re-exporting `known_labels`, not by `service/` reaching into
 `entities/`. Note what the rule is: a **naming** rule, not runtime isolation.
@@ -483,10 +486,20 @@ The direction is asymmetric on purpose, and both halves are pinned by
 - **The service may depend downward, through one named file.** `service/runtimes/`
   holds one module per execution runtime; `service/runtimes/databricks.py` is the
   *only* path outside `databricks/` permitted to import the Databricks surface, and
-  the guard names that exact relative path rather than exempting a directory or a
+  the guard names that exact relative path — compared as a POSIX string, because
+  `WindowsPath` equality is case-insensitive and a `Databricks.py` would otherwise be
+  exempt on a laptop and rejected on CI — rather than exempting a directory or a
   filename. Every other file in `service/` is held to the same rule as the engine, so
   the Databricks surface gains exactly one importer outside itself and `pyspark`
   gains none.
+
+`processing/` is reachable, but only through `processing/pipeline.py`; the guard
+closes the rest, because `field_processor.py` is the per-field
+parse → detect → reconcile → reduce orchestrator and a service reaching for it is
+reaching into the engine. `config/` is left fully open, which makes it the sanctioned
+relay for anything the service needs from below — `known_labels` and `TAXONOMY` are
+exactly such re-exports — so `config/`'s own edges are pinned in turn: it may reach
+`contracts/` and `entities/` and nothing else.
 
 `service/api.py` is the only module that imports the ASGI framework, which is an
 optional extra (`service`). The rest of `service/` is framework-free and testable

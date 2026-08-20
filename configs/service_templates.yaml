@@ -1,0 +1,83 @@
+# Server-side dataset templates for the service layer (ADR-0026).
+#
+# A template is the half of a dataset configuration a caller may NOT choose. It fixes
+# the source, the destination and the processing switches, and declares the menu the
+# caller picks from — columns, entity labels, parsers, chains, reducers. That split is
+# what stops the service becoming a confused deputy: it runs with its own credentials,
+# so a request that could name a `catalog.schema.table` could read a schema the caller
+# cannot (`docs/09`, *Choosing where data is read from and written to*).
+#
+# Three fields are here and nowhere in the request models, deliberately, because each
+# moves a privacy boundary rather than expressing a preference:
+#
+#   processing.failure_mode      `preserve_original_and_record_error` is ADR-0023's
+#                                raw-text pass-through
+#   processing.preserve_original `false` is AGENTS.md rule 4's controlled replacement
+#   destination.projection       ADR-0024's grant boundary
+#
+# Every value below is Class A: the committed synthetic corpus and a local output
+# directory. Never commit a real catalog, schema, table or path back into this file
+# (`AGENTS.md` Databricks rules).
+
+templates:
+  synthetic_corpus:
+    description: >-
+      The committed synthetic benchmark corpus, reduced to a local CSV. Class A
+      throughout — this is the template the service's own end-to-end test runs.
+    source:
+      type: csv
+      path: tests/fixtures/corpus/corpus.csv
+    destination:
+      type: csv
+      path: data/output/
+      mode: overwrite
+      # Keeps the source columns beside the reduced ones (AGENTS.md rule 4). Govern
+      # the result like the raw data, not like an analytics artifact; write
+      # `reduced_only` instead when the consumer must not see the source text.
+      projection: full
+    columns: [text]
+    row_id_columns: [document_id]
+    entities: [PERSON, EMAIL, PHONE]
+    parsers: [plain_text, transcript]
+    reducers: [redact, mask, pseudonymize]
+    # Both shipped chains are on offer. `deterministic_only` needs no extras and
+    # finds EMAIL and PHONE; `deterministic_presidio` is what finds PERSON, and needs
+    # the presidio extra plus its models — listing an entity does not make a chain
+    # capable of it.
+    provider_chains: [deterministic_only, deterministic_presidio]
+    processing:
+      preserve_original: true
+      # Fail-closed (ADR-0023). Stated rather than inherited, because this is the
+      # switch a template exists to hold.
+      failure_mode: quarantine_row
+    language:
+      # The corpus carries its own language column, so detection error does not fold
+      # into the result. A real dataset would use `mode: detect`.
+      mode: column
+      language_column: language
+
+# A Unity Catalog template looks like this. It is COMMENTED OUT because the catalog,
+# schema and table would be workspace values, and this repository holds none. Copy it
+# into your own deployment's configuration directory and point it at your objects;
+# running it needs the service started with `--databricks`.
+#
+#  uc_support_tickets:
+#    description: Support tickets from Unity Catalog, reduced to Delta.
+#    source:
+#      type: spark_table
+#      table: <catalog>.<schema>.<table>
+#    destination:
+#      type: delta_table
+#      catalog: <catalog>
+#      schema: <a schema other than the source's>
+#      mode: errorifexists
+#      projection: full
+#    columns: [description, work_notes]
+#    row_id_columns: [number]
+#    entities: [PERSON, EMAIL, PHONE]
+#    provider_chains: [deterministic_presidio]
+#    processing:
+#      preserve_original: true
+#      failure_mode: quarantine_row
+#    language:
+#      mode: detect

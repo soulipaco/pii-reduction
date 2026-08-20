@@ -34,6 +34,11 @@ pii-reduction = "pii_reduction.cli:main"
 # CLI must stay importable without Spark, and `tests/test_package.py` pins that
 # statically (ADR-0025).
 pii-reduction-databricks = "pii_reduction.databricks.cli:cli"
+# Rung 4 (ADR-0026). A third script rather than a `pii-reduction serve` subcommand:
+# that would make `cli.py` import `pii_reduction.service`, which the reverse import
+# guard in `tests/test_package.py` forbids — including from inside a function, since
+# the guard walks the AST.
+pii-reduction-service = "pii_reduction.service.cli:main"
 
 [project.optional-dependencies]
 # spaCy models are installed by documented command, never declared here: they are
@@ -61,6 +66,12 @@ parquet = [
 databricks = [
   "databricks-connect>=15.4",
 ]
+# Rung 4's HTTP surface (ADR-0026, amending ADR-0008's extras list). Only
+# `service/api.py` names it; `pii_reduction.service` stays importable without it.
+service = [
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+]
 dev = [
   # A PEP 517 front end for local wheel builds. `databricks.yml` uses `uv build`
   # instead, because the CLI runs its artifact command with PATH `python`.
@@ -70,6 +81,12 @@ dev = [
   "mypy>=1.10",
   "Faker>=25",
   "pyarrow>=14",       # so the parquet adapters are covered by the default test run
+  # So the service layer's HTTP surface is covered by the DEFAULT test run rather
+  # than a tier nobody runs (ADR-0026). `httpx` is not optional here: TestClient and
+  # ASGITransport both need it, and "a real ASGI transport, not a mock" is the
+  # property that decision rests on. It was present in the dev venv undeclared.
+  "fastapi>=0.110",
+  "httpx>=0.27",
   "pandas-stubs",      # typing only
 ]
 
@@ -121,6 +138,10 @@ ignore_missing_imports = true
 # do so lazily for exactly that reason. Without this, `mypy src tests` passes on a
 # developer machine with the extras installed and fails in the push tier that
 # deliberately installs neither — which is how CI found it on the first real run.
+# `fastapi` is deliberately absent from the override list below. It is an optional
+# extra like the others, but unlike them it is also in `dev`, so it is present
+# wherever the default tier runs — including CI. If it goes missing that is a
+# packaging error worth failing on rather than typing around.
 [[tool.mypy.overrides]]
 module = [
   "presidio_analyzer",

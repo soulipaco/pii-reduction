@@ -34,7 +34,15 @@ from pii_reduction.config.resolved import (
     ResolvedDataset,
 )
 
+# Re-exported so a caller that must *enumerate* entity labels can do so through the
+# configuration layer. `loader` already depends on `entities.taxonomy`, so this adds
+# no package edge — and it is what keeps the service layer's import allowlist
+# workable without letting it reach into `entities/` directly
+# (`docs/01_ARCHITECTURE.md`, *Package dependency direction*).
+from pii_reduction.entities.taxonomy import TAXONOMY, known_labels
+
 __all__ = [
+    "TAXONOMY",
     "ChainSettings",
     "ColumnConfig",
     "ConfigurationError",
@@ -58,6 +66,7 @@ __all__ = [
     "ValidationSettings",
     "config_fingerprint",
     "fingerprint_material",
+    "known_labels",
     "load_dataset_config",
     "load_project_config",
     "load_resolved_dataset",
