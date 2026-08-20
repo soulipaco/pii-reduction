@@ -4,24 +4,41 @@ The ten-minute path from a Unity Catalog table to a reduced Delta table, an audi
 table and a run-metrics table. Nothing here needs Python written; everything is a
 dataset config plus one command.
 
-> **Verification status (session 10, 2026-08-20).** The steps below are assembled
-> from shipped, tested code. What was actually executed while writing this: config
-> resolution of the shipped example, the command's `--help`, its refusal when no
-> credentials are present, and its refusal when the wrong front door is used — from
-> the dedicated venv this repository already had, `.venv-dbx17` (Python 3.12,
-> `databricks-connect` 16.4), which needed `uv pip install -e .` re-run before the
-> new console script appeared in it. What was **not**: the combined
-> `[databricks,presidio,language]` install of step 1 has never been performed in any
-> environment here, so treat step 1 as untested. **The
-> workspace half has NOT been executed for this runbook**: `DATABRICKS_CONFIG_PROFILE`
-> was unset in the authoring environment, so no run against a workspace was made and
-> none is claimed. The last workspace evidence this repository holds is session 8's
-> parity re-check (plan §8 F), and **three things described below post-date it and
-> have therefore never executed anywhere**: the reduced-only projection (§4, shipped
-> in R3), the run-metrics provenance columns (§5, shipped in R2), and volume
-> ingestion (§6). They are unit-tested, and their workspace assertions are written
-> and waiting in `tests/test_databricks_parity.py`. Update this block — with a date and what you ran — the first time it
-> executes end to end.
+> **Verification status (session 10, 2026-08-20).**
+>
+> **Verified on the workspace.** The owner ran `pytest -m databricks` from their own
+> PowerShell session on 2026-08-20, authenticating with `DATABRICKS_HOST` plus a
+> token (route `env_token`), against a fresh timestamped schema: **2 passed, 5
+> skipped**. The marked tier holds four tests — 2 passed, 2 skipped; the other three
+> skips are module-level collection skips in the presidio/language suites, which fire
+> in `.venv-dbx17` (no such extras) even though the marker deselects them. A reviewer
+> read 2 + 5 against a four-test tier and called it impossible, which is why the
+> arithmetic is spelled out here. The two that passed are the driver-path Delta round-trip — reduced-column
+> hashes equal between the workspace run and the local one — and the audit/metrics
+> metadata-only check. That run also carried the first execution **against a real
+> workspace** of two things previously covered only locally and against fake
+> sessions: the **reduced-only projection** of §4 (ADR-0024) and the **run-metrics
+> provenance columns** of §5 (`run_source_version` resolving to `delta_v<N>`), both
+> asserted inside those tests. Note what the projection check did and did not cover:
+> it was written into the *same* throwaway schema, so what is verified is that the
+> table exists and drops the raw column — the separate-prefix grant boundary §4
+> describes is still covered by unit tests only.
+>
+> **Still unverified, and skipped in that run for stated reasons:** **volume
+> ingestion (§6)** — `/Volumes` is not mounted on a local Databricks Connect client,
+> so it must be run from a notebook or job; and the **distributed `mapInPandas`
+> path** — the workspace's serverless Python sandbox still fails with
+> `ISOLATION_STARTUP_FAILURE`, open since session 7 (plan §8 F).
+>
+> **Also still unverified: this runbook's own path.** What executed was the parity
+> *test suite*, which drives `run_driver` directly with explicit table arguments. A
+> `pii-reduction-databricks run <dataset>` invocation — steps 2 and 3 as written,
+> with the table names coming from a dataset config — has not been run against a
+> workspace. Locally executed only: config resolution of the shipped example, the
+> command's `--help`, its refusal with no credentials, and its refusal through the
+> wrong front door, from `.venv-dbx17` (Python 3.12, `databricks-connect` 16.4).
+> Step 1's combined `[databricks,presidio,language]` install has never been performed
+> in any environment here — treat it as untested.
 
 ---
 
@@ -256,7 +273,10 @@ filesystem, so the same config run from your laptop will not find the file. The
 `databricks`-marked test `tests/test_databricks_parity.py::TestVolumeIngestion`
 asserts the read and skips with that explanation when the mount is absent.
 
-**Status: unverified.** No workspace run of this step has been made. To close it,
+**Status: unverified.** Skipped as expected on the 2026-08-20 workspace run, but note
+what that proves: the guard is a local `Path("/Volumes").exists()` check, so it would
+skip identically with no workspace at all. The server-side-mount explanation below is
+still untested. To close it,
 run the `databricks`-marked tests where a volume is actually mounted — that means on
 Databricks compute, since the mount is server-side:
 

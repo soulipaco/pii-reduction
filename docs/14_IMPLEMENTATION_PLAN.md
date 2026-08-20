@@ -395,7 +395,7 @@ the session-9 rows in the Complete table and the queue below.
 | P0 | Handoff sessions 1–8 archived to `docs/archive/SESSION_HANDOFF_S1-S8.md` behind a per-session evidence index; two stale plan pointers retargeted. Nothing else pruned, no ADR touched | 956 default, unchanged — docs only |
 | P1 | **ADR-0025: Azure Databricks is the primary deployment target.** README gains a Deployment target section, the charter's *Portability* quality is amended in place, the roadmap records that it is no longer the live sequence, docs/07 sharpens "for larger workloads". Records the platform ladder and the PHI horizon as a horizon, not a promise | 956 default, unchanged — docs only |
 | P2 | **A dataset YAML names a Unity Catalog table end to end.** `spark_table`/`delta_table` become typed config models and registry names; the local registries refuse them with an instruction naming the driver path; `run_driver` resolves table, prefix and mode from config (explicit args still win); `pii-reduction-databricks` is the front door, inside the surface because the import guard forbids a flag on the core CLI. Three defects found in review, two destructive: local `mode: overwrite` was inherited by the Delta writer, a run could write over the table it reads, and the CLI leaked Connect's message (workspace URL) on its crash path | 990 default (+34) |
-| P3 (part) | `docs/18_RUNBOOK_DATABRICKS.md`, and **authentication that does not require the Databricks CLI** — profile, `DATABRICKS_HOST` + token or service principal, or ambient compute credentials (ADR-0006 amended; its original text always said "profiles or env"). The parity fixture no longer gates on the profile variable, so token auth no longer silently skips every workspace test. **Workspace execution outstanding** — see the queue | 1001 default (+11) |
+| P3 (part) | `docs/18_RUNBOOK_DATABRICKS.md`, and **authentication that does not require the Databricks CLI** — profile, `DATABRICKS_HOST` + token or service principal, or ambient compute credentials (ADR-0006 amended; its original text always said "profiles or env"). The parity fixture no longer gates on the profile variable, so token auth no longer silently skips every workspace test. **Workspace execution outstanding** at the time of this commit; partly met on 2026-08-20 — see the queue | 1001 default (+11) |
 | P4 | `databricks.yml` + `resources/` — one job, one task, the same entry point; CLI-free path documented; zero hard-coded workspace values, pinned by a glob-discovered guard. **Never deployed.** Also caught here: `mypy src tests` (the CI invocation) had been broken by P2/P3 for two increments — 21 errors, all in `tests/` — because `/qa` ran only `mypy src`; both skills were aligned with CI in the session close-out | 1015 default (+14); `mypy src tests` clean |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
@@ -902,17 +902,20 @@ and 16.4, so it is Databricks infrastructure, not client skew). A `databricks`-m
 test watches it: it skips today naming the incident, and asserts real distributed
 parity with no code change the day the sandbox works.
 
-**Sandbox re-checks** (same command, unchanged code — a bare re-run of the marked
-tier against the workspace):
+**Sandbox re-checks** (same command against the workspace; the code underneath is
+*not* constant across rows — the 2026-08-20 run exercised R2's provenance columns,
+R3's projection and a fourth test that did not exist in sessions 7–8):
 
 | date | driver-path parity | distributed path |
 |---|---|---|
 | 2026-08-19 (session 7, Increment F) | 2 passed | skipped — ISOLATION_STARTUP_FAILURE |
 | 2026-08-19 (session 8) | 2 passed | skipped — incident still open |
+| 2026-08-20 (session 10, run by the owner, `env_token` auth) | 2 passed | skipped — incident still open |
 
 Environment facts recorded for reuse: dedicated venv (`.venv-dbx17`, Python 3.12,
-`databricks-connect` 16.4) per ADR-0006's isolation; profile via
-`DATABRICKS_CONFIG_PROFILE` only; the extra pins `databricks-connect>=15.4`.
+`databricks-connect` 16.4) per ADR-0006's isolation; authentication by named profile
+(`DATABRICKS_CONFIG_PROFILE`) **or** `DATABRICKS_HOST` plus a token — the `env_token`
+route added in session 10, which is how the 2026-08-20 run authenticated; the extra pins `databricks-connect>=15.4`.
 
 ### The review queue (session 9, from docs/17 §8 — approved sequence)
 
@@ -979,16 +982,33 @@ in its local half. Status of each below; the shipped detail is in the Complete t
   (nothing real ever enters the repo, fixtures, or logs — the tooling is
   fail-closed and metadata-only by construction, ADR-0023 / AGENTS rule 8).
   Exit: the runbook executed once end to end against the workspace on
-  synthetic data. **NOT MET — this is the one thing session 10 could not do.**
-  `DATABRICKS_CONFIG_PROFILE` was unset and no other credential was present, so no
-  workspace run was made and none is claimed. What *was* done: the runbook is
-  written and carries its own verification header; the local half was executed
-  (config resolution, `--help`, the no-credentials refusal, the wrong-front-door
-  refusal, all from `.venv-dbx17`); the Volumes test is written and
-  `databricks`-marked. The runbook's own step 1 — the combined
-  `[databricks,presidio,language]` install — has never been performed in any
-  environment here and the runbook says so; and the auth work below removed the reason it could not have
-  run for this owner anyway.
+  synthetic data. **PARTIALLY MET, and the gap is now small and named.**
+
+  **Verified on the workspace** (owner's run, 2026-08-20, from their own PowerShell
+  session over the new `env_token` route, against a fresh timestamped schema):
+  `pytest -m databricks` -> **2 passed, 5 skipped** — the marked tier is 2 passed /
+  2 skipped, plus three module-level collection skips from the presidio/language
+  suites, which fire in `.venv-dbx17` despite being deselected. Driver-path Delta round-trip
+  parity holds — reduced-column hashes equal between the workspace run and the local
+  one — and the audit and run-metrics tables are metadata-only. That run also
+  executed, **for the first time against a real workspace**, the **reduced-only
+  projection** (R3 / ADR-0024) and the **run-metrics provenance columns** (R2,
+  `run_source_version` resolving to `delta_v<N>`), both asserted inside those tests
+  and previously covered only locally and against fake sessions. The projection was
+  written into the same throwaway schema, so the separate-prefix grant boundary
+  remains unit-tested only. First workspace evidence since session 8.
+
+  **Not yet verified.** The parity suite drives `run_driver` with explicit table
+  arguments, so **the runbook's own path — `pii-reduction-databricks run <dataset>`,
+  taking its table names from a dataset config — has still not run against a
+  workspace.** That single invocation is what remains of this exit criterion. Also
+  outstanding: Volumes ingestion (skipped as expected on a local client — though
+  the guard is a local filesystem check, so the skip proves nothing about the
+  workspace; it needs a notebook or job) and the distributed path
+  (skipped — `ISOLATION_STARTUP_FAILURE`, unchanged since session 7). The local half
+  of the runbook was executed as written; step 1's combined
+  `[databricks,presidio,language]` install has never been performed in any
+  environment here, and the runbook says so.
 
   **Authentication no longer assumes the Databricks CLI**, which the owner raised
   mid-session: their organisation blocks it and they authenticate with a token. The
@@ -1002,13 +1022,12 @@ in its local half. Status of each below; the shipped detail is in the Complete t
   process that already has a session through Connect. ADR-0006 amended. Still no
   host or token parameter in any signature, pinned by a test.
 
-  **What remains, for whoever has credentials:** set `DATABRICKS_HOST` +
-  `DATABRICKS_TOKEN` (or a profile), run `pytest -m databricks`, then one
-  `pii-reduction-databricks run` on a synthetic table, and update the runbook's
-  status block with the date and what ran. Three things described in the runbook
-  post-date the last workspace evidence (session 8) and have never executed
-  anywhere: the reduced-only projection (R3), the run-metrics provenance columns
-  (R2), and Volumes ingestion.
+  **What remains, in one step:** upload a small synthetic table, point a dataset
+  config at it, and run `pii-reduction-databricks run <dataset>` once — then record
+  the result in the runbook's status block. `pytest -m databricks` is already done
+  (see above). Of the three things that had never executed anywhere, two now have;
+  only Volumes ingestion is left, and it needs a notebook or job rather than a local
+  client.
 - **P4 — deployment skeleton. Complete as a skeleton; never deployed.**
   `databricks.yml` + `resources/`, one task calling the same entry point, plus a
   CLI-free path (UI or Jobs API) since `bundle deploy` *is* the CLI. Exit criterion
@@ -1021,8 +1040,10 @@ in its local half. Status of each below; the shipped detail is in the Complete t
 - **P5 (stretch) — batching. Not started, deliberately.** Wire `detect_batch`
   (docs/17 D10 reopens: the platform direction is the condition arriving). Measure
   rows/s before and after on the 10k pack. The work order gated this on everything
-  else being done *and verified*; P3's workspace half is not, so starting a
-  performance increment would have meant leaving a correctness one unfinished.
+  else being done *and verified*. P3's workspace half is now partly done — parity
+  passed on 2026-08-20 — but its config-named CLI path is still unrun, so the gate
+  holds and starting a performance increment would have meant leaving a correctness
+  one unfinished.
 
 Rules unchanged by urgency: gates never weaken, workspace results only from
 actual workspace runs, real data never becomes a fixture. All three held: no

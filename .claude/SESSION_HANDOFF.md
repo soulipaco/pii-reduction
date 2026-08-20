@@ -43,8 +43,8 @@ the index below says what each established. The newest session's block is the li
   real workspace (Delta up, `SparkTableSource` back, byte-identical local processing,
   `DeltaTableOutput`, audit/metrics tables metadata-only). Workspace is
   **serverless-only**; the distributed path shipped but is infra-blocked
-  (ISOLATION_STARTUP_FAILURE). Dedicated venv `.venv-dbx17`, profile via
-  `DATABRICKS_CONFIG_PROFILE` only.
+  (ISOLATION_STARTUP_FAILURE). Dedicated venv `.venv-dbx17`; auth was
+  `DATABRICKS_CONFIG_PROFILE`-only until session 10 added the token route.
 - **Session 8 (2026-08-19) — the Greek call shipped.** ADR-0020 (label promotion,
   scoped to the Greek provider instance) and ADR-0021 (structurally-safe span
   extension). Published numbers moved deliberately: strict F1 0.902 → 0.910, leakage
@@ -143,15 +143,21 @@ newest live record.
 
 ## Session 10 — 2026-08-20 — The platform queue: P0 → P4 shipped, P3's workspace half outstanding
 
-**Start here:** the platform queue is done except for the one thing this session
-could not do — **run anything against a workspace**. No credential this code path can
-use was present: `DATABRICKS_CONFIG_PROFILE` unset, no host/token in the environment,
-not running on Databricks compute. (A `.databrickscfg` exists on the machine, but
-`resolve_auth_route` never falls back to it — a profile must be *named*.) So no
-workspace result is claimed anywhere. Everything else in plan §8's queue landed. The next session's first job, if
-it has credentials, is the short list in plan §8 P3: `pytest -m databricks`, one
-`pii-reduction-databricks run` on a synthetic table, then update the runbook's status
-block with a date and what ran.
+**Start here:** the platform queue is done, and after the close-out **the owner ran
+the workspace tests themselves** (2026-08-20, their own PowerShell session, over the
+new `env_token` route): `pytest -m databricks` → **2 passed, 5 skipped**. Driver-path
+parity holds on the workspace, and that run carried the first execution **against a
+real workspace** of the reduced-only projection (R3) and the run-metrics provenance
+columns (R2) — both previously covered only locally and against fakes. **I did not
+run it**: no credential was present in any shell this session spawned, and none was
+persisted at User level — deliberately, at the owner's instruction.
+
+What is left of P3's exit criterion is one invocation: `pii-reduction-databricks run
+<dataset>` against a workspace, taking its table names from a dataset config. The
+parity suite passes explicit table arguments, so the config-named path is proven
+locally and against fakes but not yet on a workspace. Volumes ingestion needs a
+notebook (the mount is server-side); the distributed path is still
+`ISOLATION_STARTUP_FAILURE`.
 
 **Five commits, each through the gate, and each reviewed by both auditors** (P0–P3
 record the verdict in their commit messages; P4's records the findings it fixed but
@@ -165,7 +171,11 @@ not the verdict — noted so the evidence and the claim match):
 | `f0481fe` | P3 (part) | `docs/18_RUNBOOK_DATABRICKS.md`, and **auth that does not require the Databricks CLI**. |
 | `0f1c6bc` | P4 | `databricks.yml` + `resources/` — bundle and job skeleton, CLI-free path documented, never deployed. |
 
-**State:** 1015 default-tier tests (956 at session start), 96 deselected; ruff clean;
+**State:** 1015 default-tier tests (956 at session start), 96 deselected; the
+`databricks` tier **2 passed / 2 skipped on the workspace** (owner's run,
+2026-08-20; plan §8 F's re-check log carries the row — pytest reported 5 skipped
+because 3 are module-level presidio/language collection skips outside the tier);
+ruff clean;
 **`mypy src tests` clean** — see lesson 1. No published benchmark number was touched,
 so none moved. Not pushed at the time this section was written; the push is the last
 step of the session.
@@ -219,14 +229,17 @@ Every increment, again. The ones that mattered:
 
 ### Deliberately not done
 
-- **P5 (batching).** Gated on everything else being done *and verified*; P3 is
-  verified only locally. Starting a performance increment while a correctness one is
+- **P5 (batching).** Gated on everything else being done *and verified*. P3 is now
+  partly verified on the workspace but its config-named CLI path is not, so the gate
+  still holds — starting a performance increment while a correctness one is
   unfinished would have been the wrong trade.
-- **Any workspace claim.** The runbook, ADR-0025, `resources/README.md`, the bundle
-  and plan §8 all say what has not been executed. Three things described in the
-  runbook post-date the last workspace evidence (session 8) and have never run
-  anywhere: the reduced-only projection (R3), the run-metrics provenance columns
-  (R2), and Volumes ingestion.
+- **Any workspace claim I did not have evidence for.** During the session that meant
+  all of them; the owner's 2026-08-20 run then supplied evidence for driver-path
+  parity, the reduced-only projection (R3) and the provenance columns (R2). Still
+  unexecuted anywhere, and still recorded as such in the runbook, ADR-0025,
+  `resources/README.md`, the bundle and plan §8: **Volumes ingestion**, the
+  **distributed path**, the **bundle deploy**, and the runbook's own
+  `pii-reduction-databricks run <dataset>` invocation.
 - **A `VolumeSource` adapter.** A volume path is a filesystem path, so `CsvSource`
   reads it unchanged — on Databricks compute, where the FUSE mount is. Building an
   adapter would have carried a Databricks concept into `sources/` for nothing.
