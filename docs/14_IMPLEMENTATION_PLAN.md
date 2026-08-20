@@ -357,9 +357,11 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 10 (2026-08-20) — the platform queue's P0–P4 shipped; P3's
-workspace half is **outstanding** and P5 was not started because of it (see the queue
-below). Previously: session 9 (2026-08-19) — two independent external reviews reconciled
+Last updated: session 10 (2026-08-20/21) — the platform queue's P0–P4 shipped **and
+the Databricks half is verified by real workspace runs**; P3 and P4's validate
+criterion are met, and what remains open is two environment blockers (`bundle deploy`
+needs a newer CLI; the distributed path is still `ISOLATION_STARTUP_FAILURE`). The
+next increment is rung 4, the service layer — not P5. Previously: session 9 (2026-08-19) — two independent external reviews reconciled
 (`docs/17_EXTERNAL_REVIEW_RECONCILIATION.md`: every load-bearing claim verified
 against the code, decision table of 6 ACCEPT / 14 DEFER / 4 REJECT / 3 DISPUTED, the
 R1–R6 sequence approved by the owner), and the R increments started landing — see
@@ -391,7 +393,7 @@ the session-9 rows in the Complete table and the queue below.
 | R3 | Reduced-only projection (ADR-0024): opt-in `destination.projection: reduced_only` writes the artifact without the configured raw text columns; `run_driver(reduced_only_prefix=...)` writes `<dataset>_reduced_only` to a separate `catalog.schema` — docs/09's grant model is now realisable with shipped code. In-memory processing unchanged (rule 4 holds); the confused combination with in-place replacement is refused at config validation; parity test asserts the projection on its next workspace run | 944 default (+7), 41/41 gates — no published number moved |
 | R4 | Docs honesty sweep (docs/17 D4): README tagline no longer claims "discovering"; docs/09 and docs/03 §12 now state the audit table's span-length disclosure and govern it like reduced output; pseudonymize documents the frequency/co-occurrence limit and correct birthday-bound sizing (both auditors independently caught a wrong first draft of the 12-hex figure — fixed before commit); charter UC-03 carries its unmet status; the stale registries comment is corrected | docs/comments only — 944 default unchanged, no behavior change |
 | R5 | Referential consistency of pseudonymization, **measured** (docs/17 D5): `evaluation/consistency.py` + an end-to-end test over the committed corpus, deterministic chain, `pseudonymize` strategy. **Result: consistency 1.000, distinctness 1.000 over all 102 EMAIL/PHONE occurrences, per dataset scope — and the same value gets different tokens across the two dataset scopes, so scope isolation holds end to end.** Test-tier by design (the pipeline outcome retains no per-operation replacements for the benchmark to consume); pinned on every push by the default tier | 951 default (+7), docs/08 records the metric |
-| P3/P4 hardening | Three real job runs found what no unit test could: a wheel task **ignores the entry point's return value** (a failed reduction was reported as a green job), raising `SystemExit` unconditionally then broke the opposite direction (Databricks runs the task under IPython, where `SystemExit(0)` is also an error, so a successful run was marked failed), and `run_driver` refused non-table sources so the front door could not run the volume config the runbook publishes. All three fixed and both exit directions re-confirmed against real jobs | 1027 default (+12); databricks tier 3 passed / 2 skipped; `bundle validate` OK |
+| P3/P4 hardening | Three real job runs found what no unit test could: a wheel task **ignores the entry point's return value** (a failed reduction was reported as a green job), raising `SystemExit` unconditionally then broke the opposite direction (Databricks runs the task under IPython, where `SystemExit(0)` is also an error, so a successful run was marked failed), and `run_driver` refused non-table sources so the front door could not run the volume config the runbook publishes. All three fixed and both exit directions re-confirmed against real jobs | 1029 default (+14); databricks tier 3 passed / 2 skipped; `bundle validate` OK; `bundle deploy` blocked by the CLI's expired Terraform key |
 | R6 | `pii-reduction run <dataset>` — the reduction finally has a CLI front door over the existing `Pipeline.run()` (one external review's capability matrix asserted this command existed; it did not). Metadata-only summary; exit 1 when any field failed, so partial output looks like a failure to a scripted caller | 956 default (+5) incl. metadata-only stderr guards on the failure path |
 | P0 | Handoff sessions 1–8 archived to `docs/archive/SESSION_HANDOFF_S1-S8.md` behind a per-session evidence index; two stale plan pointers retargeted. Nothing else pruned, no ADR touched | 956 default, unchanged — docs only |
 | P1 | **ADR-0025: Azure Databricks is the primary deployment target.** README gains a Deployment target section, the charter's *Portability* quality is amended in place, the roadmap records that it is no longer the live sequence, docs/07 sharpens "for larger workloads". Records the platform ladder and the PHI horizon as a horizon, not a promise | 956 default, unchanged — docs only |
@@ -947,9 +949,10 @@ library stays the engine; the platform is a shell on top, which is the split
 both external reviews endorsed. **Near-term exit criterion: the owner can run
 real workspace data using only a runbook, one day after this queue starts.**
 
-**Session 10 executed P0 → P4. P5 was deliberately not started**, because the work
-order gated it on everything else being "done and verified" and P3 is verified only
-in its local half. Status of each below; the shipped detail is in the Complete table.
+**Session 10 executed P0 → P4, then verified the Databricks half on the workspace.**
+P5 was deliberately not started: the work order gated it on everything else being
+"done and verified", and by the time that was true the better reason to defer it was
+that it optimises a path nobody uses yet. Status of each below; the shipped detail is in the Complete table.
 
 - **P0 — repo tidy. Complete.** Sessions 1–8 archived behind an evidence index,
   CLAUDE.md's read order re-checked, default tier green. Original brief: `.claude/SESSION_HANDOFF.md` is ~2,000 lines; collapse
@@ -1092,8 +1095,35 @@ in its local half. Status of each below; the shipped detail is in the Complete t
   and the destination stays Delta. This is the "upload a file, reduce it" half of the
   platform's rung-4 story, and it now runs.
 
-  **What remains:** the distributed path (`ISOLATION_STARTUP_FAILURE`, unchanged
-  since session 7) and `bundle deploy` itself. Neither blocks the runbook.
+  **`language: mode: detect` closed too** (2026-08-21): a workspace run over 30 rows
+  resolved `en` and `und` (the short-text gate abstaining per ADR-0012) and recorded
+  `run_language_detector_version = lingua (lingua-language-detector 2.2.0)` — the last
+  provenance column a *detect-mode* run populates. `pseudonymization_key_id` remains
+  unexercised on the workspace: only a `pseudonymize` run fills it, and every
+  workspace run so far used `redact` (docs/17 D9).
+
+  **`bundle deploy` is environment-blocked, and the attempt was still worth it.** Two
+  real defects surfaced before the blocker: the artifact build command
+  `python -m build --wheel` runs with whatever `python` is on PATH — the system
+  interpreter here, which has no `build` backend — and the wheel dependency
+  `./dist/*.whl` is resolved *relative to the file that declares it*, so it looked for
+  `resources/dist/*.whl` and failed with "no files match pattern". Both fixed (`uv
+  build --wheel`, `../dist/*.whl`). The deploy then reached Terraform provisioning and
+  stopped there:
+
+  ```text
+  Error: error downloading Terraform: unable to verify checksums signature: openpgp: key expired
+  ```
+
+  That is Databricks CLI v0.280.0's expired-key bug, not this repository — the wheel
+  built and the bundle files uploaded first. **Remedy: a newer CLI**; the same
+  version also warns it is too old for the SDK's `--force-refresh`. Recorded like
+  `ISOLATION_STARTUP_FAILURE`: an environment blocker with a named fix, not a design
+  problem, and `bundle validate` still passes.
+
+  **What remains:** the distributed path (`ISOLATION_STARTUP_FAILURE`, unchanged since
+  session 7) and `bundle deploy` (CLI upgrade). Neither blocks the runbook, and the
+  job *shape* is proven by real runs.
 - **P4 — deployment skeleton. Complete as a skeleton; never deployed.**
   `databricks.yml` + `resources/`, one task calling the same entry point, plus a
   CLI-free path (UI or Jobs API) since `bundle deploy` *is* the CLI. **Exit criterion
@@ -1119,6 +1149,25 @@ actual workspace runs, real data never becomes a fixture. All three held: no
 published benchmark number moved this session (none was touched), no workspace
 result is claimed, and the local gate was found *weaker* than CI and strengthened
 rather than left alone.
+
+### The next increment: rung 4, the service layer
+
+**The platform queue is finished and the Databricks half is verified by real runs.**
+What has never been built is the rung ADR-0025 names as the point of all of it: a
+service layer where someone picks a table or uploads a file, chooses columns, and
+runs. Every piece it needs now exists and is proven on the workspace — config-nameable
+IO, a console entry point, a job shape, volume ingestion, the reduced-only projection
+for the grant boundary, complete provenance.
+
+Smallest useful version: a config **builder** (pick source, columns, entities → a
+validated dataset config), a run trigger over `run_driver`, and a metadata-only status
+view. Constraints that already apply: the service layer owns **no** reduction logic
+and the engine never learns it exists (ADR-0025's rung rule, `AGENTS.md` rule 3); a
+side-by-side original/reduced view is a Class B display surface, so `docs/09` and rule
+8 need extending to rendered output and API responses before one is built — the
+privacy auditor raised exactly this when ADR-0025 landed.
+
+**P5 (batching) is deliberately still not next.** It optimises a path nobody uses yet.
 
 ### After the queue
 

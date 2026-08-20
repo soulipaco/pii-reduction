@@ -62,7 +62,8 @@ databricks = [
   "databricks-connect>=15.4",
 ]
 dev = [
-  # `python -m build --wheel` is what `databricks.yml`'s artifact block runs.
+  # A PEP 517 front end for local wheel builds. `databricks.yml` uses `uv build`
+  # instead, because the CLI runs its artifact command with PATH `python`.
   "build>=1.2",
   "pytest>=8.0",
   "ruff>=0.6",

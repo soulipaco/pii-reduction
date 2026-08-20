@@ -7,9 +7,25 @@ so neither is a second implementation (`AGENTS.md` rule 10).
 > **Status: validated, not deployed** (2026-08-21). `databricks bundle validate -t
 > dev` returns **Validation OK** against a real workspace with CLI v0.280.0 — so the
 > file is well-formed and its variables resolve, which is more than the default-tier
-> test can show (that only proves it parses and names no workspace). Still unproven:
-> `bundle deploy`, the job actually running, and the serverless `environments` block,
-> whose `client` version is workspace-dependent. Record those here when they happen.
+> test can show (that only proves it parses and names no workspace).
+>
+> **The job shape is proven; the deploy is blocked by the CLI.** A job of exactly this
+> shape — the same `python_wheel_task` calling the same console entry point, on
+> serverless compute — ran successfully on 2026-08-21, so the task definition works.
+> That run installed only the wheel, so the dependency list below (presidio, lingua,
+> and the model wheels it tells you to add) is still unexercised on a job. `bundle deploy` was then attempted and
+> failed inside the CLI, after building the wheel and uploading the bundle files:
+> v0.280.0 cannot verify HashiCorp's Terraform signature (`openpgp: key expired`).
+> Upgrade the CLI to get past it.
+>
+> Two bundle defects were found and fixed on the way, both invisible to `validate`:
+> the artifact build command needed `uv build --wheel` (the CLI runs it with PATH
+> `python`, which here has no `build` backend), and the wheel dependency needed
+> `../dist/*.whl` (a relative path resolves against the file that declares it, so
+> `./dist` meant `resources/dist`).
+>
+> Still unproven: `bundle deploy` completing, and this job running *as deployed by
+> this bundle*. Record those here when they happen.
 
 ## Path A — Asset Bundle (needs the Databricks CLI)
 
@@ -38,7 +54,8 @@ options:
    *Python wheel*, package `pii_reduction`, entry point `pii-reduction-databricks`,
    parameters `["run", "<dataset>", "--configs", "<configs path>"]`, on serverless
    compute with the dependencies listed in `pii_reduction_job.yml`. Upload the wheel
-   (`python -m build --wheel`) to a Unity Catalog volume and reference it there —
+   (`uv build --wheel` — `python -m build` needs a backend the ambient interpreter
+   may not have) to a Unity Catalog volume and reference it there —
    **and the spaCy model wheels too**, or the job will miss every person's name
    without saying so (see the dependency comment in `pii_reduction_job.yml`).
 2. **POST the job definition to the Jobs API** using the same token you use for

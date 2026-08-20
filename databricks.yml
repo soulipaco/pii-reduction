@@ -5,7 +5,9 @@
 # variables resolve. It has never been deployed, and the job it declares has never run
 # *as deployed by this bundle* — though a job of the same shape (the same wheel task
 # calling the same console entry point) did run on serverless compute that day.
-# `resources/README.md` carries the exact split.
+# `resources/README.md` carries the exact split — including why `bundle deploy` is
+# currently blocked (the CLI cannot verify HashiCorp's Terraform signature) and the
+# two bundle defects that surfaced before it got that far.
 #
 # Zero workspace values live here: no host, no catalog, no schema, no table, no
 # cluster or warehouse id. This file is therefore safe to commit and useless to
@@ -49,10 +51,15 @@ variables:
 
 # The wheel this repository builds. Serverless job compute installs it from the
 # bundle's own artifact path, so nothing depends on a cluster having the package.
+#
+# `uv build`, not `python -m build`: the CLI runs this command with whatever `python`
+# is on PATH, which on a developer machine is usually the system interpreter and has
+# no `build` backend installed — measured 2026-08-21, where it would have failed the
+# first deploy. `uv` needs no backend and this project already requires it (ADR-0006).
 artifacts:
   pii_reduction_wheel:
     type: whl
-    build: python -m build --wheel
+    build: uv build --wheel
     path: .
 
 include:

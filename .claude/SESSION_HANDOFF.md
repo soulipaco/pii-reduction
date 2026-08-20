@@ -141,52 +141,94 @@ newest live record.
 
 ---
 
-## Session 10 — 2026-08-20 — The platform queue: P0 → P4 shipped, P3's workspace half outstanding
+## Session 10 — 2026-08-20/21 — The platform queue shipped, then verified on the workspace
 
-**Start here:** the platform queue is done, and after the close-out **the owner ran
-the workspace tests themselves** (2026-08-20, their own PowerShell session, over the
-new `env_token` route): `pytest -m databricks` → **2 passed, 5 skipped**. Driver-path
-parity holds on the workspace, and that run carried the first execution **against a
-real workspace** of the reduced-only projection (R3) and the run-metrics provenance
-columns (R2) — both previously covered only locally and against fakes. The owner then
-configured a named profile (`pii-reduction`) at User scope and the suite was **re-run
-in-session over the `profile` route**, same result: 2 passed, 5 skipped. Two
-authentication routes, one workspace, identical outcome. (The first run was the owner's; the second I ran myself, once they had set a profile
-at User scope. Note for future sessions: variables set at User scope do **not** reach
-shells this harness spawns unless the harness process restarted after they were set —
-read them back with `[Environment]::GetEnvironmentVariable(name,'User')` and inject
-them into the command instead of concluding they are absent.)
+**Start here — the platform is built and verified on the workspace; the next move is
+the service layer, not more plumbing.**
 
-**P3's exit criterion is now MET.** The runbook's own path ran end to end on the
-workspace: synthetic table staged, dataset config pointed at it,
-`pii-reduction-databricks run` → exit 0, three Delta tables, verified on read-back,
-everything dropped afterwards. First with the deterministic chain, then — after
-performing the runbook's step-1 install for the first time — **again with the hybrid
-chain: PERSON 28 / EMAIL 15 / PHONE 15 on the workspace**, with real model versions
-in the run provenance. Step 1's trap: `python -m spacy download` installs into
-whichever `pip` is on PATH, and a `uv` venv has none, so it reported success while
-the models landed in the core venv. **It found a defect no test could have**: the shipped
-default write mode `errorifexists` is rejected by Databricks Connect, so every
-config-driven Delta write had been failing — invisible because the parity suite, the
-only workspace test, overrides the mode. Fixed by translating to Spark's `error`
-alias, pinned by a default-tier test **and** by a new workspace test that exercises
-the default mode end to end (tier: 2 passed → 3 passed). **Volumes ingestion is verified too**, on compute:
-the console entry point ran as a serverless job, read a `/Volumes` CSV through the
-ordinary CSV source, and wrote three Delta tables. `databricks bundle validate`
-passes. The distributed path is still `ISOLATION_STARTUP_FAILURE`.
+Everything the platform queue set out to do is done, and the Databricks half is no
+longer theoretical: the engine runs on the workspace from a dataset config, through
+its own console entry point, on serverless job compute, reading either a Unity
+Catalog table or a file in a volume, detecting PERSON, and writing reduced/audit/
+metrics Delta tables with complete run provenance. Ten sessions of foundation are
+finished. **What has never been built is rung 4 of ADR-0025's ladder — the service
+layer someone actually uses.** That is the next session's work; see "Where to go
+next" at the end of this section.
 
-That job run paid for itself twice over. **Databricks calls a wheel-task entry point
-as a function and ignores its return value**, so a failed reduction was reported as a
-green job — the exit code that R6 and ADR-0023 exist to produce never reached the
-scheduler. Raising `SystemExit` fixed it and immediately broke the other direction,
-because the task runs under IPython where `SystemExit(0)` is also an error: a
-successful run was marked failed after writing its tables. Raise only on non-zero;
-both directions then confirmed against real jobs. And `run_driver` refused non-table
-sources, so the Databricks front door could not run the volume config the runbook
-publishes — file sources now go through the ordinary local adapter.
+**Verified on the workspace (2026-08-20/21), each by an actual run:**
 
-**Six commits (the last three after the queue closed), each through the gate, and
-each reviewed by both auditors** (P0–P3
+| claim | evidence |
+|---|---|
+| driver-path parity | reduced-column hashes equal to the local run |
+| audit/metrics metadata-only | exact `AUDIT_COLUMNS` set, asserted |
+| the runbook's own CLI path | `pii-reduction-databricks run <dataset>` → exit 0, three Delta tables |
+| PERSON detection | audit recorded PERSON 28 / EMAIL 15 / PHONE 15 over 30 rows |
+| Volumes ingestion | a serverless job read `/Volumes/.../tickets.csv` through the ordinary CSV source |
+| the job shape (P4) | the same wheel task + entry point ran on serverless compute |
+| `bundle validate` | Validation OK |
+| R2 provenance, every column a redact run can fill | library + model versions, `delta_v<N>`, and `lingua (…2.2.0)` from a `mode: detect` run. `pseudonymization_key_id` stays unexercised — every workspace run used `redact` (docs/17 D9) |
+| reduced-only projection (R3) | written and read back without the raw column |
+| the default write mode | a workspace test writes under it and asserts the second write refuses |
+
+**Still blocked, both environmental, both with named remedies:**
+
+- **`bundle deploy`** — Databricks CLI v0.280.0 cannot verify HashiCorp's Terraform
+  signature (`openpgp: key expired`). The wheel builds and the bundle files upload
+  first, so this is the CLI, not the bundle. **Remedy: upgrade the CLI.**
+- **The distributed `mapInPandas` path** — `ISOLATION_STARTUP_FAILURE`, unchanged
+  since session 7. The `databricks`-marked test flips from skip to assertion by itself
+  the day the sandbox works.
+
+**Six defects this session, every one found by running something rather than reading
+it.** This is the session's main lesson and it is worth carrying:
+
+1. **The default Delta write mode never worked.** `errorifexists` is rejected by
+   Databricks Connect outright, so every config-driven write failed. The only
+   workspace test overrode the mode, so the default path had zero coverage.
+2. **A failed reduction was reported as a green job.** A `python_wheel_task` calls the
+   entry point as a function and ignores its return value.
+3. **…and raising `SystemExit` unconditionally broke the other direction**, because
+   the task runs under IPython where `SystemExit(0)` is also an error.
+4. **The front door refused file sources**, so it could not run the volume config the
+   runbook publishes.
+5. **The bundle's build command** ran with PATH `python`, which had no `build` backend.
+6. **The bundle's wheel path** was resolved against the declaring file, so `./dist`
+   meant `resources/dist`.
+
+Every one is now fixed, covered, and — where the behaviour is Databricks-side —
+re-confirmed against a real job. Note the shape: unit tests and audits caught none of
+these six, and both auditors reviewed the code that carried defects 1, 5 and 6.
+**Component tests prove a component; only an end-to-end run proves a path.**
+
+**A harness note that cost two wrong conclusions:** environment variables set at User
+scope do **not** reach shells this harness spawns unless the harness process restarted
+after they were set. Read them back with
+`[Environment]::GetEnvironmentVariable(name,'User')` and inject them, rather than
+concluding they are absent.
+
+### Where to go next
+
+**Do not start with P5 (batching).** It is real work, but it optimises a path nobody
+is using yet, and the gate on it is now only the two environment blockers above.
+
+**Build rung 4: the service layer.** ADR-0025 records the ladder and the owner's goal
+— an internal platform where someone picks a table or uploads a file, chooses columns,
+and runs, with the engine underneath. Every piece that layer needs now exists and is
+verified: config-nameable IO, a console entry point, a job shape, volume ingestion,
+the reduced-only projection for the grant boundary, and provenance. What is missing is
+the surface. The rung rule from ADR-0025 governs it: **the service layer owns no
+reduction logic**, and the engine must never learn it exists.
+
+The smallest useful version: a config *builder* (pick source, pick columns, pick
+entities → a validated dataset config), a run trigger over `run_driver`, and a
+metadata-only status view. `AGENTS.md` rule 3 applies to a UI exactly as it does to a
+notebook, and `docs/09` governs what such a surface may display — a side-by-side
+original/reduced view is a Class B display surface, which the privacy auditor already
+flagged as needing rule 8 extended to rendered output when this gets built.
+
+**Ten commits — five for the queue, five after it closed — each through the gate and
+each reviewed by both auditors** (the table below lists the queue's five; `git log`
+carries the rest, whose messages record their own auditor passes) (P0–P3
 record the verdict in their commit messages; P4's records the findings it fixed but
 not the verdict — noted so the evidence and the claim match):
 
@@ -198,7 +240,7 @@ not the verdict — noted so the evidence and the claim match):
 | `f0481fe` | P3 (part) | `docs/18_RUNBOOK_DATABRICKS.md`, and **auth that does not require the Databricks CLI**. |
 | `0f1c6bc` | P4 | `databricks.yml` + `resources/` — bundle and job skeleton, CLI-free path documented, never deployed. |
 
-**State:** 1027 default-tier tests (956 at session start), 97 deselected; the
+**State:** 1029 default-tier tests (956 at session start), 97 deselected; the
 `databricks` tier **3 passed / 2 skipped on the workspace** (plan §8 F's re-check log
 carries the rows — pytest reports 5 skipped because 3 are module-level
 presidio/language collection skips outside the tier); `bundle validate` OK;
@@ -252,21 +294,21 @@ Every increment, again. The ones that mattered:
   opt-in, which an inherited config may already carry.
 - **The bundle's `configs_path` could not resolve for a wheel task** (P4), and its
   dependency list **cannot install spaCy models**, so the job would have missed every
-  name silently. Neither is a substitute for validating the bundle, which nobody has.
+  name silently. Neither was a substitute for validating the bundle — `bundle
+  validate` was run on 2026-08-21 and passes; `bundle deploy` is a separate claim and
+  is still blocked.
 
 ### Deliberately not done
 
-- **P5 (batching).** Gated on everything else being done *and verified*. P3 is now
-  partly verified on the workspace but its config-named CLI path is not, so the gate
-  still holds — starting a performance increment while a correctness one is
-  unfinished would have been the wrong trade.
-- **Any workspace claim I did not have evidence for.** During the session that meant
-  all of them; the owner's 2026-08-20 run then supplied evidence for driver-path
-  parity, the reduced-only projection (R3) and the provenance columns (R2). Still
-  unexecuted anywhere, and still recorded as such in the runbook, ADR-0025,
-  `resources/README.md`, the bundle and plan §8: **Volumes ingestion**, the
-  **distributed path**, the **bundle deploy**, and the runbook's own
-  `pii-reduction-databricks run <dataset>` invocation.
+- **P5 (batching).** Its original gate — P3 unverified — has expired: P3 is met and
+  `bundle validate` passes. It stays unstarted for a better reason: it optimises a
+  path nobody uses yet, and the next increment is the service layer (see "Where to go
+  next" above).
+- **Any workspace claim I did not have evidence for.** During most of the session
+  that meant all of them. By the end, ten are evidenced (the table above). Two remain
+  unexecuted anywhere and are recorded as such in the runbook, `resources/README.md`,
+  the bundle and plan §8: **`bundle deploy` completing** and the **distributed
+  path** — both environment blockers with named remedies, neither a design problem.
 - **A `VolumeSource` adapter.** A volume path is a filesystem path, so `CsvSource`
   reads it unchanged — on Databricks compute, where the FUSE mount is. Building an
   adapter would have carried a Databricks concept into `sources/` for nothing.

@@ -21,7 +21,11 @@ resources:
           spec:
             client: "3"
             dependencies:
-              - ./dist/*.whl
+              # `../dist`, not `./dist`: a relative artifact path is resolved against
+              # the file that declares it, so `./dist/*.whl` here means
+              # `resources/dist/*.whl` and the deploy fails with "no files match
+              # pattern". Found on the first real `bundle deploy`, 2026-08-21.
+              - ../dist/*.whl
               # Necessary but NOT sufficient for PERSON. Presidio is the adapter; the
               # detection comes from spaCy models, which are not on PyPI and cannot
               # be installed by this list — `docs/15_PROVIDERS.md` installs them with

@@ -207,3 +207,43 @@ class TestTheJobRunsTheShippedEntryPoint:
         for key in ("run_as", "git_source"):
             assert key not in job
         assert "spark_conf" not in self._task()
+
+
+class TestTheDeployDefectsCannotReturn:
+    """Two bundle defects that `bundle validate` passes straight over.
+
+    Both were found only by running `bundle deploy` on 2026-08-21, and both stop the
+    deploy dead — so a test that only proves the YAML parses would not have helped.
+    """
+
+    def test_the_artifact_build_command_does_not_depend_on_an_ambient_backend(self) -> None:
+        """The CLI runs this with PATH `python`, not the project venv's.
+
+        On this machine PATH `python` is a system interpreter with no `build` module,
+        so `python -m build --wheel` failed before anything was uploaded. `uv build`
+        carries its own backend and this project already requires uv (ADR-0006).
+        """
+        build = _load(BUNDLE)["artifacts"]["pii_reduction_wheel"]["build"]
+        assert "python -m build" not in build, (
+            "the artifact build command must not rely on a backend the ambient "
+            "interpreter may lack — see resources/README.md"
+        )
+        assert build.startswith("uv build")
+
+    def test_the_wheel_dependency_is_relative_to_the_repository_root(self) -> None:
+        """A relative artifact path resolves against the file that declares it.
+
+        `./dist/*.whl` inside `resources/` means `resources/dist/*.whl`, and the
+        deploy fails with "no files match pattern". The wheel lands in `dist/` at the
+        root, so from `resources/` the path has to climb one level.
+        """
+        job = _load(JOB)["resources"]["jobs"]["pii_reduction"]
+        dependencies = job["environments"][0]["spec"]["dependencies"]
+        wheels = [item for item in dependencies if item.endswith(".whl")]
+        assert wheels, "the job must install the wheel this repository builds"
+        for wheel in wheels:
+            if wheel.startswith("/"):
+                continue  # an absolute volume path is the operator's own choice
+            assert wheel.startswith("../"), (
+                f"{wheel!r} is resolved against resources/, not the repository root"
+            )

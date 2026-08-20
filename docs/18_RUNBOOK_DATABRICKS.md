@@ -27,11 +27,11 @@ dataset config plus one command.
 > table exists and drops the raw column — the separate-prefix grant boundary §4
 > describes is still covered by unit tests only.
 >
-> **Still unverified, and skipped in that run for stated reasons:** **volume
-> ingestion (§6)** — `/Volumes` is not mounted on a local Databricks Connect client,
-> so it must be run from a notebook or job; and the **distributed `mapInPandas`
-> path** — the workspace's serverless Python sandbox still fails with
-> `ISOLATION_STARTUP_FAILURE`, open since session 7 (plan §8 F).
+> **Skipped in that run, for stated reasons:** volume ingestion — `/Volumes` is not
+> mounted on a local Databricks Connect client — and the **distributed `mapInPandas`
+> path**, whose serverless Python sandbox still fails with
+> `ISOLATION_STARTUP_FAILURE`, open since session 7 (plan §8 F). Volume ingestion was
+> subsequently **verified on compute** (§6); the distributed path remains blocked.
 >
 > **This runbook's own path has now run, end to end** (2026-08-20). A synthetic
 > 20-row table was staged in Unity Catalog, a dataset config was pointed at it, and
@@ -60,9 +60,19 @@ dataset config plus one command.
 > recorded **PERSON 28, EMAIL 15, PHONE 15**, with 28 `<PERSON>` placeholders in the
 > output and 27 of 30 rows changed. Run provenance carried real model versions for
 > the first time (`presidio-analyzer 2.2.364, spacy 3.8.15, en_core_web_md 3.8.0`),
-> which is what R2 was built to record — though that config used `language: mode:
-> column`, so the detector-version column was null and `mode: detect` is still
-> unexercised on the workspace. Everything created was dropped.
+> which is what R2 was built to record. **`language: mode: detect` was then run on
+> the workspace too** (2026-08-21): 30 rows, languages resolving to `en` and `und` —
+> the short-text gate abstaining as ADR-0012 intends — and
+> `run_language_detector_version` recording `lingua (lingua-language-detector 2.2.0)`.
+> **That abstention is not free**: over the same 30 rows the run recorded PERSON 25 /
+> EMAIL 15 / PHONE 15, against PERSON 28 under `mode: column`. The three `und` rows
+> never reach a language-routed NER instance and fall back to the deterministic
+> chain, which cannot find names. Expected, and worth knowing before comparing a
+> detect-mode result against a column-mode one.
+> That was the last provenance column a *detect-mode* run populates. One R2 column
+> remains unexercised on the workspace — `pseudonymization_key_id`, which only a
+> `pseudonymize` run fills; every workspace run so far used `redact` (docs/17 D9).
+> Everything created was dropped.
 
 ---
 
