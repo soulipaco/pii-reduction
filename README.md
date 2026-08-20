@@ -110,9 +110,14 @@ Run it from the venv that has the `databricks` extra — Databricks Connect coup
 client and server versions, so it lives in its own environment rather than the core
 one (ADR-0006). It is a separate console script rather than a flag, because the core
 CLI must stay importable with no Spark installed. Configuration names the table and the
-`catalog.schema` written to; the runtime supplies the session from your
-`DATABRICKS_CONFIG_PROFILE`. `configs/datasets/databricks_table_example.yaml` is
+`catalog.schema` written to; the runtime supplies the session from whichever
+credentials your workspace permits — a CLI profile, `DATABRICKS_HOST` plus a token or
+service principal, or the ambient credentials of Databricks compute. No host or token
+is ever a parameter, in any signature or config key. `configs/datasets/databricks_table_example.yaml` is
 the shape to copy — the placeholders in it are not a real workspace.
+`docs/18_RUNBOOK_DATABRICKS.md` is the ten-minute walkthrough, including where the
+outputs land, which of them still contain the original text, and the rules for
+running real data through it.
 
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
@@ -433,6 +438,7 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 - **How to present the project:** `docs/13_PORTFOLIO_STORY.md`
 - **Build sequence and increments:** `docs/14_IMPLEMENTATION_PLAN.md`
 - **Shipped providers, licences and measured results:** `docs/15_PROVIDERS.md`
+- **Running it on your own Databricks table:** `docs/18_RUNBOOK_DATABRICKS.md`
 - **Decision records:** `docs/adr/`
 
 ## License

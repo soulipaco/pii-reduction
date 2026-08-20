@@ -1,7 +1,6 @@
 # A dataset that names a Unity Catalog table end to end (ADR-0025, plan §8 P2).
 #
-# This file is the shape the Databricks runbook (docs/18, queued as P3) will tell an
-# operator to copy.
+# This file is the shape `docs/18_RUNBOOK_DATABRICKS.md` tells an operator to copy.
 # The catalog, schema and table below are placeholders and are NOT a workspace this
 # project has ever touched: `workspace` is the generic default catalog name on a
 # serverless workspace, and the rest is example text. Point them at your own objects
@@ -15,7 +14,7 @@ dataset:
 
 source:
   type: spark_table
-  table: workspace.pii_reduction_demo.support_tickets
+  table: workspace.pii_reduction_raw.support_tickets
 
 # Everything a run writes lands under one catalog.schema: `<dataset>_reduced`,
 # `<dataset>_pii_audit` and `<dataset>_run_metrics`. With the default
@@ -27,7 +26,10 @@ source:
 destination:
   type: delta_table
   catalog: workspace
-  schema: pii_reduction_demo
+  # A different schema from the source, deliberately: the reduced table still carries
+  # the original text columns, so it is governed like raw — but it should not sit in
+  # the schema whose grants were written for the source table.
+  schema: pii_reduction_reduced
   # Refuses to touch an existing table. Choose `overwrite` deliberately, never as a
   # fallback (docs/07).
   mode: errorifexists
@@ -38,6 +40,10 @@ columns:
   text:
     parser: plain_text
     entities: [PERSON, EMAIL, PHONE]
+    # Required for PERSON: the project default is `deterministic_only`, which finds
+    # EMAIL and PHONE and cannot find names — silently, because listing an entity
+    # does not make a provider capable of it. Needs the `presidio` extra + models.
+    provider_chain: deterministic_presidio
     output_column: text_pii_redacted
     language:
       mode: detect

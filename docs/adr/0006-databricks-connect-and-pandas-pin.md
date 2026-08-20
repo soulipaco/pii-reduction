@@ -48,6 +48,24 @@ original could not know:
    read back — output-hash equality with the local run, plus audit and run-metrics
    Delta tables that carry metadata only.
 
+**Amended again (session 10): the "or env" half of this decision is implemented.**
+The original said workspace host/IDs come from "CLI profiles **or env**", but the
+code accepted only a named profile, and the parity tests gated on
+`DATABRICKS_CONFIG_PROFILE`. That made the Databricks CLI a de-facto requirement —
+untrue of the dependencies (the extra is `databricks-connect`, a library; nothing in
+this project ever shells out to the CLI) and unworkable in organisations whose policy
+blocks it. `get_session` now resolves one of three routes: a named profile,
+environment credentials (`DATABRICKS_HOST` plus `DATABRICKS_TOKEN`, or a
+`DATABRICKS_CLIENT_ID`/`DATABRICKS_CLIENT_SECRET` service principal), or the ambient
+credentials of Databricks compute. The parity fixture skips only when **none** is
+available, and prefers a session that already exists so the tests can run in a
+notebook.
+
+What did not change: there is still no `host` or `token` parameter in any signature
+and no credential key in any config file. Secrets reach the SDK from the environment
+or a secret store, never from an argument that would land in a traceback, shell
+history or a job definition (`AGENTS.md` rule 1).
+
 ## Consequences
 
 - `databricks`-marked tests require credentials and are excluded from CI

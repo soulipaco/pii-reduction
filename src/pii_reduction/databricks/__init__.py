@@ -38,7 +38,7 @@ from pii_reduction.databricks.runner import (
     partition_processor,
     run_driver,
 )
-from pii_reduction.databricks.session import get_session
+from pii_reduction.databricks.session import get_session, resolve_auth_route
 from pii_reduction.databricks.source import SparkTableSource
 
 __all__ = [
@@ -50,5 +50,6 @@ __all__ = [
     "distributed_frame",
     "get_session",
     "partition_processor",
+    "resolve_auth_route",
     "run_driver",
 ]

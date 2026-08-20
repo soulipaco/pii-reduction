@@ -8,7 +8,9 @@ console script inside the surface costs one line of packaging and keeps the boun
 literal.
 
 What it does is deliberately thin: resolve the dataset configuration, obtain a
-session from the CLI profile, and hand both to :func:`run_driver`. The reduction
+session from whichever credentials the environment offers — a CLI profile,
+``DATABRICKS_HOST`` plus a token or service principal, or the ambient credentials of
+Databricks compute — and hand both to :func:`run_driver`. The reduction
 itself is the same ``build_pipeline``/``process`` the local run uses (`AGENTS.md`
 rule 10) — there is no second implementation here to drift.
 
@@ -55,7 +57,11 @@ def _build_parser() -> argparse.ArgumentParser:
     run_command.add_argument(
         "--profile",
         default=None,
-        help="Databricks CLI profile; defaults to DATABRICKS_CONFIG_PROFILE",
+        help=(
+            "Databricks CLI profile. Optional: without it the session falls back to "
+            "DATABRICKS_CONFIG_PROFILE, then to DATABRICKS_HOST plus a token or "
+            "service principal, then to ambient credentials on Databricks compute"
+        ),
     )
     # Every override below defaults to what the dataset config names. They exist so
     # one config can be pointed at a throwaway table without editing the file.

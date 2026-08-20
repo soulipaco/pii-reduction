@@ -154,8 +154,10 @@ the Databricks types, so a type cannot go missing from the registry and be expla
 away.
 
 Credentials and workspace details must remain outside dataset files. The table name
-is a configuration value; the profile is an environment variable
-(`DATABRICKS_CONFIG_PROFILE`).
+is a configuration value; credentials are environment variables — a CLI profile
+(`DATABRICKS_CONFIG_PROFILE`), or `DATABRICKS_HOST` plus `DATABRICKS_TOKEN` or a
+service principal, or nothing at all on Databricks compute. There is no config key
+and no function parameter for a host or a token, deliberately.
 
 ## Destination configuration
 

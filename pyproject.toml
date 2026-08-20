@@ -126,5 +126,9 @@ module = [
   "lingua.*",
   "databricks.connect",
   "databricks.connect.*",
+  # `pyspark` arrives with databricks-connect, and `databricks/session.py` reaches
+  # for it lazily to reuse a session the Databricks runtime already built.
+  "pyspark",
+  "pyspark.*",
 ]
 ignore_missing_imports = true

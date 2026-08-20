@@ -90,8 +90,9 @@ horizon here is what stops it being read into the current entity list.
 - Documentation that positions the project — README, charter, roadmap — must
   agree with this ADR. They were amended in the same commit that introduced it.
 - The near-term exit criterion the owner set: **run real workspace data using only
-  a runbook** (rung 2). That is what `docs/18_RUNBOOK_DATABRICKS.md` will be for —
-  queued as P3 in plan §8 and not yet written when this ADR was accepted.
+  a runbook** (rung 2). That is what `docs/18_RUNBOOK_DATABRICKS.md` is for; it was
+  written later the same session and carries its own verification status, because
+  the runbook existing and the runbook having been executed are different claims.
 
 ## Alternatives rejected
 

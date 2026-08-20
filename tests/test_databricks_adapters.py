@@ -516,6 +516,14 @@ class TestTheShippedExample:
         assert config.source.type == "spark_table"
         assert config.destination.type == "delta_table"
         assert config.destination.prefix.count(".") == 1
+        # The chain, not just the entity list: `entities` declares scope while
+        # `provider_chain` decides capability, and the project default chain cannot
+        # detect PERSON. An example that lists PERSON under `deterministic_only`
+        # would redact emails, report success, and leave every name in the text.
+        assert config.columns[0].provider_chain == "deterministic_presidio"
+        assert "PERSON" in config.columns[0].entities
+        # And the copyable example must not teach writing back into the source schema.
+        assert config.destination.prefix != config.source.table.rsplit(".", 1)[0]
 
 
 class TestDatabricksCli:
@@ -752,3 +760,163 @@ class TestReducedOnlyPrefixOnTheCli:
         assert "reduced_only: cat.consumers.benchmark_corpus_plain_reduced_only" in out
         projected = spark.tables["cat.consumers.benchmark_corpus_plain_reduced_only"]
         assert "text" not in projected.columns
+
+
+class TestAuditSchemaIsPinnedToALiteral:
+    """The audit table's metadata-only guarantee, pinned where CI can see it.
+
+    The parity test compares the written table against `AUDIT_COLUMNS` — but the
+    writer *builds* the frame from `AUDIT_COLUMNS`, so both sides move together and
+    adding a raw-text field would keep it green. It is also `databricks`-marked, so
+    it never runs in CI. This is the literal, in the default tier: adding a column
+    that could carry a value has to be a deliberate edit here, with rule 8 in view.
+    """
+
+    def test_the_column_set_is_exactly_this(self) -> None:
+        from pii_reduction.processing.field_processor import AUDIT_COLUMNS
+
+        assert AUDIT_COLUMNS == (
+            "run_id",
+            "row_id",
+            "column_name",
+            "segment_id",
+            "segment_start",
+            "entity_type",
+            "start",
+            "end",
+            "score",
+            "provider",
+            "recognizer",
+            "language",
+            "resolution_rule",
+        ), (
+            "the audit schema changed. Every column here is metadata about a span; "
+            "none carries the matched text, and none may (AGENTS.md rule 8, "
+            "SECURITY.md). Update this literal only with that in mind."
+        )
+
+
+class TestAuthRoutes:
+    """Which credentials the session accepts (session 10).
+
+    A profile is the nicest route and is not available everywhere: some
+    organisations block the Databricks CLI outright, leaving a personal access token
+    or a service principal as the only option. Refusing those would make the whole
+    Databricks surface unusable in exactly the environments it was built for.
+
+    The decision is separated from session construction so it can be tested here, in
+    the default tier, with no Databricks Connect installed and no real credential
+    anywhere. Values below are obvious fakes.
+    """
+
+    AUTH_VARS = (
+        "DATABRICKS_CONFIG_PROFILE",
+        "DATABRICKS_HOST",
+        "DATABRICKS_TOKEN",
+        "DATABRICKS_CLIENT_ID",
+        "DATABRICKS_CLIENT_SECRET",
+        "DATABRICKS_RUNTIME_VERSION",
+    )
+
+    @pytest.fixture(autouse=True)
+    def _clear_auth_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The developer machine may have any of these set; the routes must be decided
+        # by the test, not by the environment it runs in.
+        for name in self.AUTH_VARS:
+            monkeypatch.delenv(name, raising=False)
+
+    def test_an_explicit_profile_wins(self) -> None:
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        assert resolve_auth_route("my-profile") == ("profile", "my-profile")
+
+    def test_the_profile_environment_variable_is_used(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "from-env")
+        assert resolve_auth_route() == ("profile", "from-env")
+
+    def test_a_host_and_token_authenticate_without_any_profile(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The route for workspaces where policy blocks the CLI."""
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        monkeypatch.setenv("DATABRICKS_HOST", "https://example.invalid")
+        monkeypatch.setenv("DATABRICKS_TOKEN", "not-a-real-token")
+        assert resolve_auth_route() == ("env_token", None)
+
+    def test_a_service_principal_authenticates_without_any_profile(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        monkeypatch.setenv("DATABRICKS_HOST", "https://example.invalid")
+        monkeypatch.setenv("DATABRICKS_CLIENT_ID", "not-a-real-id")
+        monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "not-a-real-secret")
+        assert resolve_auth_route() == ("env_oauth", None)
+
+    def test_running_on_databricks_needs_no_credential_of_ours(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        monkeypatch.setenv("DATABRICKS_RUNTIME_VERSION", "16.4")
+        assert resolve_auth_route() == ("ambient", None)
+
+    def test_on_compute_an_inherited_profile_does_not_displace_ambient(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A stale variable must not route a notebook through Connect.
+
+        The process already has a session there, and taking the profile route would
+        also set a serverless compute override the runtime never asked for.
+        """
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        monkeypatch.setenv("DATABRICKS_RUNTIME_VERSION", "16.4")
+        monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "inherited-from-somewhere")
+        assert resolve_auth_route() == ("ambient", None)
+
+    def test_but_an_explicit_profile_argument_still_wins_on_compute(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # An argument is someone saying what they want; ambient is only a default.
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        monkeypatch.setenv("DATABRICKS_RUNTIME_VERSION", "16.4")
+        assert resolve_auth_route("deliberate") == ("profile", "deliberate")
+
+    def test_a_host_without_a_secret_is_not_enough(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Half-configured must fail with the instructions, not proceed and fail
+        # somewhere less legible.
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        monkeypatch.setenv("DATABRICKS_HOST", "https://example.invalid")
+        with pytest.raises(DatabricksError, match="no Databricks credentials found"):
+            resolve_auth_route()
+
+    def test_the_refusal_names_every_route_and_no_value(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from pii_reduction.databricks.session import resolve_auth_route
+
+        monkeypatch.setenv("DATABRICKS_TOKEN", "not-a-real-token")  # no host: not enough
+        with pytest.raises(DatabricksError) as exc_info:
+            resolve_auth_route()
+        message = str(exc_info.value)
+        for name in ("DATABRICKS_CONFIG_PROFILE", "DATABRICKS_HOST", "DATABRICKS_TOKEN"):
+            assert name in message, "the refusal must name the variable to set"
+        # It names variables, never their contents (AGENTS.md rule 1).
+        assert "not-a-real-token" not in message
+
+    def test_there_is_no_way_to_pass_a_secret_as_an_argument(self) -> None:
+        """The signature is the control: a token parameter would invite committing one."""
+        import inspect
+
+        from pii_reduction.databricks.session import get_session
+
+        parameters = set(inspect.signature(get_session).parameters)
+        assert parameters == {"profile", "serverless"}

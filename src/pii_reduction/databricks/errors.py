@@ -14,7 +14,9 @@ _INSTALL_HINT = (
     "(ADR-0006):\n"
     "  uv venv .venv-dbx --python 3.12\n"
     '  VIRTUAL_ENV=.venv-dbx uv pip install -e ".[databricks]"\n'
-    "and authenticate with a CLI profile — never a hard-coded host (AGENTS.md rule 1)."
+    "and authenticate with whichever route your workspace permits: a CLI profile, "
+    "DATABRICKS_HOST plus a token or service principal, or nothing at all when "
+    "running on Databricks compute — never a hard-coded host (AGENTS.md rule 1)."
 )
 
 

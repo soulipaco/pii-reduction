@@ -97,6 +97,7 @@ run_id STRING
 row_id STRING
 column_name STRING
 segment_id STRING
+segment_start INT
 entity_type STRING
 start INT
 end INT
@@ -104,7 +105,12 @@ score DOUBLE
 provider STRING
 recognizer STRING
 language STRING
+resolution_rule STRING
 ```
+
+`AUDIT_COLUMNS` in `processing/field_processor.py` is the canonical statement of this
+set, and a default-tier test pins it as a literal: every column is metadata about a
+span, none carries the matched text, and none may (`AGENTS.md` rule 8).
 
 ### Run metrics
 
