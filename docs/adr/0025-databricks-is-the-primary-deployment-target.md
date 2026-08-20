@@ -2,6 +2,10 @@
 
 **Status:** accepted · **Date:** 2026-08-20 · **Session:** 10
 
+> **Amended in part by [ADR-0026](0026-service-layer-is-a-thin-api.md):** rung 4's
+> "Databricks App / API" is resolved — rung 4 *is* a thin HTTP API, and a Databricks
+> App is how it gets hosted. The ladder and the rung rule below are unchanged.
+
 ## Context
 
 Every positioning document in this repository was written to keep Databricks

@@ -341,6 +341,15 @@ The dashboard should read Delta metrics tables rather than recalculate NLP resul
 
 ## Databricks Apps
 
+> Not to be confused with ADR-0025's rung 4, and note that ADR-0026 makes a
+> Databricks App the eventual *hosting* of rung 4's API. The list below is a **demo**
+> surface over synthetic/public data for reviewers; rung 4 is the service layer over
+> the engine for internal operators. Same technology, different data class, different
+> obligations — and the two items below that render text, the sample viewer and the
+> side-by-side view, are sanctioned only because the data is Class A (`docs/09`,
+> *Display surfaces, API responses, and request payloads*). Over anything else they
+> are the governed change that section describes.
+
 An optional Databricks App could provide:
 
 - controlled sample viewer,

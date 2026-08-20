@@ -1154,18 +1154,29 @@ rather than left alone.
 
 **The platform queue is finished and the Databricks half is verified by real runs.**
 What has never been built is the rung ADR-0025 names as the point of all of it: a
-service layer where someone picks a table or uploads a file, chooses columns, and
-runs. Every piece it needs now exists and is proven on the workspace — config-nameable
-IO, a console entry point, a job shape, volume ingestion, the reduced-only projection
-for the grant boundary, complete provenance.
+service layer where someone picks a configured dataset, chooses columns, and runs.
+Every piece it needs now exists and is proven on the workspace — config-nameable IO, a
+console entry point, a job shape, volume ingestion, the reduced-only projection for
+the grant boundary, complete provenance.
 
-Smallest useful version: a config **builder** (pick source, columns, entities → a
-validated dataset config), a run trigger over `run_driver`, and a metadata-only status
-view. Constraints that already apply: the service layer owns **no** reduction logic
-and the engine never learns it exists (ADR-0025's rung rule, `AGENTS.md` rule 3); a
-side-by-side original/reduced view is a Class B display surface, so `docs/09` and rule
-8 need extending to rendered output and API responses before one is built — the
-privacy auditor raised exactly this when ADR-0025 landed.
+**ADR-0026 decides the shape: a thin HTTP API, hosted later as a Databricks App
+rather than built as one.** Read it before implementing — it names the endpoint shapes
+that are forbidden, and two of them are the ones this paragraph used to imply. In
+particular: **no endpoint accepts text**, so there is no upload endpoint (a file in a
+volume is a path the CSV source already reads — that half of "upload a file or pick a
+table" is served a rung lower); and **the caller names a configured dataset, never a
+`catalog.schema.table`**, because the service runs with its own credentials.
+
+Smallest useful version: a config **builder** (dataset identity, columns, entities →
+a validated dataset config, with source/destination/failure-mode/projection coming
+from a server-side template), a run trigger over both entry points
+(`build_pipeline(config).run()` locally, `run_driver` on the driver path), and a
+metadata-only status view. Constraints that already apply: the service layer owns
+**no** reduction logic and the engine never learns it exists (ADR-0025's rung rule,
+`AGENTS.md` rule 3); a side-by-side original/reduced view is a Class B display
+surface, so `docs/09` and rule 8 needed extending to rendered output and API responses
+before one is built — the privacy auditor raised exactly this when ADR-0025 landed,
+and that extension is the first thing session 11 shipped.
 
 **P5 (batching) is deliberately still not next.** It optimises a path nobody uses yet.
 

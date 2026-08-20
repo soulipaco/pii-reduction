@@ -70,9 +70,25 @@ Deterministic pattern recognizers are acceptable for entity types such as email 
 
 Entity policies are configuration-driven. If the current dataset policy includes `PERSON`, `EMAIL`, `PHONE`, and `ADDRESS`, do not start removing employee IDs, ticket numbers, machine names, or dates unless explicitly configured.
 
-### 8. Privacy-safe observability
+### 8. Privacy-safe observability, and everything else that leaves the process
 
 Logs should contain identifiers such as dataset name, row ID, parser type, provider, language, entity counts, timing, and error categories. Logs must not contain full source text or detected raw PII values by default.
+
+**The same rule governs every channel that crosses the process boundary, not just logging.** A rendered page, an HTTP response body, an API error payload, a notebook cell output, a redirect, a downloaded file, a screenshot and a `print` are one disclosure with different transport. A surface may show *metadata about* text — dataset, column, row id, run id, config hash, provider, parser, reducer, language, status, error category, timings, row and field counts, entity counts, and configured names. It may not show, stream, redirect to, or vend a URL for the text: not source text, not reduced text, not a detected value, in whole or in fragment.
+
+Two things belong on the unsafe side that look like metadata: **span offsets, span lengths and per-entity confidence** (offsets restore what redaction removed — `docs/09` governs audit metadata at least as strictly as reduced output) and **authentication headers, tokens and workspace URLs**.
+
+Reduced text is included deliberately. Reduction is measured, not guaranteed, so displaying reduced text displays whatever leaked.
+
+This applies to Class B and Class C data (`docs/09`, *Data classifications*). **Class A synthetic or explicitly public-safe text may be shown where a document says so** — the demo surfaces in `docs/11_ROADMAP.md` Phase 9 and `docs/09`'s *Public demo screenshots* depend on that carve-out, as does `CLAUDE.md`'s debugging exception. Per dataset and per document, never per judgement call — and it never creates a service endpoint: an endpoint blessed for a synthetic dataset is still an endpoint.
+
+The inbound direction is governed too: text must never travel in a URL path or query string, an accepted upload is Class B from the moment it exists, and a service must disable request-body logging and debug mode rather than trust their defaults. A framework's own validation error commonly echoes the offending input — install a handler.
+
+A surface that triggers work runs it with its own credentials, so it must resolve sources and destinations from server-side configuration, never from free-form request strings; otherwise it is a confused deputy for whoever calls it.
+
+A side-by-side original/reduced view over Class B data is a governed change: `docs/09_SECURITY_PRIVACY_GOVERNANCE.md`, *Display surfaces, API responses, and request payloads*, states seven conditions, the last of which is that the decision be recorded as an ADR. No such view exists (ADR-0026).
+
+An error crossing a service boundary is a display surface too: report an unexpected exception by category, never by relaying a message raised below the answering layer.
 
 ### 9. Reproducibility
 
@@ -99,7 +115,8 @@ src/pii_reduction/
 ├── outputs/
 ├── evaluation/
 ├── observability/
-└── databricks/
+├── databricks/
+└── service/
 ```
 
 Exact names may evolve, but maintain the architectural separation described in `docs/01_ARCHITECTURE.md`.

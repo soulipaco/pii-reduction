@@ -37,6 +37,17 @@ rule above. The adapters raise an actionable `SourceError`/`OutputError` naming 
 extra when it is absent; CSV works without it. `pyarrow` is included in `dev` so the
 default test run covers those adapters.
 
+**Amended (session 11, ADR-0026):** a `service` extra (`fastapi`) **is added with
+rung 4's first increment**, along with `fastapi` and `httpx` in `dev`. Recorded here
+with the decision; the manifest changes in the commit that creates
+`src/pii_reduction/service/`. Same reasoning
+as the `parquet` amendment above and the same shape of decision: the default test tier
+should exercise the surface, and it can only drive an ASGI app over a real transport
+if `httpx` is installed. `httpx` was present in the development venv undeclared,
+which meant CI would not have had it. The core dependency list is unchanged, and
+`pii_reduction.service` stays importable with no extra installed — only
+`service/api.py` names `fastapi`, and `service/__init__.py` must never import it.
+
 **Amended (session 6, Increment D):** **no `demo` extra was added.** Retrieving the
 public datasets was the open question ADR-0017 answers, and the answer needs nothing
 new: the fetcher is `urllib` from the standard library, and reading MASSIVE's parquet

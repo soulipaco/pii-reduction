@@ -81,16 +81,21 @@ Rules:
 - row ID,
 - dataset name,
 - column name,
-- text length,
 - entity counts,
-- entity type,
-- offsets,
-- confidence,
 - provider,
 - language,
 - runtime,
 - parser status,
 - error category.
+
+**Audit-table fields only, never a log line and never a response:** text length,
+entity type, span offsets and lengths, per-entity confidence. Earlier revisions of
+this document listed them above; they are disclosive in a way the rest of the list is
+not (offsets restore the span lengths redaction removed — see *Data retention*), and
+the shipped allowlist `ALLOWED_FIELDS` in
+`src/pii_reduction/observability/logging.py` has never contained them. They belong to
+the audit table, which is governed at least as strictly as reduced output, not to
+telemetry.
 
 ### Unsafe by default
 
@@ -99,6 +104,186 @@ Rules:
 - detected raw entity values,
 - snippets surrounding entity spans,
 - authentication headers.
+
+## Display surfaces, API responses, and request payloads
+
+The logging policy above governs one channel. It is not the only one that leaves the
+process, and — once a service exists — not the only one that enters it. A rendered
+page, an HTTP response body, a validation error, a notebook cell output, a redirect,
+a downloaded file and a `print` are the same disclosure with different transport. The
+rule that applies to them is the rule above, restated so nobody has to reason by
+analogy:
+
+**A surface may show metadata about text. It may not show, stream, redirect to, or
+vend a URL for the text.**
+
+"Text" here means all three of source text, reduced text, and detected entity values
+— Class B *and* Class C. Reduced text is not exempt: reduction is **measured, not
+guaranteed**. The published leakage rate is 0.067 for the hybrid chain
+(`docs/08_EVALUATION_BENCHMARKING.md`) and 0.433 for the deterministic one
+(`docs/15_PROVIDERS.md`) on the committed corpus, and on the public packs 0.000 for
+the hybrid chain on two of them and 0.065 on the third — and, as
+`docs/18_RUNBOOK_DATABRICKS.md` states plainly, the rate on somebody else's data is
+unknown until they sample and look. A surface that displays reduced text displays
+whatever leaked.
+
+**Why reduced text may sit in a table and not in a response.** `docs/09`'s grant
+model puts the reduced-only artifact in a schema granted to broader analytics
+consumers (ADR-0024), which looks like a contradiction and is not: that artifact is
+disclosed *under Unity Catalog grants, to named principals, with access audited*. A
+response body is disclosed under whatever authentication the surface happens to have.
+The data class did not change; the governance did.
+
+### Safe on a display surface
+
+`ALLOWED_FIELDS` in `src/pii_reduction/observability/logging.py` is the governing
+list, and these are its keys. It is not a subset of the *Safe to log* prose above and
+the prose is not a subset of it — each carries names the other lacks. Where they
+differ **the code governs**, which is why the prose above was corrected rather than
+left for a reader to reconcile:
+
+- dataset, column, output column, row id, run id, config hash,
+- provider(s), parser, reducer, language,
+- status, error **category**, duration,
+- rows, rows read/written, fields processed/failed, entities detected/reduced,
+  fallbacks,
+- destination — the one key under which a configuration-derived table or file name
+  may appear.
+
+### Unsafe by default on a display surface
+
+- source text, in whole or in fragment,
+- reduced text, in whole or in fragment,
+- detected entity values,
+- snippets surrounding entity spans,
+- **span offsets and lengths**, and per-entity confidence — see *Data retention*
+  below: audit metadata is governed at least as strictly as reduced output, because
+  exact offsets restore the span lengths redaction removed. A surface that renders
+  *where* something was found has rendered part of the thing,
+- authentication headers, tokens, and workspace URLs,
+- an exception message that carries a value it was raised about.
+
+**Class A is the carve-out.** Synthetic or explicitly public-safe text may be
+shown where a document says so — the *Public demo screenshots* section below and
+`docs/11_ROADMAP.md`'s Phase 9 demo surface both depend on it, and `CLAUDE.md`'s
+privacy checkpoint states the same exception for debugging. The carve-out is per
+dataset and per document, never per developer's judgement in the moment, and it never
+extends to Class B or Class C.
+
+**It does not create a service endpoint.** ADR-0026's no-text rule is absolute
+regardless of the data class behind it, because a dataset's class is a configuration
+value while an endpoint is code: an endpoint blessed for a synthetic dataset is still
+an endpoint, and the next config change repoints it. Nothing declares a dataset's
+class today — `DatasetIdentity` carries `name`, `row_id` and `source_version` and
+nothing else — so the carve-out currently attaches to a *committed in-repo synthetic
+corpus or a documented public pack*, by name. Any future text-rendering surface must
+read a machine-readable `dataset.data_class` and refuse what it does not recognise,
+rather than trusting a file name.
+
+One other exception exists in this repository and it is narrower still:
+`observability.log_raw_text`, which the config loader refuses unless
+`project.environment` is `local`. It is a *logging* switch for local debugging, it is
+read by nothing today, and it never extends to a display surface or a response.
+
+### Request payloads: the inbound half
+
+A service boundary has two directions and the paragraphs above govern one. Text
+arriving over HTTP is Class B the moment it exists in the process, and it arrives
+into channels no reduction has touched:
+
+- **text in a URL path or query string** — reaches every access log, proxy and
+  browser history on the path. Forbidden outright; there is no safe amount.
+- **an uploaded file** — becomes a copy of the source with weaker governance than
+  the source (`docs/09`, *Core principle*) unless it is written only to the
+  configured destination boundary, never logged, and deleted on a stated schedule.
+- **request bodies in an access-logging middleware or a captured traceback** — the
+  same leak with nobody's name on it. A service that accepts text must disable body
+  logging explicitly rather than rely on the default.
+- **framework-generated responses** — a validation error that echoes the offending
+  input, and a debug-mode traceback, are *defaults*, not exceptions the service
+  raises, so "report by category" does not reach them. A service must install its own
+  validation-error handler and must never run with debug enabled.
+
+**As of ADR-0026 the service layer has no endpoint that accepts text**, which is what
+makes the outbound argument hold: text that never enters cannot leave. Adding one is
+a governed change under this section, not a feature.
+
+### Choosing where data is read from and written to
+
+A surface that triggers work runs it with the surface's credentials, not the
+caller's. If the caller also names the source table and the destination, the surface
+is a confused deputy: a request can read a restricted schema and land the output —
+which by default still carries the source columns (`AGENTS.md` rule 4) — somewhere
+the caller can read. That is threat T4 below, executed through a surface whose
+response bodies are impeccably clean.
+
+Therefore: **a service resolves the source and destination from server-side
+configuration or a server-side allowlist, never from free-form request strings**, and
+any file it writes on a caller's behalf gets a server-derived name and location. A
+caller may choose *which configured dataset* to run. It may not choose *what
+`catalog.schema.table` that means*.
+
+The same reasoning bounds a **config builder**, and there the bound is not only about
+locations. A dataset configuration carries switches whose whole purpose is to move a
+privacy boundary: `processing.failure_mode`, whose
+`preserve_original_and_record_error` value is ADR-0023's explicit raw-text
+pass-through and would land source text in a column an operator governs as reduced;
+`processing.preserve_original`, whose `false` value is the controlled replacement
+workflow `AGENTS.md` rule 4 requires a configuration to define explicitly; and
+`destination.projection`, which is the ADR-0024 grant boundary itself. **A builder
+accepts dataset identity, column selection and entity selection. Everything else —
+source, destination, failure mode, preservation, projection — comes from a
+server-side template**, which the builder fills rather than deserializing a
+configuration from a request body.
+
+### Side-by-side original/reduced views
+
+A side-by-side "before and after" view is the most requested feature such a service
+has, and over real data it is a **Class B display surface**: it discloses original
+text to whoever holds the URL, outside every control the pipeline applies to the data
+it writes. Over Class A data it is a demo, and `docs/11_ROADMAP.md` Phase 9 already
+sanctions one. Over anything else, building it is a governed change, not a UI task.
+For a view over Class B or Class C data, before one exists:
+
+1. the surface must state which data class it is showing, per view,
+2. access to it must be governed like the raw schema, not like the reduced one
+   (see *Unity Catalog governance model* below — the full frame is already governed
+   that way and this is the same boundary),
+3. it must read **under the end user's identity**, never under the service's. A
+   service principal reading and rendering to a browser launders the grants that
+   condition 2 relies on, which is the one real advantage a Databricks App has
+   (on-behalf-of-user authentication) and the reason condition 2 is not
+   self-enforcing,
+4. it must be gated behind an explicit, recorded operator authorization for the
+   dataset, granted per dataset rather than once per surface,
+5. it must **record each disclosure as metadata** — viewer identity, dataset, row id,
+   timestamp — and never its content. The schema it is governed like is audited by
+   Unity Catalog; a view with no record of who saw which row is *less* governed than
+   the table it renders,
+6. nothing it renders may be logged, cached or persisted — by the surface, by the
+   browser, or by anything between them (`Cache-Control: no-store`) — and it must be
+   bounded in volume: a paged view over a whole table is a bulk export wearing a UI,
+   and
+7. the decision must be recorded as an ADR, because it changes what this project
+   discloses rather than what it computes.
+
+**As of ADR-0026 no such view exists.** The service layer's v1 has no endpoint that
+returns text of any kind, which is how it satisfies this section rather than by
+filtering. A filter is a thing that can be wrong; an absent capability cannot be.
+
+### Errors crossing a service boundary
+
+An error returned to a caller is a display surface. `docs/09`'s *Error handling*
+section applies to it unchanged, plus one rule specific to services: an unexpected
+exception is reported by **category**, never by relaying a message raised below the
+layer that is answering. The Databricks front door is the worked example — because
+the exceptions crossing into it from Databricks Connect carry the workspace URL and
+profile, it reduces them to an exception class name (`databricks/cli.py`).
+
+The core CLI deliberately does the opposite, letting an unexpected exception keep its
+traceback, which is right for a local run whose output goes to the person who started
+it. **That leniency does not transfer to a service run locally**: the output goes to a
+client either way.
 
 ## Audit tables
 

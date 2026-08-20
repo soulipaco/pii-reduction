@@ -399,6 +399,10 @@ processing/orchestrator depends on those interfaces.
 
 execution surfaces (cli.py, benchmark.py, databricks/) depend on processing/;
 nothing on the runtime path depends on them.
+
+service/ (rung 4, ADR-0026) sits above the execution surfaces. It may depend on
+config/, processing/, contracts/ and observability/, and on databricks/ through
+one named file; nothing outside it may import it.
 ```
 
 `synthetic/` sits **beside** `processing/`, not under it: it is a build-time package
@@ -412,13 +416,14 @@ deliberately not a source adapter: `sources/` is on the runtime path and returns
 `SourceDataset`, while `fetch()` returns a file path and is never reachable from
 `pipeline.process`.
 
-`databricks/` sits at the **outermost** edge, beside `cli.py` and `benchmark.py`
-rather than beside `sources/` or `outputs/`. It is an *execution surface*: it decides
+`databricks/` sits at the **outermost edge of the engine**, beside `cli.py` and
+`benchmark.py` rather than beside `sources/` or `outputs/` (`service/`, below, sits
+above it — rung 4 is not part of the engine). It is an *execution surface*: it decides
 where a run happens, not what a run does. It may import `processing/`, `config/`,
 `sources/` and `contracts/`; the bad example above names it for the opposite reason,
-the forbidden `parsers -> databricks` edge. **Nothing else in `src/` imports it** —
-only its own tests do — so removing it removes a way to run the pipeline and no
-behaviour. It is also the only package permitted to import
+the forbidden `parsers -> databricks` edge. **Nothing else in `src/` imports it**,
+with exactly one named exception described in the `service/` paragraph below — so
+removing it removes two ways to run the pipeline and no behaviour. It is also the only package permitted to import
 `pyspark` or `databricks.connect`. Three tests hold that boundary, and each holds a
 part the others cannot:
 
@@ -430,7 +435,11 @@ part the others cannot:
   fails on a **static** Spark import outside `databricks/`, at any nesting depth.
 - `test_nothing_outside_the_databricks_surface_imports_it` pins the direction, over
   every import form that can name a submodule (`from pii_reduction import databricks`
-  included — reading only the module of a `from ... import ...` would miss it).
+  included — reading only the module of a `from ... import ...` would miss it). It
+  exempts exactly one path, `service/runtimes/databricks.py` (ADR-0026), and asserts
+  that the path exists so a rename cannot retire the exemption into a blanket
+  allowance. The Spark-name guard above is **not** exempted for it: the one file that
+  may import the Databricks surface still may not name `pyspark`.
 
 Neither AST scan can see `importlib.import_module("pyspark")`, and the subprocess
 check cannot see a function-local import; that is why all three exist rather than one.
@@ -442,6 +451,54 @@ runtime path — the inversion this section exists to forbid. Neither imports th
 protocol it satisfies; conformance is structural, and asserted by
 `TestProtocolConformance` so that a protocol gaining a member cannot break it
 silently.
+
+`service/` sits **above** every one of them — rung 4 of ADR-0025's ladder, a thin
+HTTP API (ADR-0026). It builds and validates dataset configurations, triggers runs
+through the same two entry points a human uses (`build_pipeline(config).run()` and
+`run_driver`), and answers with metadata. Like `synthetic/` it is a package nothing
+on the runtime path may depend on and whose removal removes a capability rather than
+a behaviour — but it is *narrower* than `synthetic/`, which may import `parsers/` and
+`entities/` and is imported by `cli.py`. `service/` may do neither.
+
+It owns **no reduction logic** — no detection, no reconciliation, no reduction — and
+that is enforced rather than asserted: no module under `service/` may import
+`providers/`, `reducers/`, `parsers/`, `language/`, `entities/`, `evaluation/`,
+`sources/` or `outputs/`. What is left to it is `config/`, `processing/`
+(`build_pipeline`), `contracts/`, `observability/`, and the one Databricks file. A
+service that cannot name a provider or a reducer cannot quietly reimplement one, and
+a capability it needs that the engine lacks becomes a change to the engine — the
+entity taxonomy a column picker must enumerate is the first such case, and it is met
+by `config/` re-exporting `known_labels`, not by `service/` reaching into
+`entities/`. Note what the rule is: a **naming** rule, not runtime isolation.
+`processing/pipeline.py` imports every one of those packages, so the service process
+loads them all transitively. The guard stops the service *writing* reduction logic;
+it is not a sandbox.
+
+The direction is asymmetric on purpose, and both halves are pinned by
+`tests/test_package.py` from the increment that creates the package:
+
+- **The engine never learns the service exists.** Nothing in `src/pii_reduction`
+  outside `service/` may import `pii_reduction.service`, at any nesting depth. This
+  is the literal form of ADR-0025's rung rule.
+- **The service may depend downward, through one named file.** `service/runtimes/`
+  holds one module per execution runtime; `service/runtimes/databricks.py` is the
+  *only* path outside `databricks/` permitted to import the Databricks surface, and
+  the guard names that exact relative path rather than exempting a directory or a
+  filename. Every other file in `service/` is held to the same rule as the engine, so
+  the Databricks surface gains exactly one importer outside itself and `pyspark`
+  gains none.
+
+`service/api.py` is the only module that imports the ASGI framework, which is an
+optional extra (`service`). The rest of `service/` is framework-free and testable
+without it — but note the difference from `providers/presidio_provider.py`, whose
+defining property is that `pii_reduction.providers` imports fine with no extra
+installed. Route decorators run at import time, so `service/api.py` cannot defer its
+import the way the Presidio adapter defers its engine. The contract is therefore on
+the package: **`service/__init__.py` must not import `api`**, or
+`pii_reduction.service` stops being importable in a core install. The subprocess
+guard **will check** it, with `fastapi` added to the optional-module list — otherwise
+the check is blind on a developer machine that has it — in the increment that creates
+the package.
 
 ## Local and Databricks parity
 
