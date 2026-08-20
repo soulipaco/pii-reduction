@@ -11,12 +11,29 @@ from typing import Any
 
 import pandas as pd
 
-from pii_reduction.databricks.errors import DatabricksError
+from pii_reduction.databricks.errors import DatabricksError, error_label
 from pii_reduction.databricks.source import require_table_name
 
 __all__ = ["DeltaTableOutput"]
 
 _KNOWN_MODES = frozenset({"overwrite", "append", "errorifexists"})
+
+#: What this project calls a mode, and what the client actually accepts.
+#:
+#: Databricks Connect **rejects** ``errorifexists`` outright —
+#: ``[UNSUPPORTED_OPERATION] errorifexists is not supported`` — while accepting
+#: Spark's older alias ``error``, which behaves identically: a second write to an
+#: existing table raises. Measured against the workspace on 16.4 (session 10), where
+#: it broke the first real end-to-end run of the CLI: the shipped default is
+#: ``errorifexists``, so *every* config-driven Delta write failed, and the parity
+#: test never saw it because it passes ``mode="overwrite"`` explicitly.
+#:
+#: The translation lives here rather than in the configuration vocabulary on purpose
+#: — the same shape as ADR-0004's per-model label mapping inside provider adapters.
+#: ``errorifexists`` is Spark's documented name, `docs/06` publishes it, and the local
+#: file adapters use their own spelling too — adapting a name to what a client will
+#: take is exactly an adapter's job.
+_SPARK_MODES = {"errorifexists": "error", "overwrite": "overwrite", "append": "append"}
 
 
 class DeltaTableOutput:
@@ -50,9 +67,7 @@ class DeltaTableOutput:
         table = require_table_name(f"{self._prefix}.{name}")
         try:
             spark_frame = self._spark.createDataFrame(frame)
-            spark_frame.write.format("delta").mode(self._mode).saveAsTable(table)
+            spark_frame.write.format("delta").mode(_SPARK_MODES[self._mode]).saveAsTable(table)
         except Exception as error:
-            raise DatabricksError(
-                f"could not write {table} ({error.__class__.__name__})"
-            ) from error
+            raise DatabricksError(f"could not write {table} ({error_label(error)})") from error
         return table

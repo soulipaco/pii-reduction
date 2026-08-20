@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from pii_reduction.databricks.errors import DatabricksError
+from pii_reduction.databricks.errors import DatabricksError, error_label
 from pii_reduction.observability.logging import get_logger, safe_fields
 from pii_reduction.sources.base import SourceDataset
 
@@ -67,7 +67,7 @@ class SparkTableSource:
             # not a credential (it lives in the user's own profile), and suppressing
             # the cause would cost the debugging context.
             raise DatabricksError(
-                f"source {self._name!r}: could not read {self._table} ({error.__class__.__name__})"
+                f"source {self._name!r}: could not read {self._table} ({error_label(error)})"
             ) from error
         return SourceDataset(
             name=self._name,

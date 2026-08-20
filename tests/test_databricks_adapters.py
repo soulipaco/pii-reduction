@@ -306,23 +306,38 @@ class _FakeSpark:
 class _FakeWriter:
     """`createDataFrame(f).write.format("delta").mode(m).saveAsTable(t)` — capture."""
 
-    def __init__(self, sink: dict[str, pd.DataFrame], frame: pd.DataFrame) -> None:
+    def __init__(
+        self,
+        sink: dict[str, pd.DataFrame],
+        frame: pd.DataFrame,
+        modes: dict[str, str] | None = None,
+    ) -> None:
         self._sink = sink
         self._frame = frame
+        self._modes = modes
+        self._mode = ""
 
     def format(self, _fmt: str) -> _FakeWriter:
         return self
 
-    def mode(self, _mode: str) -> _FakeWriter:
+    def mode(self, mode: str) -> _FakeWriter:
+        self._mode = mode
         return self
 
     def saveAsTable(self, table: str) -> None:  # noqa: N802 - Spark's casing
         self._sink[table] = self._frame
+        if self._modes is not None:
+            self._modes[table] = self._mode
 
 
 class _FakeSessionFrame:
-    def __init__(self, sink: dict[str, pd.DataFrame], frame: pd.DataFrame) -> None:
-        self.write = _FakeWriter(sink, frame)
+    def __init__(
+        self,
+        sink: dict[str, pd.DataFrame],
+        frame: pd.DataFrame,
+        modes: dict[str, str] | None = None,
+    ) -> None:
+        self.write = _FakeWriter(sink, frame, modes)
 
 
 class _FakeWritableSpark(_FakeSpark):
@@ -912,3 +927,107 @@ class TestAuthRoutes:
 
         parameters = set(inspect.signature(get_session).parameters)
         assert parameters == {"profile", "serverless"}
+
+
+class TestWriteModeReachesSparkAsAnAcceptedName:
+    """`errorifexists` must reach Spark as `error` (session 10, measured).
+
+    Databricks Connect rejects `errorifexists` outright —
+    `[UNSUPPORTED_OPERATION] errorifexists is not supported` — and it is the shipped
+    default, so before this translation every config-driven Delta write failed on the
+    workspace. Nothing caught it: the parity test passes `mode="overwrite"`
+    explicitly, so the default path had no coverage at all until the first real
+    end-to-end CLI run hit it.
+    """
+
+    class _Recorder:
+        def __init__(self) -> None:
+            self.tables: dict[str, pd.DataFrame] = {}
+            self.modes: dict[str, str] = {}
+
+        def createDataFrame(self, frame: pd.DataFrame):  # type: ignore[no-untyped-def]  # noqa: N802
+            return _FakeSessionFrame(self.tables, frame, self.modes)
+
+    def _written_mode(self, configured: str) -> str:
+        from pii_reduction.databricks.output import DeltaTableOutput
+
+        spark = self._Recorder()
+        DeltaTableOutput(spark, "cat.sch", mode=configured).write(
+            pd.DataFrame({"a": ["x"]}), name="t"
+        )
+        return spark.modes["cat.sch.t"]
+
+    def test_errorifexists_is_translated(self) -> None:
+        assert self._written_mode("errorifexists") == "error"
+
+    @pytest.mark.parametrize("mode", ["overwrite", "append"])
+    def test_the_others_pass_through(self, mode: str) -> None:
+        assert self._written_mode(mode) == mode
+
+    def test_every_accepted_mode_has_a_translation(self) -> None:
+        # A mode the config layer accepts but the writer cannot translate would fail
+        # at the workspace boundary, which is exactly how this was found.
+        from pii_reduction.databricks.output import _KNOWN_MODES, _SPARK_MODES
+
+        assert set(_SPARK_MODES) == set(_KNOWN_MODES)
+        # `errorifexists` is the one name Connect refuses; nothing may send it.
+        assert "errorifexists" not in set(_SPARK_MODES.values())
+
+
+class TestErrorLabelsCarryTheConditionAndNothingElse:
+    """`ClassName: CONDITION` — the token that makes a failure diagnosable.
+
+    This session lost an afternoon to `could not write <table> (PySparkValueError)`
+    whose real cause was `[UNSUPPORTED_OPERATION] errorifexists is not supported`.
+    The condition is a fixed identifier and carries no data; the message can quote a
+    workspace URL or a cell value, so it still never appears.
+    """
+
+    class _ConditionError(Exception):
+        def getCondition(self) -> str:  # noqa: N802 - Spark's casing
+            return "TABLE_OR_VIEW_ALREADY_EXISTS"
+
+    class _LegacyClassError(Exception):
+        def getErrorClass(self) -> str:  # noqa: N802 - Spark's casing
+            return "UNSUPPORTED_OPERATION"
+
+    class _HostileGetterError(Exception):
+        def getCondition(self) -> str:  # noqa: N802 - Spark's casing
+            raise RuntimeError("getter itself fails")
+
+    def test_a_condition_is_included(self) -> None:
+        from pii_reduction.databricks.errors import error_label
+
+        label = error_label(self._ConditionError("workspace https://example.invalid said no"))
+        assert label == "_ConditionError: TABLE_OR_VIEW_ALREADY_EXISTS"
+        # The message is what can carry a host or a cell value; it must not appear.
+        assert "example.invalid" not in label
+
+    def test_the_older_getter_is_used_too(self) -> None:
+        from pii_reduction.databricks.errors import error_label
+
+        assert (
+            error_label(self._LegacyClassError("x")) == "_LegacyClassError: UNSUPPORTED_OPERATION"
+        )
+
+    def test_a_plain_exception_degrades_to_its_class(self) -> None:
+        from pii_reduction.databricks.errors import error_label
+
+        assert error_label(ValueError("sensitive text")) == "ValueError"
+
+    def test_a_failing_getter_never_becomes_a_second_failure(self) -> None:
+        from pii_reduction.databricks.errors import error_label
+
+        assert error_label(self._HostileGetterError("x")) == "_HostileGetterError"
+
+
+class TestConfigModesAndWriterModesCannotDrift:
+    def test_the_config_vocabulary_matches_what_the_writer_accepts(self) -> None:
+        """A mode config accepts but the writer cannot deliver is this session's bug class."""
+        from typing import get_args
+
+        from pii_reduction.config.models import DeltaTableDestination
+        from pii_reduction.databricks.output import _KNOWN_MODES
+
+        annotation = DeltaTableDestination.model_fields["mode"].annotation
+        assert set(get_args(annotation)) == _KNOWN_MODES

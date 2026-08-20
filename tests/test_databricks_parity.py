@@ -292,3 +292,36 @@ class TestVolumeIngestion:
         assert dataset.row_count == len(corpus_frame)
         assert dataset.source_type == "csv"
         assert dataset.source_reference == volume_path
+
+
+class TestTheDefaultWriteModeWorksOnThisClient:
+    """The blind spot that let a broken default ship (session 10).
+
+    `errorifexists` is the shipped default everywhere — `DeltaTableDestination.mode`,
+    `run_driver`'s fallback, the runbook, `docs/06` — and Databricks Connect rejects
+    it outright with `[UNSUPPORTED_OPERATION]`. Every config-driven Delta write
+    therefore failed, and **no test saw it**: the parity tests above are the only
+    workspace coverage and they pass `mode="overwrite"` explicitly, so the default
+    path was never exercised against a real client.
+
+    The adapter now translates to Spark's `error` alias. That translation is pinned
+    in the default tier against a fake writer, which can show the string mapping but
+    not that a real client accepts it — the gap this test closes, so the same class
+    of defect cannot ship twice.
+    """
+
+    def test_the_default_mode_writes_and_then_refuses_an_existing_table(self, spark: Any) -> None:
+        from pii_reduction.databricks.errors import DatabricksError
+        from pii_reduction.databricks.output import DeltaTableOutput
+
+        # Default mode, exactly as a dataset config would leave it.
+        output = DeltaTableOutput(spark, SCHEMA)
+        frame = pd.DataFrame({"document_id": ["doc_0001"], "note": ["synthetic"]})
+
+        table = output.write(frame, name="default_mode_probe")
+        assert table.endswith("default_mode_probe")
+
+        # And the contract the name promises: a second write must refuse, not
+        # silently overwrite a governed table.
+        with pytest.raises(DatabricksError):
+            output.write(frame, name="default_mode_probe")

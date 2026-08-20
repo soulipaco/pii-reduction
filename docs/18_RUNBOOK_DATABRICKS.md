@@ -33,15 +33,29 @@ dataset config plus one command.
 > path** — the workspace's serverless Python sandbox still fails with
 > `ISOLATION_STARTUP_FAILURE`, open since session 7 (plan §8 F).
 >
-> **Also still unverified: this runbook's own path.** What executed was the parity
-> *test suite*, which drives `run_driver` directly with explicit table arguments. A
-> `pii-reduction-databricks run <dataset>` invocation — steps 2 and 3 as written,
-> with the table names coming from a dataset config — has not been run against a
-> workspace. Locally executed only: config resolution of the shipped example, the
-> command's `--help`, its refusal with no credentials, and its refusal through the
-> wrong front door, from `.venv-dbx17` (Python 3.12, `databricks-connect` 16.4).
-> Step 1's combined `[databricks,presidio,language]` install has never been performed
-> in any environment here — treat it as untested.
+> **This runbook's own path has now run, end to end** (2026-08-20). A synthetic
+> 20-row table was staged in Unity Catalog, a dataset config was pointed at it, and
+> `pii-reduction-databricks run <dataset> --configs <dir>` was executed exactly as
+> §3 describes: **exit 0**, three Delta tables written, metadata-only summary. Read
+> back: 20 rows, the source column intact beside the reduced one (rule 4), every row
+> `success` under a single run id, 16 of 20 rows carrying `<EMAIL>`/`<PHONE>`
+> placeholders, the audit table's column set exactly `AUDIT_COLUMNS`, and run metrics
+> showing `run_rows_read=20` with `run_source_version=delta_v0`. Everything created
+> was dropped afterwards.
+>
+> **That run found a real defect, which is why it was worth doing.** The shipped
+> default write mode, `errorifexists`, is **rejected by Databricks Connect**
+> (`[UNSUPPORTED_OPERATION]`), so every config-driven Delta write failed with exit 2.
+> The parity suite never saw it because it passes `mode="overwrite"` explicitly. The
+> adapter now sends Spark's equivalent alias `error`, and the coverage gap that let
+> it ship is closed at both levels: a default-tier test pins the translation, and a
+> new **workspace** test writes under the *default* mode and asserts that a second
+> write refuses. That test passes — the marked tier is now **3 passed, 2 skipped**.
+>
+> Still untested: step 1's combined `[databricks,presidio,language]` install, which
+> has never been performed in any environment here. The run above used the
+> deterministic chain (EMAIL and PHONE only) because `.venv-dbx17` carries the
+> databricks extra alone — so it does **not** demonstrate PERSON detection.
 
 ---
 
@@ -362,6 +376,12 @@ them:
 
 ## 8. When something goes wrong
 
+Databricks failures are reported as `ClassName: CONDITION` — the condition is a
+fixed Spark identifier carrying no data, and it is what tells a "table already
+exists" rerun apart from a genuine fault. The message itself is deliberately never
+shown: Connect messages can quote the workspace URL and an analysis error can quote a
+value.
+
 | symptom | cause | fix |
 |---|---|---|
 | `error: no Databricks credentials found` | no profile, no `DATABRICKS_HOST`+token, not on compute | set one of the three routes in §1b |
@@ -369,6 +389,7 @@ them:
 | `source type 'spark_table' … run_driver` | ran `pii-reduction` instead of `pii-reduction-databricks` | use the Databricks front door |
 | a pydantic `String should match pattern` on `table` | a bare or two-part name **in the dataset file** | use `catalog.schema.table` |
 | `table name … must be fully qualified` | a bare or two-part name passed to `--source-table` | same, on the command line |
+| `could not write … (AnalysisException: TABLE_OR_VIEW_ALREADY_EXISTS)` | a rerun against a destination whose `mode` is the default `errorifexists` | intended — choose `overwrite` deliberately, or write to a new schema |
 | `prefix … must be catalog.schema` | `--destination-prefix` given one part or three | give exactly `catalog.schema` |
 | `would write over the table it reads` | destination resolves to the source | give the destination its own schema |
 | `no entities configured` | a column block without `entities:` | list them explicitly |

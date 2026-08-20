@@ -912,6 +912,7 @@ R3's projection and a fourth test that did not exist in sessions 7–8):
 | 2026-08-19 (session 8) | 2 passed | skipped — incident still open |
 | 2026-08-20 (session 10, run by the owner, `env_token` auth) | 2 passed | skipped — incident still open |
 | 2026-08-20 (session 10, re-run in-session, `profile` auth) | 2 passed | skipped — incident still open |
+| 2026-08-20 (session 10, after the write-mode fix; tier gained a default-mode test) | 3 passed | skipped — incident still open |
 
 Environment facts recorded for reuse: dedicated venv (`.venv-dbx17`, Python 3.12,
 `databricks-connect` 16.4) per ADR-0006's isolation; authentication by named profile
@@ -983,7 +984,33 @@ in its local half. Status of each below; the shipped detail is in the Complete t
   (nothing real ever enters the repo, fixtures, or logs — the tooling is
   fail-closed and metadata-only by construction, ADR-0023 / AGENTS rule 8).
   Exit: the runbook executed once end to end against the workspace on
-  synthetic data. **PARTIALLY MET, and the gap is now small and named.**
+  synthetic data. **MET (2026-08-20).**
+
+  **The runbook's own path ran end to end.** A synthetic 20-row table was staged in
+  Unity Catalog, a dataset config named it, and `pii-reduction-databricks run
+  <dataset>` was executed as §3 describes: exit 0, three Delta tables, metadata-only
+  summary; read back as 20 rows with the source column intact beside the reduced one,
+  every row `success`, 16 of 20 carrying placeholders, the audit table's column set
+  exactly `AUDIT_COLUMNS`, and `run_rows_read=20` / `run_source_version=delta_v0`.
+  **Deterministic chain only** — EMAIL and PHONE — because `.venv-dbx17` carries the
+  databricks extra alone: this run does **not** demonstrate PERSON detection, which
+  under `deterministic_only` is silently absent by design.
+  All created objects were dropped. The dataset config lived outside the repository
+  because it names real catalog/schema values.
+
+  **It found a defect that had gone unseen since Increment F.** `errorifexists` — the
+  shipped default write mode, published in `docs/06` and the runbook — is rejected
+  outright by Databricks Connect (`[UNSUPPORTED_OPERATION]`), so **every**
+  config-driven Delta write failed with exit 2. Nothing caught it: the parity suite
+  is the only workspace test and it passes `mode="overwrite"` explicitly, so the
+  default path had no coverage at all. The adapter now translates to Spark's alias
+  `error`, with a default-tier test pinning every accepted mode to a translation
+  **and** a new workspace test that writes under the *default* mode and asserts the
+  second write refuses — the coverage that did not exist, which is why the defect
+  shipped. The marked tier went 2 passed → **3 passed**. **This is the argument for
+  end-to-end runs over component tests**, recorded here rather than learned twice.
+
+  **Earlier the same day, before that run:**
 
   **Verified on the workspace** (owner's run, 2026-08-20, from their own PowerShell
   session over the new `env_token` route, against a fresh timestamped schema):
@@ -1001,11 +1028,10 @@ in its local half. Status of each below; the shipped detail is in the Complete t
   written into the same throwaway schema, so the separate-prefix grant boundary
   remains unit-tested only. First workspace evidence since session 8.
 
-  **Not yet verified.** The parity suite drives `run_driver` with explicit table
-  arguments, so **the runbook's own path — `pii-reduction-databricks run <dataset>`,
-  taking its table names from a dataset config — has still not run against a
-  workspace.** That single invocation is what remains of this exit criterion. Also
-  outstanding: Volumes ingestion (skipped as expected on a local client — though
+  **Not yet verified at that point.** The parity suite drives `run_driver` with
+  explicit table arguments, so the runbook's own path had not yet run against a
+  workspace — that invocation is what the end-to-end run above then performed. Also
+  outstanding at the time, and still: Volumes ingestion (skipped as expected on a local client — though
   the guard is a local filesystem check, so the skip proves nothing about the
   workspace; it needs a notebook or job) and the distributed path
   (skipped — `ISOLATION_STARTUP_FAILURE`, unchanged since session 7). The local half
@@ -1025,12 +1051,11 @@ in its local half. Status of each below; the shipped detail is in the Complete t
   process that already has a session through Connect. ADR-0006 amended. Still no
   host or token parameter in any signature, pinned by a test.
 
-  **What remains, in one step:** upload a small synthetic table, point a dataset
-  config at it, and run `pii-reduction-databricks run <dataset>` once — then record
-  the result in the runbook's status block. `pytest -m databricks` is already done
-  (see above). Of the three things that had never executed anywhere, two now have;
-  only Volumes ingestion is left, and it needs a notebook or job rather than a local
-  client.
+  **What remains outside this criterion:** Volumes ingestion (needs a notebook or
+  job — the mount is server-side), the distributed path (`ISOLATION_STARTUP_FAILURE`,
+  unchanged since session 7), the bundle deploy (P4, never validated), and step 1's
+  combined extras install. None blocks the runbook's documented path, which now
+  works.
 - **P4 — deployment skeleton. Complete as a skeleton; never deployed.**
   `databricks.yml` + `resources/`, one task calling the same entry point, plus a
   CLI-free path (UI or Jobs API) since `bundle deploy` *is* the CLI. Exit criterion

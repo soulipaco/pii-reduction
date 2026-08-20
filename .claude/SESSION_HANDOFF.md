@@ -157,12 +157,17 @@ shells this harness spawns unless the harness process restarted after they were 
 read them back with `[Environment]::GetEnvironmentVariable(name,'User')` and inject
 them into the command instead of concluding they are absent.)
 
-What is left of P3's exit criterion is one invocation: `pii-reduction-databricks run
-<dataset>` against a workspace, taking its table names from a dataset config. The
-parity suite passes explicit table arguments, so the config-named path is proven
-locally and against fakes but not yet on a workspace. Volumes ingestion needs a
-notebook (the mount is server-side); the distributed path is still
-`ISOLATION_STARTUP_FAILURE`.
+**P3's exit criterion is now MET.** The runbook's own path ran end to end on the
+workspace: synthetic table staged, dataset config pointed at it,
+`pii-reduction-databricks run` → exit 0, three Delta tables, verified on read-back,
+everything dropped afterwards. It used the **deterministic chain only** (EMAIL and
+PHONE; `.venv-dbx17` has no presidio), so it proves the path, not PERSON detection. **It found a defect no test could have**: the shipped
+default write mode `errorifexists` is rejected by Databricks Connect, so every
+config-driven Delta write had been failing — invisible because the parity suite, the
+only workspace test, overrides the mode. Fixed by translating to Spark's `error`
+alias, pinned by a default-tier test **and** by a new workspace test that exercises
+the default mode end to end (tier: 2 passed → 3 passed). Volumes ingestion still needs a notebook; the
+distributed path is still `ISOLATION_STARTUP_FAILURE`.
 
 **Five commits, each through the gate, and each reviewed by both auditors** (P0–P3
 record the verdict in their commit messages; P4's records the findings it fixed but
