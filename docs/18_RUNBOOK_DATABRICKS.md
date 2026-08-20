@@ -356,7 +356,10 @@ them:
 
 ## 9. What this runbook does not cover
 
-- **Scheduling.** A job/Asset Bundle definition is plan §8 P4.
+- **Scheduling.** `databricks.yml` and `resources/` hold an Asset Bundle and job
+  skeleton, with a CLI-free path (UI or Jobs API) for workspaces where policy blocks
+  the Databricks CLI — see `resources/README.md`. It has never been deployed, and it
+  ships without a schedule on purpose.
 - **The distributed path.** `distributed_frame` (`mapInPandas`) is shipped and
   unit-tested but has never executed on a workspace — see plan §8 F. The driver path
   is what this runbook uses, and it processes on the driver, so very large tables

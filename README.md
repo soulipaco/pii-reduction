@@ -346,6 +346,7 @@ As built. Every path below exists; nothing here is aspirational.
 │   ├── 15_PROVIDERS.md             # shipped providers, licences, measured results
 │   ├── 16_BENCHMARK_REPORT_10K.md  # the 10k-document two-chain comparison
 │   └── adr/                        # decision records, indexed in adr/README.md
+├── databricks.yml · resources/  # Asset Bundle + job skeleton (never deployed)
 ├── configs/
 │   ├── project.yaml · entities.yaml · providers.yaml
 │   ├── datasets/             # one dataset contract per file
@@ -365,11 +366,15 @@ As built. Every path below exists; nothing here is aspirational.
 └── data/downloads/           # fetched public datasets, gitignored and checksummed
 ```
 
-Two directories the original plan named are deliberately absent. There is no
-`notebooks/`: the Databricks entry points are importable modules under
+One directory the original plan named is still deliberately absent: there is no
+`notebooks/`. The Databricks entry points are importable modules under
 `src/pii_reduction/databricks/`, because a notebook is not testable and `AGENTS.md`
-forbids logic living in one. There is no `resources/`: no job, bundle or app resource
-has been needed yet, and an empty directory is a promise rather than a fact.
+forbids logic living in one. `resources/` now exists — session 10 added the Asset
+Bundle and job skeleton (ADR-0025 rung 3) — and it is a **skeleton that has never
+been deployed**. A default-tier test holds the one promise that can be held without
+a workspace: that no host, catalog, cluster id, secret, personal workspace path or
+email address is hard-coded in any deployment file, discovered rather than listed so
+a new one cannot slip past the guard.
 
 ## Implementation philosophy
 

@@ -422,7 +422,11 @@ class TestRunFromConfiguration:
 
     def test_csv_source_round_trips_through_the_pipeline(self, tmp_path: Path) -> None:
         config = make_config(tmp_path)
-        loaded = CsvSource(config.source.path, name="demo_smoke").load()
+        # `make_config` builds a csv source; the union now also holds table types
+        # that carry no path (ADR-0025), so narrow before reaching for one.
+        source = config.source
+        assert source.type == "csv"
+        loaded = CsvSource(source.path, name="demo_smoke").load()
         assert loaded.row_count == 20
         assert build_pipeline(config).process(loaded).run.rows_read == 20
 

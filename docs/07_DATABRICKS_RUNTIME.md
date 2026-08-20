@@ -263,6 +263,14 @@ Notebooks should not contain hard-coded secrets.
 
 ## Jobs
 
+> **Shipped (session 10): `resources/pii_reduction_job.yml`, a skeleton that has
+> never been deployed.** It is **one** task, not the five below — a
+> `python_wheel_task` calling the same `pii-reduction-databricks run` entry point a
+> person uses interactively, so there is no second implementation to drift
+> (`AGENTS.md` rule 10). The five-task shape below remains the sketch for a *demo*
+> pipeline that also builds ground truth and publishes benchmark metrics; nothing
+> like it is built.
+
 Recommended tasks for a mature demo job:
 
 ```text
@@ -276,6 +284,13 @@ Recommended tasks for a mature demo job:
 These may be separate tasks or one parameterized entry point depending on complexity.
 
 ## Parameters
+
+> **What the shipped job actually takes**, which is deliberately less than the list
+> below: `run <dataset> --configs <path>`. The dataset config names the source table,
+> the destination, the columns, the provider chain and the reduction strategy — so
+> the parameters below that look like job settings (`provider_chain`, `run_mode`,
+> `sample_fraction`) are either config keys or do not exist. A job that carried them
+> could be retargeted in a browser with nobody reviewing it.
 
 Useful job parameters:
 
@@ -337,6 +352,11 @@ An optional Databricks App could provide:
 Never expose real production PII through a portfolio review interface.
 
 ## Deployment
+
+`databricks.yml` and `resources/` hold the shipped skeleton (session 10): an Asset
+Bundle plus a job definition, with a CLI-free path — UI job creation or a Jobs API
+POST — for workspaces whose policy blocks the Databricks CLI. Never deployed; see
+`resources/README.md`.
 
 The repository may support multiple deployment methods:
 

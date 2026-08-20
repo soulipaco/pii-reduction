@@ -534,7 +534,9 @@ class TestDatabricksCli:
 
         return main(argv, session_factory=lambda _profile=None: spark)
 
-    def test_run_reports_metadata_only(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_reports_metadata_only(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import pii_reduction.databricks.cli as cli_module
 
         spark = _FakeWritableSpark(_FakeQuery([_HistoryRow(1)]))
@@ -542,12 +544,8 @@ class TestDatabricksCli:
         # The CLI's job under test is argument wiring, so the config load is the one
         # thing stubbed: a real dataset file cannot both name a UC table and stay
         # inside the default tier's no-model budget (see `table_config`).
-        original = cli_module.load_resolved_dataset
-        cli_module.load_resolved_dataset = lambda *_args, **_kwargs: config  # type: ignore[assignment]
-        try:
-            code = self._main(["run", "any_dataset"], spark)
-        finally:
-            cli_module.load_resolved_dataset = original  # type: ignore[assignment]
+        monkeypatch.setattr(cli_module, "load_resolved_dataset", lambda *_a, **_k: config)
+        code = self._main(["run", "any_dataset"], spark)
 
         assert code == 0
         captured = capsys.readouterr()
@@ -711,7 +709,9 @@ class TestDriverRunStatus:
         assert result.status == "success"
         assert result.fields_failed == 0
 
-    def test_the_cli_exits_one_when_fields_failed(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_the_cli_exits_one_when_fields_failed(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """A scheduler must not read a partial reduction as green (ADR-0025 rung 3)."""
         import pii_reduction.databricks.cli as cli_module
         from pii_reduction.databricks.runner import DriverRunResult
@@ -726,34 +726,26 @@ class TestDriverRunStatus:
             status="partial_failure",
             fields_failed=2,
         )
-        original_load = cli_module.load_resolved_dataset
-        original_run = cli_module.run_driver
-        cli_module.load_resolved_dataset = lambda *_a, **_k: table_config()  # type: ignore[assignment]
-        cli_module.run_driver = lambda *_a, **_k: failed  # type: ignore[assignment]
-        try:
-            code = cli_module.main(["run", "d"], session_factory=lambda _p=None: object())
-        finally:
-            cli_module.load_resolved_dataset = original_load  # type: ignore[assignment]
-            cli_module.run_driver = original_run  # type: ignore[assignment]
+        monkeypatch.setattr(cli_module, "load_resolved_dataset", lambda *_a, **_k: table_config())
+        monkeypatch.setattr(cli_module, "run_driver", lambda *_a, **_k: failed)
+        code = cli_module.main(["run", "d"], session_factory=lambda _p=None: object())
 
         assert code == 1
         assert "fields_failed=2" in capsys.readouterr().out
 
 
 class TestReducedOnlyPrefixOnTheCli:
-    def test_the_flag_reaches_the_runner(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_the_flag_reaches_the_runner(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import pii_reduction.databricks.cli as cli_module
 
         spark = _FakeWritableSpark(_FakeQuery([_HistoryRow(1)]))
-        original = cli_module.load_resolved_dataset
-        cli_module.load_resolved_dataset = lambda *_a, **_k: table_config()  # type: ignore[assignment]
-        try:
-            code = cli_module.main(
-                ["run", "d", "--reduced-only-prefix", "cat.consumers"],
-                session_factory=lambda _p=None: spark,
-            )
-        finally:
-            cli_module.load_resolved_dataset = original  # type: ignore[assignment]
+        monkeypatch.setattr(cli_module, "load_resolved_dataset", lambda *_a, **_k: table_config())
+        code = cli_module.main(
+            ["run", "d", "--reduced-only-prefix", "cat.consumers"],
+            session_factory=lambda _p=None: spark,
+        )
 
         assert code == 0
         out = capsys.readouterr().out

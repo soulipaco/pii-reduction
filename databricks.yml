@@ -1,0 +1,77 @@
+# Databricks Asset Bundle — the deployment skeleton (plan §8 P4, ADR-0025 rung 3).
+#
+# NOT VALIDATED. This bundle has never been deployed or run: no workspace run has
+# been made from this repository since session 8, and none was made for this file.
+# It is a skeleton to adapt, not a tested artifact — `resources/README.md` says what
+# would have to happen to change that.
+#
+# Zero workspace values live here: no host, no catalog, no schema, no table, no
+# cluster or warehouse id. This file is therefore safe to commit and useless to
+# anyone trying to learn where it points (AGENTS.md Databricks rules).
+# Where a run writes is decided by the dataset config it names, not by this file:
+#
+#   databricks bundle deploy -t dev --var="dataset=my_tickets"
+#
+# That is deliberate. A job that carried its own catalog and schema could be
+# retargeted in a browser with nobody reviewing it; a job that names a dataset config
+# can only be retargeted by editing a file in git.
+#
+# If your organisation blocks the Databricks CLI, this file cannot be deployed —
+# `bundle deploy` IS the CLI. Use the API/UI path in `resources/README.md` instead;
+# it runs the same entry point with the same parameters.
+
+bundle:
+  name: pii-reduction
+
+variables:
+  dataset:
+    description: >-
+      Dataset name under <configs>/datasets/. Names the source table, the
+      destination and the columns to reduce — the job takes no table names of its
+      own, so what runs is reviewable in git.
+    default: databricks_table_example
+  configs_path:
+    description: >-
+      Where the job finds the configs directory. NOT `./configs`: a python_wheel_task
+      has no source directory, and its working directory is not the synced checkout,
+      so a relative path would leave the job exiting 2 on its first run.
+      `${workspace.file_path}` is the bundle's own synced location, resolved at
+      deploy time, so nothing about a workspace is committed here. UNVERIFIED, like
+      everything else in this file.
+    default: ${workspace.file_path}/configs
+  # There are deliberately no `catalog`/`schema` variables. The destination — and
+  # the reduced-only projection of ADR-0024 — belong to the dataset config, which is
+  # the artifact under review. Per-environment destinations are expressed as
+  # different dataset configs, not as deploy-time overrides, so "what does prod
+  # write to" is answered by reading a file rather than a deploy command someone ran.
+
+# The wheel this repository builds. Serverless job compute installs it from the
+# bundle's own artifact path, so nothing depends on a cluster having the package.
+artifacts:
+  pii_reduction_wheel:
+    type: whl
+    build: python -m build --wheel
+    path: .
+
+include:
+  - resources/*.yml
+
+targets:
+  # `mode: development` prefixes deployed resources with the deploying user and
+  # pauses schedules, so a deploy cannot quietly start running against real tables.
+  dev:
+    mode: development
+    default: true
+
+  prod:
+    mode: production
+    # A different dataset config, so a production destination is reviewable in git:
+    #   variables:
+    #     dataset: my_tickets_prod
+    # No `workspace.host` here on purpose. The CLI resolves the target workspace
+    # from the profile or environment it is already authenticated with, and writing
+    # a host into a committed file is the thing AGENTS.md rule 1 forbids. Select the
+    # workspace with `-p <profile>` or DATABRICKS_HOST at deploy time.
+    permissions:
+      - level: CAN_VIEW
+        group_name: users

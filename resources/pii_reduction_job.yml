@@ -1,0 +1,78 @@
+# The reduction job (plan §8 P4). NOT VALIDATED — never deployed or run.
+#
+# One task, one entry point: the same `pii-reduction-databricks run` a person types
+# in the runbook. There is deliberately no notebook here — `AGENTS.md` rule 3 keeps
+# logic in importable modules, and a scheduled notebook is the standard way that rule
+# gets broken.
+
+resources:
+  jobs:
+    pii_reduction:
+      name: pii-reduction-${var.dataset}
+      description: >-
+        Reduce the configured free-text columns of ${var.dataset} into the Delta
+        tables its dataset config names.
+
+      # Serverless job compute: ADR-0006 records that this workspace has no classic
+      # clusters, and a serverless environment also keeps the dependency set
+      # declarative rather than baked into a cluster someone configured by hand.
+      environments:
+        - environment_key: default
+          spec:
+            client: "3"
+            dependencies:
+              - ./dist/*.whl
+              # Necessary but NOT sufficient for PERSON. Presidio is the adapter; the
+              # detection comes from spaCy models, which are not on PyPI and cannot
+              # be installed by this list — `docs/15_PROVIDERS.md` installs them with
+              # `python -m spacy download`, and a serverless dependency list has no
+              # step that could run it. Left as it stands, this job detects EMAIL and
+              # PHONE, reports success on every row, and misses every name — the
+              # silent failure docs/18 §1 is about.
+              #
+              # Before the first real run: upload the model wheels to a Unity Catalog
+              # volume and add them here, e.g.
+              #   - /Volumes/<catalog>/<schema>/<volume>/en_core_web_md-3.8.0-py3-none-any.whl
+              # The version pins below deliberately match pyproject's `presidio` and
+              # `language` extras; if you change one, change both.
+              - presidio-analyzer>=2.2.355
+              - lingua-language-detector>=2.0.0
+
+      tasks:
+        - task_key: reduce
+          environment_key: default
+          python_wheel_task:
+            package_name: pii_reduction
+            entry_point: pii-reduction-databricks
+            parameters:
+              - run
+              - ${var.dataset}
+              - --configs
+              - ${var.configs_path}
+          # The job authenticates as itself — ambient credentials on Databricks
+          # compute — so no token, profile or host is configured anywhere in this
+          # file. `get_session` reuses the session the runtime already built.
+
+      # A partially-failed reduction exits 1, so the job fails. Add a recipient and
+      # uncomment — an address is personal data and does not belong in a committed
+      # file, and the Jobs API rejects an empty one, so this cannot ship enabled:
+      #
+      # email_notifications:
+      #   on_failure:
+      #     - <your-address>
+
+      # No `schedule:` block. A skeleton that arrives already scheduled is a skeleton
+      # that runs against real data before anyone has read it. Add one deliberately:
+      #
+      #   schedule:
+      #     quartz_cron_expression: "0 0 3 * * ?"
+      #     timezone_id: UTC
+      #     pause_status: PAUSED
+
+      # Reruns must not silently overwrite: the destination's own `mode` governs
+      # that, and the shipped default (`errorifexists`) refuses to touch an existing
+      # table. A repeating job therefore needs a deliberate choice in the dataset
+      # config — see docs/18 §4 and the note on Delta time travel in §7.
+      max_concurrent_runs: 1
+      queue:
+        enabled: true
