@@ -4,6 +4,15 @@
 
 This roadmap is intentionally phased. The project should become useful early and add sophistication only after measurable baselines exist.
 
+> **Status and precedence (session 10).** Phases 0–6 are built; Phase 6's
+> distributed exit criterion is the one that remains unmet, and it is annotated in
+> place below. **This document is no longer the live sequence.** ADR-0025 makes
+> Azure Databricks the primary deployment target, so Databricks-facing capability —
+> config-nameable Unity Catalog IO, a runbook, a deployable job, batching — comes
+> before Phase 7's provider expansion. The live queue is
+> `docs/14_IMPLEMENTATION_PLAN.md` §8; the phase order below is kept as the record
+> of how the build actually went, not rewritten to match current priorities.
+
 ---
 
 # Phase 0 — Repository foundation
@@ -229,6 +238,12 @@ Shipped as Increment F (`src/pii_reduction/databricks/`); see plan §8 F for evi
 
 # Phase 7 — Provider expansion
 
+> **Displaced by ADR-0025.** This phase is where the Greek gap's next real move
+> lives (a better-licensed model, plan §8), and it is still the right next
+> *quality* investment. It now sits behind the platform queue: a provider that
+> nobody can run on the target platform is worth less than the path that makes the
+> shipped providers deployable.
+
 ## Goal
 
 Demonstrate provider-agnostic architecture.
@@ -298,6 +313,11 @@ Suggested pages:
 7. Parser health
 
 ### Optional Databricks App
+
+> Not to be confused with ADR-0025's rung 4. This is a **demo** surface over
+> synthetic/public data for reviewers; rung 4 is the service layer over the engine
+> for internal operators. Same technology, different data class and different
+> obligations.
 
 Side-by-side public/synthetic samples:
 

@@ -7,6 +7,23 @@
      column discovery, and both external reviews independently flagged the word
      as the one misleading claim in this README (docs/17 §1.8). -->
 
+## Deployment target
+
+**Azure Databricks is the primary deployment target (ADR-0025), not one execution
+surface among several.** Local execution is the development, test and evaluation
+surface — and stays a hard engineering constraint, because it is what makes the
+local/Databricks parity claim checkable: `pytest -q` runs model-free and
+Spark-free, and nothing on the runtime path may import `pyspark`.
+
+The intended shape is a ladder, each rung depending only on the ones below it:
+the engine (this library) → a runbook-driven workspace run → a scheduled job or
+Asset Bundle → a service layer over the engine. This repository is the engine and
+the rungs beneath the service layer; reduction logic never moves upward into a
+notebook or a UI (`AGENTS.md` rule 3). PHI is a recorded horizon for the same
+platform, not a claim about what is detected today — the shipped taxonomy is
+`PERSON`/`EMAIL`/`PHONE`/`ADDRESS`, and `ADDRESS` is not yet detected at all
+(ADR-0002).
+
 ## Why this project exists
 
 Organizations increasingly store operational text alongside structured business data: support tickets, chat transcripts, call summaries, case notes, incident descriptions, resolution notes, emails, CRM comments, survey responses, and knowledge-work artifacts. These fields often contain PII even when the surrounding table is otherwise well governed.
@@ -32,7 +49,9 @@ routing, entity reconciliation, redact/mask/pseudonymize reducers, local outputs
 run metrics and run provenance, a seeded synthetic corpus with an injection manifest,
 three public-dataset packs built from pinned checksummed sources, the evaluation
 framework with its gate runner, and a Databricks execution surface whose local/remote
-parity is asserted against a real workspace.
+parity is asserted against a real workspace (the driver path; the distributed
+`mapInPandas` path is shipped but has never executed — the workspace's serverless
+sandbox is infra-blocked, plan §8 F).
 
 The architecture, data contracts, security model and contribution rules that framed
 all of it are in `docs/`, and every non-obvious choice has a decision record under

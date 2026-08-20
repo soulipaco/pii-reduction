@@ -4,6 +4,11 @@
 
 Databricks is the target execution and governance surface for larger workloads, while the core project remains runnable locally. The Databricks implementation should feel native to the lakehouse without creating a separate codebase.
 
+> **ADR-0025 (session 10) sharpens "for larger workloads": Azure Databricks is the
+> primary deployment target**, and this document describes the deployment surface
+> rather than an optional one. Local runnability is unchanged and stays a hard
+> constraint — it is what makes the parity claim checkable.
+
 ## Runtime modes
 
 ### Local mode

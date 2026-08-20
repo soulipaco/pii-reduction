@@ -31,3 +31,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0022](0022-incident-notes-as-an-over-redaction-stress-corpus.md) | `incident_notes` is a generated over-redaction stress corpus, not a public pack |
 | [0023](0023-fail-closed-default-failure-mode.md) | Default failure mode is `quarantine_row`; raw-text pass-through is an explicit opt-in |
 | [0024](0024-reduced-only-projection.md) | Opt-in reduced-only projection (local `destination.projection`, `run_driver` second prefix) makes the docs/09 grant model realisable |
+| [0025](0025-databricks-is-the-primary-deployment-target.md) | Azure Databricks is the **primary deployment target**; local stays the development/test surface and a hard engineering constraint |

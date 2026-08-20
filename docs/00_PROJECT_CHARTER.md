@@ -115,6 +115,16 @@ The pipeline should expose what happened without logging the sensitive text it i
 
 Core functionality should run locally. Databricks should add scale, governance, orchestration, and visualization rather than becoming a hard dependency for every test.
 
+> **Amended by ADR-0025 (session 10): Azure Databricks is the primary deployment
+> target, not an optional surface.** The half of this quality that survives is the
+> engineering constraint — the core library runs, tests and benchmarks locally with
+> no workspace, no Spark on the runtime path, and no model in the default test
+> tier. What no longer holds is the *product* reading: the deployment this project
+> is built for is a Databricks one, and Databricks-facing capability outranks new
+> providers or parsers until the platform path is usable end to end. Local
+> runnability is kept because it is what makes the parity claim checkable, not
+> because Databricks is optional.
+
 ## Non-functional requirements
 
 ### Performance
@@ -148,7 +158,13 @@ One malformed record should not necessarily fail an entire large dataset. Error 
 - fully reversible token vaulting,
 - enterprise master-data resolution,
 - automatic deletion/retention policy enforcement,
-- fine-tuning large language models from scratch.
+- fine-tuning large language models from scratch,
+- **PHI detection.** Recorded as a horizon for the same platform in ADR-0025 and
+  deliberately not a scope item: it would need its own entity taxonomy, provider
+  evidence, benchmark corpora and a legal/model-risk review. Nothing in this
+  repository detects health identifiers today, and the *Initial PII scope* list
+  above — as amended by ADR-0002, which leaves `ADDRESS` in the taxonomy and
+  detected by nothing — is the whole claim.
 
 ## Design decisions to preserve
 
