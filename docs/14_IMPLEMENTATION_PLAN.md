@@ -357,7 +357,9 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 9 (2026-08-19) — two independent external reviews reconciled
+Last updated: session 10 (2026-08-20) — the platform queue's P0–P4 shipped; P3's
+workspace half is **outstanding** and P5 was not started because of it (see the queue
+below). Previously: session 9 (2026-08-19) — two independent external reviews reconciled
 (`docs/17_EXTERNAL_REVIEW_RECONCILIATION.md`: every load-bearing claim verified
 against the code, decision table of 6 ACCEPT / 14 DEFER / 4 REJECT / 3 DISPUTED, the
 R1–R6 sequence approved by the owner), and the R increments started landing — see
@@ -390,6 +392,11 @@ the session-9 rows in the Complete table and the queue below.
 | R4 | Docs honesty sweep (docs/17 D4): README tagline no longer claims "discovering"; docs/09 and docs/03 §12 now state the audit table's span-length disclosure and govern it like reduced output; pseudonymize documents the frequency/co-occurrence limit and correct birthday-bound sizing (both auditors independently caught a wrong first draft of the 12-hex figure — fixed before commit); charter UC-03 carries its unmet status; the stale registries comment is corrected | docs/comments only — 944 default unchanged, no behavior change |
 | R5 | Referential consistency of pseudonymization, **measured** (docs/17 D5): `evaluation/consistency.py` + an end-to-end test over the committed corpus, deterministic chain, `pseudonymize` strategy. **Result: consistency 1.000, distinctness 1.000 over all 102 EMAIL/PHONE occurrences, per dataset scope — and the same value gets different tokens across the two dataset scopes, so scope isolation holds end to end.** Test-tier by design (the pipeline outcome retains no per-operation replacements for the benchmark to consume); pinned on every push by the default tier | 951 default (+7), docs/08 records the metric |
 | R6 | `pii-reduction run <dataset>` — the reduction finally has a CLI front door over the existing `Pipeline.run()` (one external review's capability matrix asserted this command existed; it did not). Metadata-only summary; exit 1 when any field failed, so partial output looks like a failure to a scripted caller | 956 default (+5) incl. metadata-only stderr guards on the failure path |
+| P0 | Handoff sessions 1–8 archived to `docs/archive/SESSION_HANDOFF_S1-S8.md` behind a per-session evidence index; two stale plan pointers retargeted. Nothing else pruned, no ADR touched | 956 default, unchanged — docs only |
+| P1 | **ADR-0025: Azure Databricks is the primary deployment target.** README gains a Deployment target section, the charter's *Portability* quality is amended in place, the roadmap records that it is no longer the live sequence, docs/07 sharpens "for larger workloads". Records the platform ladder and the PHI horizon as a horizon, not a promise | 956 default, unchanged — docs only |
+| P2 | **A dataset YAML names a Unity Catalog table end to end.** `spark_table`/`delta_table` become typed config models and registry names; the local registries refuse them with an instruction naming the driver path; `run_driver` resolves table, prefix and mode from config (explicit args still win); `pii-reduction-databricks` is the front door, inside the surface because the import guard forbids a flag on the core CLI. Three defects found in review, two destructive: local `mode: overwrite` was inherited by the Delta writer, a run could write over the table it reads, and the CLI leaked Connect's message (workspace URL) on its crash path | 990 default (+34) |
+| P3 (part) | `docs/18_RUNBOOK_DATABRICKS.md`, and **authentication that does not require the Databricks CLI** — profile, `DATABRICKS_HOST` + token or service principal, or ambient compute credentials (ADR-0006 amended; its original text always said "profiles or env"). The parity fixture no longer gates on the profile variable, so token auth no longer silently skips every workspace test. **Workspace execution outstanding** — see the queue | 1001 default (+11) |
+| P4 | `databricks.yml` + `resources/` — one job, one task, the same entry point; CLI-free path documented; zero hard-coded workspace values, pinned by a glob-discovered guard. **Never deployed.** Also caught here: `mypy src tests` (the CI invocation) had been broken by P2/P3 for two increments — 21 errors, all in `tests/` — because `/qa` ran only `mypy src`; both skills were aligned with CI in the session close-out | 1015 default (+14); `mypy src tests` clean |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -934,24 +941,35 @@ library stays the engine; the platform is a shell on top, which is the split
 both external reviews endorsed. **Near-term exit criterion: the owner can run
 real workspace data using only a runbook, one day after this queue starts.**
 
-One increment at a time, same discipline as every queue before it:
+**Session 10 executed P0 → P4. P5 was deliberately not started**, because the work
+order gated it on everything else being "done and verified" and P3 is verified only
+in its local half. Status of each below; the shipped detail is in the Complete table.
 
-- **P0 — repo tidy.** `.claude/SESSION_HANDOFF.md` is ~2,000 lines; collapse
+- **P0 — repo tidy. Complete.** Sessions 1–8 archived behind an evidence index,
+  CLAUDE.md's read order re-checked, default tier green. Original brief: `.claude/SESSION_HANDOFF.md` is ~2,000 lines; collapse
   sessions 1–8 into a short evidence index (what each established, one link
   each) and move the full text to `docs/archive/SESSION_HANDOFF_S1-S8.md`.
   Prune nothing else by default: **ADRs are the decision record and are not
   deleted or thinned**; numbered docs stay unless demonstrably superseded (then
   a one-line pointer replaces content, never silent removal). CLAUDE.md's
   read order must still resolve afterwards.
-- **P1 — ADR-0025: Databricks is the primary deployment target.** Supersedes
-  the "feature among surfaces" framing; amends README positioning, charter and
-  roadmap in the same change. Records the platform ladder and the PHI horizon.
+- **P1 — ADR-0025. Complete.** Written and indexed; README, charter, roadmap and
+  docs/07 amended in the same commit. It *amends* the "feature among surfaces"
+  framing rather than superseding an ADR — no ADR ever asserted it; the framing
+  lived in charter/README/roadmap prose.
 - **P2 — config-nameable Databricks IO.** `spark_table` source and
   `delta_table` destination become registrable config types. Design point to
   resolve in the ADR or a companion: config names the table; the runtime
   supplies the session (`build_source` takes a path today — `docs/06` records
   the structural reason; superseding it is deliberate, not a drive-by).
   Exit: a dataset YAML can name a UC table end to end on the driver path.
+  **Met.** `configs/datasets/databricks_table_example.yaml` resolves end to end and
+  `run_driver` needs no table arguments. The design point is resolved and recorded in
+  docs/06 and ADR-0025: **config names the table, the runtime supplies the session**.
+  They cannot arrive together — a session is not a value a YAML file can hold, and a
+  `sources/` module that accepted one would invert the dependency direction that
+  three tests in `test_package.py` pin. So the registries refuse the Databricks types
+  with an instruction rather than a misleading "not registered".
 - **P3 — real-data readiness.** Verify UC **Volumes** file ingestion on the
   workspace (a `/Volumes/...` path through the existing CSV source,
   databricks-marked test), then write `docs/18_RUNBOOK_DATABRICKS.md`: the
@@ -961,15 +979,56 @@ One increment at a time, same discipline as every queue before it:
   (nothing real ever enters the repo, fixtures, or logs — the tooling is
   fail-closed and metadata-only by construction, ADR-0023 / AGENTS rule 8).
   Exit: the runbook executed once end to end against the workspace on
-  synthetic data.
-- **P4 — deployment skeleton.** A Databricks Asset Bundle / job definition
-  with zero hard-coded workspace values (names from config/env only).
-- **P5 (stretch) — batching.** Wire `detect_batch` (docs/17 D10 reopens: the
-  platform direction is the condition arriving). Measure rows/s before and
-  after on the 10k pack.
+  synthetic data. **NOT MET — this is the one thing session 10 could not do.**
+  `DATABRICKS_CONFIG_PROFILE` was unset and no other credential was present, so no
+  workspace run was made and none is claimed. What *was* done: the runbook is
+  written and carries its own verification header; the local half was executed
+  (config resolution, `--help`, the no-credentials refusal, the wrong-front-door
+  refusal, all from `.venv-dbx17`); the Volumes test is written and
+  `databricks`-marked. The runbook's own step 1 — the combined
+  `[databricks,presidio,language]` install — has never been performed in any
+  environment here and the runbook says so; and the auth work below removed the reason it could not have
+  run for this owner anyway.
+
+  **Authentication no longer assumes the Databricks CLI**, which the owner raised
+  mid-session: their organisation blocks it and they authenticate with a token. The
+  CLI was never a code dependency — nothing shells out to it, and the extra is
+  `databricks-connect`, a library — but `get_session` accepted only a named profile
+  and the parity fixture gated on that variable, so **token auth would have skipped
+  every workspace test silently**. Four routes now resolve in order: explicit
+  `profile=`, ambient credentials on Databricks compute, `DATABRICKS_CONFIG_PROFILE`,
+  then `DATABRICKS_HOST` plus a token or service principal. Ambient is checked before
+  the profile variable because a stale one inherited into a notebook would route a
+  process that already has a session through Connect. ADR-0006 amended. Still no
+  host or token parameter in any signature, pinned by a test.
+
+  **What remains, for whoever has credentials:** set `DATABRICKS_HOST` +
+  `DATABRICKS_TOKEN` (or a profile), run `pytest -m databricks`, then one
+  `pii-reduction-databricks run` on a synthetic table, and update the runbook's
+  status block with the date and what ran. Three things described in the runbook
+  post-date the last workspace evidence (session 8) and have never executed
+  anywhere: the reduced-only projection (R3), the run-metrics provenance columns
+  (R2), and Volumes ingestion.
+- **P4 — deployment skeleton. Complete as a skeleton; never deployed.**
+  `databricks.yml` + `resources/`, one task calling the same entry point, plus a
+  CLI-free path (UI or Jobs API) since `bundle deploy` *is* the CLI. Exit criterion
+  for the next session that has a workspace: `databricks bundle validate` run once
+  and its result recorded here. Three things in it would have broken a first run and
+  were fixed in review — a `configs_path` a wheel task cannot resolve, a dependency
+  list that cannot install spaCy models (so PERSON would be missed silently), and an
+  empty notification recipient the Jobs API rejects — but **none of that is a
+  substitute for validating it**.
+- **P5 (stretch) — batching. Not started, deliberately.** Wire `detect_batch`
+  (docs/17 D10 reopens: the platform direction is the condition arriving). Measure
+  rows/s before and after on the 10k pack. The work order gated this on everything
+  else being done *and verified*; P3's workspace half is not, so starting a
+  performance increment would have meant leaving a correctness one unfinished.
 
 Rules unchanged by urgency: gates never weaken, workspace results only from
-actual workspace runs, real data never becomes a fixture.
+actual workspace runs, real data never becomes a fixture. All three held: no
+published benchmark number moved this session (none was touched), no workspace
+result is claimed, and the local gate was found *weaker* than CI and strengthened
+rather than left alone.
 
 ### After the queue
 
@@ -1064,4 +1123,4 @@ corpus introduced alongside it.
 - Pseudonymization collision detection is per process, not global (ADR-0013 §4).
 - Language detection is per field, not per segment; code-switching would need the
   per-segment form.
-- The pipeline is row-at-a-time; `detect_batch` exists but nothing calls it until F.
+- The pipeline is row-at-a-time; `detect_batch` exists and **still has no caller** — Increment F shipped without one, and wiring it is P5.

@@ -6,7 +6,8 @@ allowed-tools: Bash, Read, Glob, Grep, Agent
 Run the full pre-commit gate for this repository before a commit, a PR, or a
 roadmap-phase completion claim.
 
-**Step 1 — quality gate.** Run `ruff format --check .`, `ruff check .`, `mypy src`
+**Step 1 — quality gate.** Run `ruff format --check .`, `ruff check .`, `mypy src tests`
+(both, matching CI — `mypy src` alone is weaker than the remote gate)
 and `pytest -q` using the `.venv` interpreter. Record exact exit codes and counts.
 
 **Step 2 — audits.** Launch both review agents in parallel, in a single message, and

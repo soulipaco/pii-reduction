@@ -1,20 +1,23 @@
 """Session construction: profile, environment, or ambient — never a hard-coded host.
 
-Three authentication routes are supported, in this order, because workspaces differ
-in which ones they permit:
+Four routes are supported, because workspaces differ in which ones they permit.
+:func:`resolve_auth_route` tries them in **this** order — which is not the order they
+are introduced below, and the difference is deliberate; see its docstring:
 
-1. **A named CLI profile** (``DATABRICKS_CONFIG_PROFILE`` or ``profile=``). The
-   nicest when it is available: credentials live in the CLI's auth store and rotate
-   without touching this project.
-2. **Environment credentials** — ``DATABRICKS_HOST`` plus either
-   ``DATABRICKS_TOKEN`` or an OAuth service principal
+1. **An explicit ``profile=`` argument** — someone saying what they want, so it wins
+   outright.
+2. **Ambient compute credentials**, when the process is already running on Databricks
+   (a notebook or a job): the runtime authenticates itself, and an existing session
+   is reused rather than a second one built through Connect.
+3. **A named CLI profile** in ``DATABRICKS_CONFIG_PROFILE``. The nicest of the
+   credential-carrying routes where it is available: credentials live in the CLI's
+   auth store and rotate without touching this project.
+4. **Environment credentials** — ``DATABRICKS_HOST`` plus either ``DATABRICKS_TOKEN``
+   or an OAuth service principal
    (``DATABRICKS_CLIENT_ID``/``DATABRICKS_CLIENT_SECRET``). This is the route for
    organisations whose policy blocks the Databricks CLI, where a personal access
    token or a service principal is the only option (session 10; ADR-0006 always
    allowed "CLI profiles **or env**", this implements the second half).
-3. **Ambient compute credentials**, when the process is already running on
-   Databricks (a notebook or a job): the runtime authenticates itself and neither of
-   the above is needed.
 
 What does **not** change with the route: this module has no ``host`` or ``token``
 parameter, and it never will. A signature that accepted a secret invites committing

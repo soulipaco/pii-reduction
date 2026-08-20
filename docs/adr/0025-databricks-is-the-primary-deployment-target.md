@@ -89,6 +89,18 @@ horizon here is what stops it being read into the current entity list.
   is recorded as such; it does not become green because the target got promoted.
 - Documentation that positions the project — README, charter, roadmap — must
   agree with this ADR. They were amended in the same commit that introduced it.
+- **Configuration names the table; the runtime supplies the session.** Recorded here
+  because the code points here for it (`sources/registry.py`, `outputs/registry.py`,
+  `processing/pipeline.py`, `databricks/runner.py` all cite this ADR). A dataset file
+  may name a `spark_table` source and a `delta_table` destination, and the config
+  layer validates those names holding no adapter import. It cannot supply a Spark
+  session — a session is not a value a YAML file can hold, and a `sources/` module
+  that accepted one would invert the dependency direction three tests pin — so the
+  adapters are built by the execution surface that has one, and the local registries
+  refuse those types with an instruction naming it rather than a misleading
+  "not registered". `docs/06_CONFIGURATION_CONTRACT.md` carries the operator-facing
+  form. This supersedes docs/06's earlier note that the Databricks adapters were
+  "deliberately not config-buildable".
 - The near-term exit criterion the owner set: **run real workspace data using only
   a runbook** (rung 2). That is what `docs/18_RUNBOOK_DATABRICKS.md` is for; it was
   written later the same session and carries its own verification status, because

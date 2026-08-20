@@ -14,7 +14,10 @@ Run, in order, and do not stop early on failure — collect all four results:
 
 1. `ruff format --check .`
 2. `ruff check .`
-3. `mypy src`
+3. `mypy src tests` — **both**, because that is what CI runs
+   (`.github/workflows/ci.yml`). Checking `src` alone passed locally for two whole
+   increments in session 10 while `tests` carried 21 errors that CI would have
+   caught; a local gate that is weaker than the remote one is not a gate.
 4. `pytest -q $ARGUMENTS` (omit the argument if none was given)
 
 Then report:

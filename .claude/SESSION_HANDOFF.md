@@ -138,3 +138,101 @@ source should read as-is (one verification run owed, queue item P3).
 P0 includes collapsing sessions 1–8 of THIS file into `docs/archive/` — when
 that happens, this addendum and the session-9 block above stay in place as the
 newest live record.
+
+---
+
+## Session 10 — 2026-08-20 — The platform queue: P0 → P4 shipped, P3's workspace half outstanding
+
+**Start here:** the platform queue is done except for the one thing this session
+could not do — **run anything against a workspace**. No credential this code path can
+use was present: `DATABRICKS_CONFIG_PROFILE` unset, no host/token in the environment,
+not running on Databricks compute. (A `.databrickscfg` exists on the machine, but
+`resolve_auth_route` never falls back to it — a profile must be *named*.) So no
+workspace result is claimed anywhere. Everything else in plan §8's queue landed. The next session's first job, if
+it has credentials, is the short list in plan §8 P3: `pytest -m databricks`, one
+`pii-reduction-databricks run` on a synthetic table, then update the runbook's status
+block with a date and what ran.
+
+**Five commits, each through the gate, and each reviewed by both auditors** (P0–P3
+record the verdict in their commit messages; P4's records the findings it fixed but
+not the verdict — noted so the evidence and the claim match):
+
+| commit | increment | what changed |
+|---|---|---|
+| `890cb4a` | P0 | Handoff sessions 1–8 → `docs/archive/` behind an evidence index. Nothing else pruned; no ADR touched. |
+| `309d79a` | P1 | **ADR-0025: Azure Databricks is the primary deployment target.** README/charter/roadmap/docs-07 amended in the same commit. Records the platform ladder and PHI as a horizon, not a promise. |
+| `acefb64` | P2 | **A dataset YAML names a UC table end to end.** Typed `spark_table`/`delta_table` config, registries that refuse them with an instruction, `run_driver` reading config, and `pii-reduction-databricks` as the front door. |
+| `f0481fe` | P3 (part) | `docs/18_RUNBOOK_DATABRICKS.md`, and **auth that does not require the Databricks CLI**. |
+| `0f1c6bc` | P4 | `databricks.yml` + `resources/` — bundle and job skeleton, CLI-free path documented, never deployed. |
+
+**State:** 1015 default-tier tests (956 at session start), 96 deselected; ruff clean;
+**`mypy src tests` clean** — see lesson 1. No published benchmark number was touched,
+so none moved. Not pushed at the time this section was written; the push is the last
+step of the session.
+
+### The two findings worth carrying forward
+
+**1. The local gate was weaker than CI, and it hid a real breakage for two
+increments.** `/qa` and `/gate` ran `mypy src`; CI runs `mypy src tests`. My P2 and P3
+commits introduced **21 type errors in `tests/`** — 20 in `test_databricks_adapters.py`,
+one in `test_pipeline.py`, none in `src` — and both gates stayed green. (I first wrote
+28 here; that was the working-tree count, which included the not-yet-committed P4 test
+file. The committed P2 and P3 states each measure 21.) At `890cb4a` the CI invocation
+was clean, so this was self-inflicted and invisible.
+Both skill files now run `mypy src tests`. The general lesson: **a local gate that
+does not match the remote one is not a gate**, and the way to find that out is to
+run the remote command, not to trust the local wrapper.
+
+**2. The owner's environment invalidated an assumption nobody had written down.**
+They reported mid-session that their organisation blocks the Databricks CLI and that
+they authenticate with a token. The CLI
+was never a *code* dependency — nothing shells out to it, and the extra is
+`databricks-connect`, a library — but `get_session` accepted only a named profile and
+the parity fixture gated on `DATABRICKS_CONFIG_PROFILE`, so **every workspace test
+would have skipped silently** under token auth, and the whole Databricks surface would
+have looked broken for no discoverable reason. ADR-0006's original text already said
+"CLI profiles **or env**"; only the env half had ever been implemented. Four routes
+now resolve, ambient before the profile variable so a stale variable in a notebook
+cannot route a process that already has a session through Connect.
+
+### What the auditors caught that the tests did not
+
+Every increment, again. The ones that mattered:
+
+- **A local `mode: overwrite` was inherited by the Delta writer** (P2). Any dataset
+  config written for local files would have made *overwriting a governed Delta table*
+  the default. Now only a `delta_table` destination's own mode reaches Delta.
+- **A run could write over the table it reads** (P2) — read via `toPandas()`, then
+  replace. `errorifexists` made it fail closed *by default*, which is not the same as
+  "cannot happen". Refused now under every mode, before anything is read.
+- **The runbook's config template omitted `provider_chain`** (P3). The project
+  default is `deterministic_only`. An operator following the runbook exactly would
+  have redacted emails and phones, seen `success` on every row, and left **every
+  person's name in the text** — the precise failure this project exists to prevent.
+  Fixed in the runbook and the shipped example, and pinned by a test.
+- **"Failed fields are null, not raw" was stated unconditionally** (P3). True under
+  the default `failure_mode`, false under the `preserve_original_and_record_error`
+  opt-in, which an inherited config may already carry.
+- **The bundle's `configs_path` could not resolve for a wheel task** (P4), and its
+  dependency list **cannot install spaCy models**, so the job would have missed every
+  name silently. Neither is a substitute for validating the bundle, which nobody has.
+
+### Deliberately not done
+
+- **P5 (batching).** Gated on everything else being done *and verified*; P3 is
+  verified only locally. Starting a performance increment while a correctness one is
+  unfinished would have been the wrong trade.
+- **Any workspace claim.** The runbook, ADR-0025, `resources/README.md`, the bundle
+  and plan §8 all say what has not been executed. Three things described in the
+  runbook post-date the last workspace evidence (session 8) and have never run
+  anywhere: the reduced-only projection (R3), the run-metrics provenance columns
+  (R2), and Volumes ingestion.
+- **A `VolumeSource` adapter.** A volume path is a filesystem path, so `CsvSource`
+  reads it unchanged — on Databricks compute, where the FUSE mount is. Building an
+  adapter would have carried a Databricks concept into `sources/` for nothing.
+
+### Open, unchanged by this session
+
+The speaker-prefix ADR (still the most serious open design item), the Phase-7 Greek
+model, the distributed path whenever the serverless sandbox incident closes, and the
+deferred items in `docs/17` §7.
