@@ -911,6 +911,7 @@ R3's projection and a fourth test that did not exist in sessions 7–8):
 | 2026-08-19 (session 7, Increment F) | 2 passed | skipped — ISOLATION_STARTUP_FAILURE |
 | 2026-08-19 (session 8) | 2 passed | skipped — incident still open |
 | 2026-08-20 (session 10, run by the owner, `env_token` auth) | 2 passed | skipped — incident still open |
+| 2026-08-20 (session 10, re-run in-session, `profile` auth) | 2 passed | skipped — incident still open |
 
 Environment facts recorded for reuse: dedicated venv (`.venv-dbx17`, Python 3.12,
 `databricks-connect` 16.4) per ADR-0006's isolation; authentication by named profile
@@ -986,9 +987,11 @@ in its local half. Status of each below; the shipped detail is in the Complete t
 
   **Verified on the workspace** (owner's run, 2026-08-20, from their own PowerShell
   session over the new `env_token` route, against a fresh timestamped schema):
-  `pytest -m databricks` -> **2 passed, 5 skipped** — the marked tier is 2 passed /
-  2 skipped, plus three module-level collection skips from the presidio/language
-  suites, which fire in `.venv-dbx17` despite being deselected. Driver-path Delta round-trip
+  `pytest -m databricks` -> **2 passed, 5 skipped**, reproduced in-session over the
+  *profile* route (the owner's run used the token route, so the same workspace has
+  now been reached by two different authentication routes). The marked tier is 2
+  passed / 2 skipped; the other three are module-level collection skips from the
+  presidio/language suites, which fire in `.venv-dbx17` despite being deselected. Driver-path Delta round-trip
   parity holds — reduced-column hashes equal between the workspace run and the local
   one — and the audit and run-metrics tables are metadata-only. That run also
   executed, **for the first time against a real workspace**, the **reduced-only

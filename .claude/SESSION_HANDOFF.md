@@ -148,9 +148,14 @@ the workspace tests themselves** (2026-08-20, their own PowerShell session, over
 new `env_token` route): `pytest -m databricks` → **2 passed, 5 skipped**. Driver-path
 parity holds on the workspace, and that run carried the first execution **against a
 real workspace** of the reduced-only projection (R3) and the run-metrics provenance
-columns (R2) — both previously covered only locally and against fakes. **I did not
-run it**: no credential was present in any shell this session spawned, and none was
-persisted at User level — deliberately, at the owner's instruction.
+columns (R2) — both previously covered only locally and against fakes. The owner then
+configured a named profile (`pii-reduction`) at User scope and the suite was **re-run
+in-session over the `profile` route**, same result: 2 passed, 5 skipped. Two
+authentication routes, one workspace, identical outcome. (The first run was the owner's; the second I ran myself, once they had set a profile
+at User scope. Note for future sessions: variables set at User scope do **not** reach
+shells this harness spawns unless the harness process restarted after they were set —
+read them back with `[Environment]::GetEnvironmentVariable(name,'User')` and inject
+them into the command instead of concluding they are absent.)
 
 What is left of P3's exit criterion is one invocation: `pii-reduction-databricks run
 <dataset>` against a workspace, taking its table names from a dataset config. The

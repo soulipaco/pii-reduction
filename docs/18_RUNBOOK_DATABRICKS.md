@@ -6,14 +6,17 @@ dataset config plus one command.
 
 > **Verification status (session 10, 2026-08-20).**
 >
-> **Verified on the workspace.** The owner ran `pytest -m databricks` from their own
-> PowerShell session on 2026-08-20, authenticating with `DATABRICKS_HOST` plus a
-> token (route `env_token`), against a fresh timestamped schema: **2 passed, 5
-> skipped**. The marked tier holds four tests — 2 passed, 2 skipped; the other three
-> skips are module-level collection skips in the presidio/language suites, which fire
-> in `.venv-dbx17` (no such extras) even though the marker deselects them. A reviewer
-> read 2 + 5 against a four-test tier and called it impossible, which is why the
-> arithmetic is spelled out here. The two that passed are the driver-path Delta round-trip — reduced-column
+> **Verified on the workspace, twice, by two people.** The owner ran
+> `pytest -m databricks` from their own PowerShell session on 2026-08-20 over the
+> token route (`env_token`); it was then re-run in-session over a **named CLI
+> profile** (route `profile`) against the schema the owner configured. Both runs:
+> **2 passed, 5 skipped** (69–74s). The marked tier holds four tests — 2 passed, 2
+> skipped; the other three skips are module-level collection skips in the
+> presidio/language suites, which fire in `.venv-dbx17` (no such extras) even though
+> the marker deselects them. A reviewer read 2 + 5 against a four-test tier and
+> called it impossible; the second run settled it first-hand, which is why the
+> arithmetic is spelled out here. Incidentally this also exercised **two different
+> authentication routes** against the same workspace, which nothing had done before. The two that passed are the driver-path Delta round-trip — reduced-column
 > hashes equal between the workspace run and the local one — and the audit/metrics
 > metadata-only check. That run also carried the first execution **against a real
 > workspace** of two things previously covered only locally and against fake
