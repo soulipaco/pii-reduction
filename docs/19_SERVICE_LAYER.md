@@ -7,7 +7,8 @@ whose ladder puts it above the engine, the runbook and the job.
 
 It owns **no reduction logic**, and cannot: no module under `src/pii_reduction/service/`
 may import `providers/`, `reducers/`, `parsers/`, `language/`, `entities/`,
-`evaluation/`, `sources/` or `outputs/`. It assembles configurations that the
+`evaluation/`, `sources/`, `outputs/` or `synthetic/`, nor anything under
+`processing/` except `pipeline`. It assembles configurations that the
 configuration layer validates, and calls the same two entry points a person calls by
 hand. A capability it needs that the engine lacks is a change to the engine.
 
@@ -170,18 +171,78 @@ exception held.
 
 ## Two limits, stated rather than discovered
 
-**No authentication.** Hosted as a Databricks App, authentication and Unity Catalog
-authorization are the platform's, applied as the end user. Run locally it is a
-developer tool: the default bind is `127.0.0.1`, and any other bind needs `--host`
-explicitly and prints a warning, because with no auth the bind address is the entire
-control. Exposing this on a network without something in front of it is a deployment
-error.
+**No authentication.** Run locally it is a developer tool: the default bind is
+`127.0.0.1`, and **any other bind is refused by the console script** unless
+`--i-provide-authentication` is passed as well. Note the scope — it is `main()` that
+refuses, so a hosting wrapper calling `create_app` directly never passes through it,
+which is exactly why the platform's authentication is a *precondition* of hosting
+rather than a bonus. With no auth the bind address is the entire control, so a warning
+printed into a container log nobody reads would not be one — the acknowledgement is
+explicit and the exit code is 2.
+
+Hosted as a Databricks App, authentication is the platform's. **Authorization is a
+separate question and this project has not verified the answer:** Apps authenticate
+the end user, but data access defaults to the App's *service principal*, and
+on-behalf-of-user authorization is a separate opt-in. That distinction matters here
+because `docs/09`'s conditions for a Class B display surface require reading under
+the end user's identity, and because the whole server-side-template design exists
+precisely because the service runs with credentials that are not the caller's.
 
 **Run state is in memory.** A process-local store is honest for v1 and wrong for a
 multi-replica App; a restart forgets. The durable record of a run is the
 `<dataset>_run_metrics` artifact the engine already writes, which is where a status
 view should eventually read from. Persisting service-side state is a named later
 increment.
+
+## Verified, by running it
+
+Two paths, both executed rather than reasoned about — which is the argument ADR-0026
+makes for choosing an API over an App in the first place.
+
+**The local path, over real HTTP** (2026-08-21). The service was started through its
+own console entry point on `127.0.0.1`, then driven with an ordinary HTTP client:
+`POST /configs` built and saved a dataset from the shipped Class A template,
+`POST /runs` answered `202 pending`, and polling `GET /runs/{id}` reached `succeeded`
+with 102 documents read and written, 102 entities reduced, zero fields failed — the
+`deterministic_only` chain, so the 102 are the corpus's EMAIL and PHONE occurrences,
+the same ones the referential-consistency metric counts. The
+refusal paths were exercised in the same session: an unknown dataset (404 with the
+menu), an unavailable runtime (409), a second save under the same name (400), an
+off-menu column (400), a request carrying `source` or `projection` (422, "Extra
+inputs are not permitted"), and a malformed dataset name (422 whose body does not
+contain the name). The default test tier repeats all of it over a real ASGI
+transport.
+
+**The Databricks path, on the workspace** (2026-08-21). A 25-row synthetic table was
+staged in Unity Catalog from the head of the committed corpus — a different slice and
+a different chain from session 10's 25-row Volumes run, so the two sets of counts are
+not expected to match — a workspace-pointing template was
+written **outside the repository** (a real catalog and schema must never be
+committed), and the service was started from the `databricks`-extra virtual
+environment with `--databricks`. `GET /health` reported both runtimes;
+`GET /templates` reported `requires_databricks: true`; `POST /runs` with
+`runtime: databricks` answered `202`, and the status view reached `succeeded` in
+about 22 seconds.
+
+What the workspace held afterwards, read back and checked:
+
+| claim | what was found |
+|---|---|
+| rows | 25 read, 25 written, every row `pii_status = success` |
+| non-destructive (rule 4) | `text` still present beside `text_pii_redacted`, plus `pii_run_id` and `pii_status` |
+| detection | the audit table recorded PERSON 22 / EMAIL 13 / PHONE 12 — the hybrid chain, chosen through the API |
+| audit is metadata-only | the audit table's column set is exactly `AUDIT_COLUMNS` — no values. Note it carries `start`, `end` and `score`, so it stays governed like reduced output (`docs/09`), and no endpoint returns it |
+| reduction happened | 23 of 25 rows carry at least one placeholder |
+| provenance | `run_source_version = delta_v0`, `run_pipeline_version = 0.1.0`, real library **and** model versions per provider, `run_threshold_calibration` naming the locked review |
+| the status view agrees with the engine | the `config_hash` the API returned equals `run_config_hash` in the Delta metrics table |
+
+The staged table and the three tables the run wrote were dropped afterwards; the
+schema was left as it was found.
+
+**Not yet done, and recorded as such:** this service has never been *hosted* — no
+Databricks App has been created, and `bundle deploy` remains blocked by the Databricks
+CLI's expired Terraform signing key. Running the API from a terminal against the
+workspace and hosting it inside the workspace are different claims.
 
 ## Hosting it as a Databricks App
 
@@ -190,7 +251,14 @@ to build. Databricks Apps run an ASGI application directly, so the App's entry p
 is a small wrapper that calls `pii_reduction.service.api.create_app` with a
 `RunStore` holding the Databricks runtime — `create_app` takes a configuration
 directory and a store, so it is not itself a zero-argument ASGI factory. A UI, if one
-is ever built, is a client of these endpoints rather than a reimplementation of them. **This has not been done**: `bundle deploy` is blocked by
+is ever built, is a client of these endpoints rather than a reimplementation of them.
+
+If that increment instead points the App's start command at the console script, the
+command must pass `--i-provide-authentication`: the script refuses a non-loopback
+bind, and a container is where that refusal is least fun to debug. Passing it there
+is honest — on an App, the platform *is* the authentication.
+
+**This has not been done**: `bundle deploy` is blocked by
 the Databricks CLI's expired Terraform signing key (session 10), and no App has been
 created. That is an environment blocker with a named remedy, recorded here so the
 distance between "decided" and "deployed" stays visible.

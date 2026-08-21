@@ -13,18 +13,23 @@ own ``RunSummary`` is what is under test.
 
 from __future__ import annotations
 
+import builtins
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from pii_reduction.databricks.runner import DriverRunResult
 from pii_reduction.service import cli as cli_module
-from pii_reduction.service.cli import build_runtimes
+from pii_reduction.service.cli import build_runtimes, main
 from pii_reduction.service.errors import RuntimeUnavailableError
 from pii_reduction.service.runtimes import databricks as runtime_module
 from pii_reduction.service.runtimes.databricks import databricks_runtime
 
 pytestmark = pytest.mark.unit
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class _Sentinel:
@@ -128,6 +133,88 @@ class TestTheDriverPathRuntime:
 
         databricks_runtime("prod", session_factory=factory)(None)  # type: ignore[arg-type]
         assert seen == ["prod"]
+
+
+class TestTheBindRefusal:
+    """`docs/19` calls an unauthenticated network bind a deployment error.
+
+    So the code refuses it rather than printing a warning: a warning on stderr is
+    invisible in a container log nobody reads, and with no authentication the bind
+    address is the entire control. Fail-closed, like ADR-0023's failure mode and the
+    Delta writer's `errorifexists`.
+    """
+
+    def test_a_non_localhost_bind_is_refused_without_the_acknowledgement(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        code = main(["--configs", str(tmp_path), "--host", "0.0.0.0", "--port", "0"])
+        assert code == 2
+        message = capsys.readouterr().err
+        assert "refusing to bind" in message
+        assert "--i-provide-authentication" in message
+
+    def test_the_acknowledgement_gets_past_the_refusal(self) -> None:
+        # Stops at `uvicorn.run`, which is as far as this test wants to go: the point
+        # is that the refusal is not what ended it.
+        served: dict[str, object] = {}
+        code = main(
+            [
+                "--configs",
+                str(REPO_ROOT / "configs"),
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "0",
+                "--i-provide-authentication",
+            ],
+            serve=lambda app, **kwargs: served.update(kwargs),
+        )
+        assert code == 0
+        assert served["host"] == "0.0.0.0"
+
+    def test_localhost_needs_no_acknowledgement(self) -> None:
+        served: dict[str, object] = {}
+        code = main(
+            ["--configs", str(REPO_ROOT / "configs"), "--port", "0"],
+            serve=lambda app, **kwargs: served.update(kwargs),
+        )
+        assert code == 0
+        assert served["host"] == "127.0.0.1"
+
+
+class TestTheMissingExtraPath:
+    """`uvicorn` is in the `service` extra and **not** in `dev`.
+
+    So the environment CI provisions — and the one most contributors have — can
+    import `fastapi` and start the app, then fail at the very last step. That is the
+    likeliest operator mistake this script sees, and it must produce the install
+    instruction rather than a traceback from the bottom of `main` after the app and
+    its worker thread have already been built.
+
+    Caught by the architecture audit after an earlier refactor moved the import out
+    of the guarded block, where nothing noticed because every other test injects
+    `serve` and never reaches it.
+    """
+
+    def test_a_missing_server_exits_2_with_the_instruction(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        real_import = builtins.__import__
+
+        def without_uvicorn(name: str, *args: Any, **kwargs: Any) -> Any:
+            if name == "uvicorn":
+                raise ImportError("No module named 'uvicorn'", name="uvicorn")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.delitem(sys.modules, "uvicorn", raising=False)
+        monkeypatch.setattr(builtins, "__import__", without_uvicorn)
+
+        code = main(["--configs", str(REPO_ROOT / "configs"), "--port", "0"])
+
+        assert code == 2
+        message = capsys.readouterr().err
+        assert "uvicorn is not installed" in message
+        assert '".[service]"' in message
 
 
 class TestRuntimeWiring:

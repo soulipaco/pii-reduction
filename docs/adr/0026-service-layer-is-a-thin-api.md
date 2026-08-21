@@ -16,9 +16,15 @@ stop exactly that.
 The two candidates are not symmetric, and the asymmetries are the whole argument.
 
 **A Databricks App** is a workspace-hosted process (Streamlit, Dash, Gradio or a
-plain ASGI app) with on-behalf-of-user authentication, Unity Catalog permissions
-applied as the *end user* rather than as a service principal, and a URL inside the
-workspace. It is the shortest distance to something an internal user can click.
+plain ASGI app) that authenticates the end user, with a URL inside the workspace. It
+is the shortest distance to something an internal user can click. *(Amended session
+11: an earlier draft of this paragraph said Unity Catalog permissions apply as the
+end user rather than as a service principal. That is the **opt-in**, not the default —
+data access defaults to the App's service principal, and on-behalf-of-user
+authorization is a separate setting nobody here has verified. The asymmetry the
+decision rests on is still real, but it is smaller than first written, and it matters
+because `docs/09`'s conditions for a Class B display surface require reading under
+the end user's identity.)*
 
 **A thin HTTP API** is an ASGI application: typed request and response models, no
 rendering, callable by anything — a notebook, a job, `curl`, a future UI.
@@ -208,10 +214,10 @@ obeys it by having no endpoint that could.
   so the new reverse guard would fail. A lazy import inside the subcommand would not
   help either — the guard walks the AST and catches function-local imports. The guard
   does real work on its first day.
-- **The service binds `127.0.0.1` by default**, and any other bind requires an
-  explicit flag. Since no authentication is implemented, the default bind is the
-  entire control, so it belongs in the console script rather than in a deployment
-  note.
+- **The service binds `127.0.0.1` by default**, and any other bind is *refused*
+  rather than merely flagged — see the amended bullet below. Since no authentication
+  is implemented, the bind address is the entire control, so it belongs in the
+  console script rather than in a deployment note.
 - **Both runtimes land in the same increment.** `service/runtimes/` holding one
   module would be a factory around a single implementation — the abstraction this
   repository warns against in the other direction. Local and Databricks ship
@@ -221,10 +227,22 @@ obeys it by having no endpoint that could.
   record of a run is the `<dataset>_run_metrics` table the engine already writes.
   Persisting service-side run state is a named later increment, not an oversight.
 - **No authentication is implemented, and the API must not be exposed without it.**
-  Hosted as a Databricks App, authentication and Unity Catalog authorization are the
-  platform's, applied to the end user; run locally it is a developer tool bound to
-  localhost. Shipping an unauthenticated service on a network is a deployment error,
-  and the documentation says so rather than the code pretending otherwise.
+  Run locally it is a developer tool bound to localhost. Hosted as a Databricks App,
+  *authentication* is the platform's; **authorization is a separate question with an
+  unverified answer** — see the amendment in *Context* above.
+
+  *Amended (session 11, close-out):* this bullet originally said "shipping an
+  unauthenticated service on a network is a deployment error, and the documentation
+  says so rather than the code pretending otherwise", and the console script printed
+  a warning. **The code now refuses it**: any `--host` other than `127.0.0.1` exits 2
+  unless `--i-provide-authentication` is passed as well, checked before the
+  application or the run store is built. The architecture audit's argument was the
+  deciding one — a warning on stderr is invisible in a container log nobody reads,
+  and with no authentication the bind address is the entire control, so this belongs
+  with ADR-0023's failure mode and the Delta writer's `errorifexists` rather than
+  with advice. The refusal is a property of the **console script**; a hosting wrapper
+  that calls `create_app` directly does not pass through it, which is why the
+  platform's authentication is a precondition of hosting rather than a bonus.
 
 ## Alternatives rejected
 

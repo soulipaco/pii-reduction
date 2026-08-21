@@ -6,28 +6,39 @@ is a guard rather than a preference: a subcommand would make `cli.py` import
 this package — including from inside a function, since the guard walks the AST. The
 engine does not learn that a service exists, and the packaging reflects it.
 
-**The default bind is `127.0.0.1`.** No authentication is implemented (ADR-0026):
-hosted as a Databricks App the platform authenticates and authorizes as the end user,
-and run locally this is a developer tool. Binding anywhere else needs `--host`
-explicitly, because with no auth the bind address is the entire control.
+**The default bind is `127.0.0.1`, and any other bind is refused** unless
+`--i-provide-authentication` says something in front of this service authenticates
+callers. No authentication is implemented here (ADR-0026), so with no auth the bind
+address is the entire control, and a warning printed into a container log nobody
+reads would not be one.
+
+Hosted as a Databricks App the platform authenticates the end user. **Whether it
+*authorizes* as them is a separate question this project has not verified** — data
+access defaults to the App's service principal, and on-behalf-of-user authorization
+is an opt-in. `docs/19_SERVICE_LAYER.md` carries the full statement; it matters
+because `docs/09`'s conditions for a Class B display surface require reading under
+the end user's identity.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
 from pii_reduction.contracts.errors import PiiReductionError
+from pii_reduction.observability.logging import get_logger, safe_fields
 from pii_reduction.service.errors import RuntimeUnavailableError
 from pii_reduction.service.runs import RunStore
 from pii_reduction.service.runtimes import Runtime
 from pii_reduction.service.runtimes.local import local_runtime
 
 __all__ = ["build_runtimes", "main"]
+
+logger = get_logger("service")
 
 DEFAULT_CONFIGS_DIR = Path("configs")
 LOCALHOST = "127.0.0.1"
@@ -47,8 +58,16 @@ def _build_parser() -> argparse.ArgumentParser:
         default=LOCALHOST,
         help=(
             "bind address (default 127.0.0.1). This service implements no "
-            "authentication; exposing it on a network is a deployment decision that "
-            "needs one in front of it"
+            "authentication, so any other address is refused unless "
+            "--i-provide-authentication is passed as well"
+        ),
+    )
+    parser.add_argument(
+        "--i-provide-authentication",
+        action="store_true",
+        help=(
+            "acknowledge that something in front of this service authenticates and "
+            "authorizes callers. Required for any --host other than 127.0.0.1"
         ),
     )
     parser.add_argument("--port", type=int, default=8000)
@@ -102,22 +121,56 @@ def build_runtimes(*, databricks: bool = False, profile: str | None = None) -> d
     return runtimes
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def _serve(app: Any, *, host: str, port: int) -> None:
+    """Hand the application to the server."""
+    import uvicorn
+
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    serve: Callable[..., None] = _serve,
+) -> int:
     """Exit codes: 0 on a clean shutdown, 2 when the service could not start.
 
     Startup failures are configuration failures — a malformed `project.yaml`, an
     invalid template — and they are reported as a line rather than a traceback,
     because the package's own errors are written to be read.
+
+    ``serve`` is injected for the same reason `databricks/cli.py` injects
+    ``session_factory``: the argument wiring and the bind refusal are then testable in
+    the default tier without opening a listener.
     """
     args = _build_parser().parse_args(argv)
+    if args.host != LOCALHOST and not args.i_provide_authentication:
+        # Checked **before** anything is built. This service implements no
+        # authentication, so the bind address is the entire control, and a warning on
+        # stderr is invisible in a container log nobody reads. Fail-closed, like
+        # ADR-0023's failure mode and the Delta writer's `errorifexists`.
+        print(
+            f"error: refusing to bind {args.host}. This service implements no "
+            "authentication (ADR-0026); hosted as a Databricks App the platform "
+            "provides it, and anywhere else something must. Pass "
+            "--i-provide-authentication to confirm that it does",
+            file=sys.stderr,
+        )
+        return 2
     try:
-        import uvicorn
+        import uvicorn  # noqa: F401  -- imported here only to fail early and kindly
 
         from pii_reduction.service.api import create_app
     except ImportError as error:
-        # Scoped to the two framework imports only. Wrapping `create_app` in the same
-        # handler would report an unrelated ImportError from below as "install the
-        # service extra", which is the wrong instruction confidently given.
+        # Both framework imports, and nothing else. `uvicorn` is imported here rather
+        # than only inside `_serve` because it is in the `service` extra and **not**
+        # in `dev`: the environment CI provisions has fastapi and no uvicorn, so
+        # without this line the most likely operator mistake would raise a traceback
+        # from the bottom of `main` — after the app and its worker thread had already
+        # been built — instead of this instruction. Wrapping `create_app` in the same
+        # handler would be the opposite error: an unrelated ImportError from below
+        # reported as "install the service extra", which is a wrong instruction given
+        # confidently.
         print(
             f"error: {error.name or 'a dependency'} is not installed. The service "
             'needs the service extra: pip install -e ".[service]"',
@@ -131,14 +184,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     except PiiReductionError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
-    if args.host != LOCALHOST:
-        print(
-            f"warning: binding {args.host} — this service implements no "
-            "authentication (ADR-0026); put one in front of it",
-            file=sys.stderr,
+    if args.i_provide_authentication:
+        # The riskiest configuration this CLI can produce leaves a record. Metadata
+        # only, through the same allowlisted path everything else logs through.
+        logger.warning(
+            "service bound beyond localhost on an operator's authentication assertion %s",
+            safe_fields(destination=f"{args.host}:{args.port}", status="auth_asserted"),
         )
     try:
-        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        serve(app, host=args.host, port=args.port)
     finally:
         # The worker thread joins on the way out rather than relying on the
         # interpreter's atexit join, which is what happens by accident otherwise.

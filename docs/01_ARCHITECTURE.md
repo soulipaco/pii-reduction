@@ -463,8 +463,10 @@ a behaviour — but it is *narrower* than `synthetic/`, which may import `parser
 It owns **no reduction logic** — no detection, no reconciliation, no reduction — and
 that is enforced rather than asserted: no module under `service/` may import
 `providers/`, `reducers/`, `parsers/`, `language/`, `entities/`, `evaluation/`,
-`sources/` or `outputs/`. What is left to it is `config/`, `processing/`
-(`build_pipeline`), `contracts/`, `observability/`, and the one Databricks file. A
+`sources/`, `outputs/` or `synthetic/`. What is left to it is `config/`, `contracts/`,
+`observability/`, `processing/` **through `processing/pipeline.py` only** (the bare
+package is closed too, because its `__init__` re-exports `FieldProcessor`), and the
+one Databricks file. A
 service that cannot name a provider or a reducer cannot quietly *reuse* one, and any
 attempt to reimplement one is visible in the diff rather than hidden behind an
 import. (The guard bounds what the service may name; it cannot stop somebody writing

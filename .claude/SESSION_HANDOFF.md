@@ -7,7 +7,7 @@ Keep it factual: what was verified, how, and what is still unknown.
 Sessions 1–8 are archived verbatim in
 [`docs/archive/SESSION_HANDOFF_S1-S8.md`](../docs/archive/SESSION_HANDOFF_S1-S8.md);
 the index below says what each established. The newest session's block is the live
-"start here".
+"start here" — currently **session 11**, at the end of this file.
 
 ---
 
@@ -318,3 +318,173 @@ Every increment, again. The ones that mattered:
 The speaker-prefix ADR (still the most serious open design item), the Phase-7 Greek
 model, the distributed path whenever the serverless sandbox incident closes, and the
 deferred items in `docs/17` §7.
+
+---
+
+## Session 11 — 2026-08-21 — Rung 4 built, decided by ADR, and run on both runtimes
+
+**Start here — the service layer exists and has been executed. It has never been
+hosted, and that is the next increment.**
+
+Someone can now pick a configured dataset, choose columns and entities, and run it —
+over HTTP, locally or on the workspace, with the engine underneath and no reduction
+logic anywhere above it. What has *not* happened is hosting: no Databricks App has
+been created, and `bundle deploy` is still blocked by the CLI's expired Terraform
+signing key. Running the API from a terminal against the workspace and hosting it
+inside the workspace are different claims; only the first has been made.
+
+### The decision, and why it went that way
+
+**ADR-0026: rung 4 is a thin HTTP API, and a Databricks App is how it gets hosted
+rather than a second surface to build.** ADR-0025 left a slash in "Databricks App /
+API"; ten sessions later everything below rung 4 existed, so the slash had to become
+a decision. Five reasons, and the first is this project's own most expensive lesson:
+an API can be started, driven and asserted against on the machine that builds it,
+with no workspace, no Spark and no models — a workspace-hosted UI can be proved to
+work only by deploying it and clicking it. The App's deployment path is also the one
+currently blocked, and the choice is one-way in only one direction: an ASGI app
+becomes an App by being hosted, a Streamlit app does not become an API without a
+rewrite.
+
+### Two increments, in this order deliberately
+
+**S1 — the contract, before any endpoint existed** (`e31063d`). The privacy auditor
+asked for this when ADR-0025 landed, and doing it first is what made the rest
+checkable. `AGENTS.md` rule 8 and a new `docs/09` section — *Display surfaces, API
+responses, and request payloads* — extend the observability rule from logs to every
+channel that crosses the process boundary, and to the inbound half nobody had
+written down: uploads, query strings, access-logged request bodies, and a framework's
+own 422 echoing the input it rejected. A future side-by-side view now carries seven
+conditions instead of five (added: read under the **end user's** identity, and record
+each disclosure as metadata), scoped explicitly to Class B/C so the Phase 9 demo
+surface stays legal.
+
+**S2 — the code** (`0759d1a`, with the close-out increment on top). `src/pii_reduction/service/`: a config builder over server-side templates, a run
+trigger over both entry points, a metadata-only status view, and
+`pii-reduction-service` as a third console script. 60 new tests.
+
+### What makes the rung rule real rather than stated
+
+Four static guards in `tests/test_package.py`, each of which I confirmed fails on the
+violation it describes:
+
+1. **Nothing outside `service/` imports it** — ADR-0025's "the engine never learns a
+   service layer exists", in its literal form. It is also *why* there is a third
+   console script: a `pii-reduction serve` subcommand would need `cli.py` to import
+   the package, and a function-local import would not help, because the guard walks
+   the AST.
+2. **`service/` may not name the engine's internals** — providers, reducers, parsers,
+   language, entities, evaluation, sources, outputs, synthetic, and anything
+   under `processing/` except `pipeline`. This is what makes "owns no reduction logic" checkable. It is a
+   *naming* rule, not a sandbox: `processing/` imports all of them, so the process
+   still loads them.
+3. **Exactly one file may import the Databricks surface** —
+   `service/runtimes/databricks.py`, matched by exact POSIX relative path (Windows
+   path equality is case-insensitive) and asserted to exist, so a rename cannot turn a
+   named exemption into a blanket one. The Spark-name guard is **not** exempted: that
+   file still may not say `pyspark`.
+4. **`config/` is bounded to `contracts/` and `entities/`** — because the allowlist
+   works by leaving `config/` open, which makes it one convenience re-export away from
+   being routed around. `known_labels` and `TAXONOMY` are exactly such re-exports.
+
+### The design decision worth carrying: what a caller may *not* choose
+
+The service runs with its own credentials, so a request that could name a
+`catalog.schema.table` would let a caller read a schema they cannot. Source and
+destination therefore come from a server-side **template** — and so do three switches
+that move a privacy boundary rather than express a preference:
+`processing.failure_mode` (whose `preserve_original_and_record_error` is ADR-0023's
+raw-text pass-through), `processing.preserve_original`, and
+`destination.projection`. The request models have nowhere to put them, so a request
+carrying one is a 422 rather than a policy check that could be forgotten.
+
+Same doctrine on the way out: **no endpoint accepts text, and none returns, streams,
+redirects to or vends a URL for any.** Enforced by a reflection test over every
+model — a filter can be wrong, an absent field cannot — and six endpoint shapes are
+forbidden by name in ADR-0026, because each will be proposed and each looks
+reasonable.
+
+### Verified by running it, which was the point
+
+- **Local, over real HTTP** (three times during the increment, through the console
+  entry point): build a config, save it, run 102 corpus documents, poll to
+  `succeeded`, plus every refusal path — unknown dataset, unavailable runtime,
+  duplicate save, off-menu column, a request carrying `source` or `projection`, and a
+  malformed name whose 422 body does not contain the name.
+- **On the workspace**: a 25-row synthetic table staged in Unity Catalog from the
+  head of the committed corpus — a different slice and a different chain from session
+  10's 25-row Volumes run, so those counts are not expected to match — a
+  workspace-pointing template written **outside the repository**, the service started
+  from the `databricks`-extra venv with `--databricks`. `POST /runs` with
+  `runtime: databricks` → `succeeded` in ~22s. Read back: 25 rows all `success`, the
+  source column intact beside the reduced one, the audit table's column set exactly
+  `AUDIT_COLUMNS` (no values — though its offsets and scores keep it governed like
+  reduced output), PERSON 22 / EMAIL 13 / PHONE 12 detected by the hybrid chain,
+  `run_source_version = delta_v0`, real library **and** model versions per provider,
+  and — the check worth repeating — the `config_hash` the API returned equals
+  `run_config_hash` in the Delta metrics table. Staged and written tables dropped
+  afterwards; the schema left as found.
+
+### The auditors found real defects on every pass, again — four passes this session
+
+Session 5's rule keeps paying. The ones that changed the design rather than the
+prose:
+
+- **The run trigger was a confused deputy** and the first draft's "no endpoint returns
+  text" reasoning did not see it: a caller who names the source and destination makes
+  the *service's* credentials read and write on their behalf. That produced the
+  server-side template, which is now the load-bearing idea in the whole layer.
+- **A build could take a name another dataset declares**, which made that dataset
+  unreachable with the 404 blaming the innocent file. `open("x")` guards the file
+  name; nothing guarded the *declared* name, which is what decides where output lands.
+- **Two path parameters echoed caller input** into a 404 body and the access log,
+  while the body models were carefully bounded so the 422 handler would not.
+- **The reflection guard was blind to `error`, `message`, `start` and `end`** — the
+  names this codebase actually uses. A guard that matches the wrong tokens reads
+  exactly like one that works.
+- **`--databricks` in an environment without the extra** accepted a run, failed it on
+  the worker thread, and discarded the install hint — because the runtime module
+  imports fine without `databricks-connect`. Now probed at startup.
+- **The executor submit sat outside the lock its own comment claimed it was inside.**
+- Docs-side: span offsets and per-entity confidence had been on *Safe to log* since
+  the document was written, contradicting `docs/18`, the new section, and the shipped
+  `ALLOWED_FIELDS`, which never contained them.
+
+### State
+
+1089 default-tier tests (1029 at session start), 97 deselected; ruff clean;
+`mypy src tests` clean (151 files). No published benchmark number was touched, so
+none moved. `configs/service_templates.yaml` is Class A throughout, with the Unity
+Catalog variant commented out — the workspace-pointing template used for the run
+lived outside the repository, deliberately.
+
+### Where to go next
+
+1. **Host it.** A Databricks App is the decided hosting; `create_app` needs a small
+   wrapper plus a `RunStore` carrying the Databricks runtime. Blocked on the CLI
+   unless the App is created through the workspace UI, which is untried. This is the
+   increment that turns a decision into a deployment, and it carries two exit
+   conditions of its own: it is scoped to a **single replica** (item 2 is why), and
+   it must **verify** what the platform does about identity (item 3) rather than
+   assume it. If it starts the console script rather than a wrapper, the command
+   needs `--i-provide-authentication` — the script refuses a non-loopback bind.
+2. **A durable run store** — part of hosting being correct rather than a follow-up
+   to it. The store is process-local, so the first thing a hosted user does
+   (`POST /runs`, then poll `GET /runs/{id}`) returns 404 from a second replica or
+   after a restart.
+3. **Settle the identity question against the platform, not from memory.** Databricks
+   Apps authenticate the end user, but data access defaults to the **App's service
+   principal**; on-behalf-of-user authorization is a separate opt-in. S1 just added
+   "read under the end user's identity" to `docs/09`'s conditions for a Class B
+   display surface, so hosting does *not* satisfy that condition by default, and
+   nobody here has checked which mode this workspace's Apps run in.
+4. **Batching (P5)** — its old reason for waiting ("it optimises a path nobody uses")
+   has expired, but it is the only item with nobody waiting on it, so it sits behind
+   the three above. Bring the measurement obligation with it: rows/s before and after
+   on the 10k pack.
+5. **Schema introspection in the engine**, so a column picker can read a source's
+   columns without reading the source. Last, because the workaround is documented and
+   works.
+
+Unchanged: the speaker-prefix ADR, the Phase-7 Greek model, the distributed path
+(`ISOLATION_STARTUP_FAILURE`), and `docs/17` §7's deferred items.

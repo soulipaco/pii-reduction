@@ -357,11 +357,21 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 10 (2026-08-20/21) — the platform queue's P0–P4 shipped **and
-the Databricks half is verified by real workspace runs**; P3 and P4's validate
-criterion are met, and what remains open is two environment blockers (`bundle deploy`
-needs a newer CLI; the distributed path is still `ISOLATION_STARTUP_FAILURE`). The
-next increment is rung 4, the service layer — not P5. Previously: session 9 (2026-08-19) — two independent external reviews reconciled
+Last updated: session 11 (2026-08-21) — **rung 4 is built: the service layer
+exists, and both of its runtimes have been executed.** ADR-0026 decided its shape (a
+thin HTTP API, hosted later as a Databricks App rather than built as one), the
+privacy contract was extended to rendered output, API responses and request payloads
+*before* any endpoint was written, and the surface was then driven over real HTTP —
+locally over 102 corpus documents, and on the workspace over a 25-row Unity Catalog
+table with the hybrid chain. What remains **blocked** is unchanged and
+environmental, and there are two of it: `bundle deploy` needs a newer CLI, and the
+distributed path is still `ISOLATION_STARTUP_FAILURE`. What remains **open** is
+design work — the five-item list at the end of this section, headed by *hosting the
+service*, which is undone rather than blocked (no Databricks App has been created;
+the workspace-UI route is untried). Running the API against the workspace and hosting
+it inside the workspace are different claims, and only the first has been made.
+Previously: session 10 (2026-08-20/21) — the platform queue's P0–P4 shipped and the
+Databricks half was verified by real workspace runs. Previously: session 9 (2026-08-19) — two independent external reviews reconciled
 (`docs/17_EXTERNAL_REVIEW_RECONCILIATION.md`: every load-bearing claim verified
 against the code, decision table of 6 ACCEPT / 14 DEFER / 4 REJECT / 3 DISPUTED, the
 R1–R6 sequence approved by the owner), and the R increments started landing — see
@@ -400,6 +410,8 @@ the session-9 rows in the Complete table and the queue below.
 | P2 | **A dataset YAML names a Unity Catalog table end to end.** `spark_table`/`delta_table` become typed config models and registry names; the local registries refuse them with an instruction naming the driver path; `run_driver` resolves table, prefix and mode from config (explicit args still win); `pii-reduction-databricks` is the front door, inside the surface because the import guard forbids a flag on the core CLI. Three defects found in review, two destructive: local `mode: overwrite` was inherited by the Delta writer, a run could write over the table it reads, and the CLI leaked Connect's message (workspace URL) on its crash path | 990 default (+34) |
 | P3 (part) | `docs/18_RUNBOOK_DATABRICKS.md`, and **authentication that does not require the Databricks CLI** — profile, `DATABRICKS_HOST` + token or service principal, or ambient compute credentials (ADR-0006 amended; its original text always said "profiles or env"). The parity fixture no longer gates on the profile variable, so token auth no longer silently skips every workspace test. **Workspace execution outstanding** at the time of this commit; partly met on 2026-08-20 — see the queue | 1001 default (+11) |
 | P4 | `databricks.yml` + `resources/` — one job, one task, the same entry point; CLI-free path documented; zero hard-coded workspace values, pinned by a glob-discovered guard. **Never deployed.** Also caught here: `mypy src tests` (the CI invocation) had been broken by P2/P3 for two increments — 21 errors, all in `tests/` — because `/qa` ran only `mypy src`; both skills were aligned with CI in the session close-out | 1015 default (+14); `mypy src tests` clean |
+| S1 | **ADR-0026: rung 4 is a thin HTTP API**, and a Databricks App is how it gets hosted rather than a second surface to build. `AGENTS.md` rule 8 and a new `docs/09` section extend the observability rule from logs to every channel crossing the process boundary — rendered output, response bodies, error payloads, redirects, downloads — and to the **inbound** half (uploads, query strings, access-logged bodies, a framework's own 422 echoing the input it rejected). Span offsets and per-entity confidence moved off *Safe to log*, where the prose had been wrong since it was written and the shipped `ALLOWED_FIELDS` never agreed with it. A Class A carve-out keeps the Phase 9 demo surface legal without creating a service endpoint; a future side-by-side view now carries seven conditions (added: read under the end user's identity, record each disclosure) instead of five | 1029 default, unchanged — docs only; landed **before** any endpoint existed, which is the order the privacy auditor asked for when ADR-0025 shipped |
+| S2 | **The service layer** (`src/pii_reduction/service/`): a config **builder** over server-side templates, a run **trigger** over both entry points, a metadata-only **status view**, and `pii-reduction-service` as a third console script. Four static guards make the rung rule code rather than prose — nothing outside `service/` imports it; `service/` may not name providers, reducers, parsers, language, entities, evaluation, sources, outputs, synthetic, or anything under `processing/` except `pipeline`; exactly one file may import the Databricks surface and still may not name `pyspark`; and `config/`, now the sanctioned relay, is bounded to `contracts/` and `entities/`. No endpoint accepts text and none returns, streams or links to any — enforced by a reflection test over every model rather than by a filter | 1089 default (+60); driven over real HTTP three times during the increment, and on the workspace once (docs/19 *Verified, by running it*) |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -952,7 +964,8 @@ real workspace data using only a runbook, one day after this queue starts.**
 **Session 10 executed P0 → P4, then verified the Databricks half on the workspace.**
 P5 was deliberately not started: the work order gated it on everything else being
 "done and verified", and by the time that was true the better reason to defer it was
-that it optimises a path nobody uses yet. Status of each below; the shipped detail is in the Complete table.
+that it optimised a path nobody used yet. *(Session 11 built that path; see the
+pickup list at the end of this section.)* Status of each below; the shipped detail is in the Complete table.
 
 - **P0 — repo tidy. Complete.** Sessions 1–8 archived behind an evidence index,
   CLAUDE.md's read order re-checked, default tier green. Original brief: `.claude/SESSION_HANDOFF.md` is ~2,000 lines; collapse
@@ -1135,14 +1148,16 @@ that it optimises a path nobody uses yet. Status of each below; the shipped deta
   list that cannot install spaCy models (so PERSON would be missed silently), and an
   empty notification recipient the Jobs API rejects — but **none of that is a
   substitute for validating it**.
-- **P5 (stretch) — batching. Not started, deliberately.** Wire `detect_batch`
+- **P5 (stretch) — batching. Not started.** *Its gate is superseded by the
+  session-11 pickup list at the end of this section, where it is item 4.* Wire
+  `detect_batch`
   (docs/17 D10 reopens: the platform direction is the condition arriving). Measure
   rows/s before and after on the 10k pack. The work order gated this on everything
   else being done *and verified*. P3 is now met and P4's validate criterion with it,
-  so the original reason has expired; what still holds the gate is the distributed
-  path (`ISOLATION_STARTUP_FAILURE`) and `bundle deploy`, neither of which a
-  batching increment would help. Measure rows/s before and after on the 10k pack when
-  it is picked up.
+  so the original reason has expired. Its position is now set by the
+  session-11 list at the end of this section, where it is item 4 — it is the only
+  entry with nobody waiting on it. Measure rows/s before and after on the 10k pack
+  when it is picked up.
 
 Rules unchanged by urgency: gates never weaken, workspace results only from
 actual workspace runs, real data never becomes a fixture. All three held: no
@@ -1150,14 +1165,23 @@ published benchmark number moved this session (none was touched), no workspace
 result is claimed, and the local gate was found *weaker* than CI and strengthened
 rather than left alone.
 
-### The next increment: rung 4, the service layer
+### Rung 4, the service layer — **built** (session 11)
 
-**The platform queue is finished and the Databricks half is verified by real runs.**
-What has never been built is the rung ADR-0025 names as the point of all of it: a
-service layer where someone picks a configured dataset, chooses columns, and runs.
-Every piece it needs now exists and is proven on the workspace — config-nameable IO, a
-console entry point, a job shape, volume ingestion, the reduced-only projection for
-the grant boundary, complete provenance.
+**Built in session 11, in two increments, and executed on both runtimes.** The rung
+ADR-0025 names as the point of all of it now exists: someone picks a configured
+dataset, chooses columns and entities, and runs — over HTTP, with the engine
+underneath and no reduction logic anywhere above it. `docs/19_SERVICE_LAYER.md` is
+the operator-facing description and carries the evidence; ADR-0026 carries the
+decision and the five rules v1 obeys by construction.
+
+What it does **not** do, recorded so the gap between decided and deployed stays
+visible: it has never been hosted. No Databricks App has been created, and
+`bundle deploy` is still blocked by the CLI's expired Terraform signing key. Running
+the API from a terminal against the workspace and hosting it inside the workspace are
+different claims, and only the first has been made.
+
+The framing this section carried *before* the increment is kept below, because two
+of the endpoint shapes it implied are ones ADR-0026 went on to forbid by name.
 
 **ADR-0026 decides the shape: a thin HTTP API, hosted later as a Databricks App
 rather than built as one.** Read it before implementing — it names the endpoint shapes
@@ -1166,6 +1190,8 @@ particular: **no endpoint accepts text**, so there is no upload endpoint (a file
 volume is a path the CSV source already reads — that half of "upload a file or pick a
 table" is served a rung lower); and **the caller names a configured dataset, never a
 `catalog.schema.table`**, because the service runs with its own credentials.
+
+*Kept as written before the increment, in the imperative it was written in:*
 
 Smallest useful version: a config **builder** (dataset identity, columns, entities →
 a validated dataset config, with source/destination/failure-mode/projection coming
@@ -1178,7 +1204,48 @@ surface, so `docs/09` and rule 8 needed extending to rendered output and API res
 before one is built — the privacy auditor raised exactly this when ADR-0025 landed,
 and that extension is the first thing session 11 shipped.
 
-**P5 (batching) is deliberately still not next.** It optimises a path nobody uses yet.
+**P5 (batching) is no longer gated by "nobody uses this path" — there is now a
+surface that uses it.** It is **fourth** in the pickup order below, not first; the
+list is ordered by what makes the thing just built correct, and batching is the only
+entry with nobody waiting on it. It keeps its measurement obligation: rows/s before
+and after on the 10k pack, published beside the existing numbers.
+
+### What session 11 left open, in the order it would pick them up
+
+1. **Host the service.** Everything below rung 4 is executed; rung 4 itself has been
+   *run* and never *hosted*. A Databricks App is the decided hosting (ADR-0026) and
+   needs `create_app` behind a small wrapper plus a `RunStore` carrying the Databricks
+   runtime. Blocked on the same Databricks CLI issue as `bundle deploy` unless the App
+   is created through the workspace UI, which is untried. **This is the increment that
+   turns a decision into a deployment**, and it has two exit conditions of its own:
+   it is scoped to a **single replica** (see 2), and it must **verify** what the
+   platform actually does about identity (see 3) rather than assume it.
+2. **A durable run store.** Not a follow-up to hosting — part of hosting being
+   correct. The store is process-local, so the first thing a hosted user does
+   (`POST /runs`, then poll `GET /runs/{id}`) returns 404 from a second replica or
+   after a restart. Either the hosting increment states single-replica-and-restarts-
+   forget as a constraint, or this lands with it. The
+   `<dataset>_run_metrics` table is the record that already survives a restart.
+3. **Settle the identity question, in writing and against the platform.** The service
+   implements no authentication. Databricks Apps authenticate the end user — but data
+   access defaults to the **App's service principal**, and on-behalf-of-user
+   authorization is a separate opt-in. That distinction is load-bearing here, because
+   S1 added "read under the end user's identity" to `docs/09`'s conditions for a
+   Class B display surface, and the whole server-side-template design exists precisely
+   because the service runs with its own credentials. Hosting does not satisfy that
+   condition by default, and nobody here has verified which mode this workspace's Apps
+   run in.
+4. **Batching (P5).** `detect_batch` still has no caller; the platform direction that
+   `docs/17` D10 named as its reopening condition has now arrived twice over.
+5. **Schema introspection in the engine.** The service declares its column menus in a
+   template because `sources/` exposes only `load()`, which materialises the frame. A
+   schema-only path would let a column picker read the source's columns without
+   reading the source — an engine change, deliberately not improvised in the service,
+   and last because the workaround is documented and works.
+
+Unchanged and unsequenced: the speaker-prefix ADR (still the most serious open design
+item), the Phase-7 Greek model, the distributed path, and the deferred items in
+`docs/17` §7.
 
 ### After the queue
 
