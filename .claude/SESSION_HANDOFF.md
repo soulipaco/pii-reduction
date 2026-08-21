@@ -347,7 +347,9 @@ deferred items in `docs/17` §7.
 ## Session 11 — 2026-08-21 — Rung 4 built, decided by ADR, and run on both runtimes
 
 **Start here — the service layer exists and has been executed. It has never been
-hosted, and that is the next increment.**
+hosted.** That *was* the next increment; the owner has since set a different course
+for session 12 — see the addendum at the end of this section before picking anything
+up.
 
 Someone can now pick a configured dataset, choose columns and entities, and run it —
 over HTTP, locally or on the workspace, with the engine underneath and no reduction
@@ -511,3 +513,81 @@ lived outside the repository, deliberately.
 
 Unchanged: the speaker-prefix ADR, the Phase-7 Greek model, the distributed path
 (`ISOLATION_STARTUP_FAILURE`), and `docs/17` §7's deferred items.
+
+### Session 11 addendum — the owner set a new course for session 12
+
+**Read this before the "Where to go next" list above: that list is paused, not
+cancelled.** The owner's next instruction (2026-08-21) is a different kind of work
+from the pickup list, and it comes first.
+
+**The task.** A separate reference implementation and a private source workbook exist
+at `..\pii_alternative`:
+
+```text
+pii_alternative/
+├── Combined-Files_WorkCopy.xlsx        <- Class B. See the rules below.
+└── project_reference_handsoff/
+    ├── README.md · HANDOFF_BRIEF.md · ADOPTION_CHECKLIST.md
+    ├── knowledge/        (9 files)
+    ├── portable/         (11 files)
+    ├── reference-data/   (5 files, incl. configs/)
+    └── source-docs/      (4 files)
+```
+
+Session 12 compares this repository against that reference, decides whether it holds
+evidence-backed capabilities, safeguards or lessons this repository lacks, and
+**implements only what it judges justified** — not a merge, not a list of
+suggestions. The alternative is not assumed superior: this repository's contracts,
+architecture, privacy rules and ADRs take precedence, and "no change is warranted" is
+a legitimate outcome if the evidence says so.
+
+**This is a fresh judgement, and it is not session 9 again.** Sessions 9's external
+reviews were *assessments of this repository*; this is a comparison against a working
+implementation with its own corpus and its own measured history. Different question,
+different failure mode: the risk here is absorbing an architecture rather than
+absorbing a critique. `docs/17_EXTERNAL_REVIEW_RECONCILIATION.md` is the shape of the
+output to aim for — a decision table with reasons, not a diff.
+
+**Class B rules, restated because this is the first time real data is within reach.**
+`Combined-Files_WorkCopy.xlsx` is production-like. `docs/09`'s *Display surfaces, API
+responses, and request payloads* governs it, and so does `AGENTS.md` rule 2 — nothing
+from it becomes a fixture, an example, a log line, a doc snippet, or a committed
+artifact. Metadata only: sheet names, configured column names, row and field counts,
+aggregate entity counts, parser fallback counts, language distributions, timings,
+error categories. **Not** cell values, not text fragments, not span offsets or
+lengths, not per-entity confidence. Prefer the already-sanitized files under
+`project_reference_handsoff/reference-data/` over reopening the workbook at all. Any
+temporary validation output lives outside both repositories and is deleted afterwards.
+
+**Two environment facts session 12 will hit in its first hour:**
+
+1. **This repository cannot open that workbook, and should not learn to.** `openpyxl`
+   is not installed and is not a dependency; `docs/06` records Excel as deferred with
+   the note-history parser, so there is no Excel source adapter either. If the
+   workbook genuinely must be opened to check a structural claim, build a **throwaway
+   venv outside both repositories** — never add an Excel reader to `pyproject.toml`
+   to satisfy a one-off inspection. The same applies to running the alternative's
+   portable smoke test: its dependencies are unknown, and `.venv` is not the place to
+   find out.
+2. **The throwaway `.[dev]` venv is now a standing technique, not a one-off.** It
+   caught two failures at the end of session 11 that the developer venv hides, after
+   CI caught a third. Build it before any push that touches packaging:
+   `uv venv <scratch>/venv-devtier --python 3.11` then
+   `VIRTUAL_ENV=<scratch>/venv-devtier uv pip install -e ".[dev]"`, and run ruff, mypy
+   and pytest in it. It is strictly stronger than the local gate.
+
+**Starting state, stated because the owner's brief describes an older one.** The tree
+is **clean** at `28979b8`, pushed, CI green. Session 11's work — including
+`pyproject.toml`, `src/pii_reduction/service/cli.py` and
+`tests/test_service_databricks_runtime.py` — is **committed**, not pending. A brief
+that says those files carry uncommitted user-owned modifications is describing the
+state before the session-11 close-out; there is nothing in the working tree to
+preserve or work around. Verify with `git status --short` rather than trusting either
+statement.
+
+**Unchanged by the new course:** every rule in `AGENTS.md`, the ADR record, the rung
+rule, the entity taxonomy, the CPU-only constraint (ADR-0015), the local/Databricks
+parity contract, and the standing prohibition on moving a published benchmark number
+without re-running it. An adopted idea that changes any of those needs its own ADR in
+the same change, as ADR-0026 did.
+

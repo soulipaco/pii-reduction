@@ -364,14 +364,20 @@ privacy contract was extended to rendered output, API responses and request payl
 *before* any endpoint was written, and the surface was then driven over real HTTP —
 locally over 102 corpus documents, and on the workspace over a 25-row Unity Catalog
 table with the hybrid chain. What remains **blocked** is unchanged and
-environmental, and there are two of it: `bundle deploy` needs a newer CLI, and the
+environmental, and there are two of them: `bundle deploy` needs a newer CLI, and the
 distributed path is still `ISOLATION_STARTUP_FAILURE`. What remains **open** is
 design work — the five-item list at the end of this section, headed by *hosting the
 service*, which is undone rather than blocked (no Databricks App has been created;
 the workspace-UI route is untried). Running the API against the workspace and hosting
 it inside the workspace are different claims, and only the first has been made.
-Previously: session 10 (2026-08-20/21) — the platform queue's P0–P4 shipped and the
-Databricks half was verified by real workspace runs. Previously: session 9 (2026-08-19) — two independent external reviews reconciled
+**Session 12 has a different course**, set by the owner after this section was
+written: compare this repository against the separate reference implementation at
+`..\pii_alternative` and implement only what that comparison justifies. The five-item
+pickup list at the end of this section is **paused, not cancelled** — see the session
+11 addendum in `.claude/SESSION_HANDOFF.md` for the task, the Class B rules that come
+with it, and the two environment facts it will hit immediately. Previously: session 10
+(2026-08-20/21) — the platform queue's P0–P4 shipped and the Databricks half was
+verified by real workspace runs. Previously: session 9 (2026-08-19) — two independent external reviews reconciled
 (`docs/17_EXTERNAL_REVIEW_RECONCILIATION.md`: every load-bearing claim verified
 against the code, decision table of 6 ACCEPT / 14 DEFER / 4 REJECT / 3 DISPUTED, the
 R1–R6 sequence approved by the owner), and the R increments started landing — see
@@ -1211,6 +1217,12 @@ entry with nobody waiting on it. It keeps its measurement obligation: rows/s bef
 and after on the 10k pack, published beside the existing numbers.
 
 ### What session 11 left open, in the order it would pick them up
+
+> **Paused for session 12, not cancelled.** The owner set a different course — a
+> comparison against the reference implementation at `..\pii_alternative` (see the
+> status line above and the session-11 addendum in `.claude/SESSION_HANDOFF.md`).
+> This list is the queue to return to, and item 1 is still the one that turns a
+> decision into a deployment.
 
 1. **Host the service.** Everything below rung 4 is executed; rung 4 itself has been
    *run* and never *hosted*. A Databricks App is the decided hosting (ADR-0026) and
