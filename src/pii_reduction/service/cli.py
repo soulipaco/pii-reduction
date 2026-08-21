@@ -157,19 +157,28 @@ def main(
             file=sys.stderr,
         )
         return 2
+    if serve is _serve and find_spec("uvicorn") is None:
+        # Probed, not imported, and only when the **default** server is the one that
+        # will be used. `uvicorn` lives in the `service` extra and not in `dev`, so
+        # the environment CI provisions has fastapi and no uvicorn — without this the
+        # most likely operator mistake would raise a traceback from the bottom of
+        # `main`, after the app and its worker thread had already been built, instead
+        # of this instruction. Probing rather than importing is what lets a caller who
+        # injects their own `serve` (the tests, an embedder) run with no server
+        # installed at all, which is the honest requirement: `main` needs a server
+        # only if it is going to start one.
+        print(
+            "error: uvicorn is not installed. The service "
+            'needs the service extra: pip install -e ".[service]"',
+            file=sys.stderr,
+        )
+        return 2
     try:
-        import uvicorn  # noqa: F401  -- imported here only to fail early and kindly
-
         from pii_reduction.service.api import create_app
     except ImportError as error:
-        # Both framework imports, and nothing else. `uvicorn` is imported here rather
-        # than only inside `_serve` because it is in the `service` extra and **not**
-        # in `dev`: the environment CI provisions has fastapi and no uvicorn, so
-        # without this line the most likely operator mistake would raise a traceback
-        # from the bottom of `main` — after the app and its worker thread had already
-        # been built — instead of this instruction. Wrapping `create_app` in the same
-        # handler would be the opposite error: an unrelated ImportError from below
-        # reported as "install the service extra", which is a wrong instruction given
+        # Scoped to the framework import, and nothing else: wrapping `create_app`'s
+        # own body in the same handler would report an unrelated ImportError from
+        # below as "install the service extra", which is a wrong instruction given
         # confidently.
         print(
             f"error: {error.name or 'a dependency'} is not installed. The service "

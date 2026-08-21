@@ -13,8 +13,7 @@ own ``RunSummary`` is what is under test.
 
 from __future__ import annotations
 
-import builtins
-import sys
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
@@ -199,15 +198,14 @@ class TestTheMissingExtraPath:
     def test_a_missing_server_exits_2_with_the_instruction(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        real_import = builtins.__import__
-
-        def without_uvicorn(name: str, *args: Any, **kwargs: Any) -> Any:
-            if name == "uvicorn":
-                raise ImportError("No module named 'uvicorn'", name="uvicorn")
-            return real_import(name, *args, **kwargs)
-
-        monkeypatch.delitem(sys.modules, "uvicorn", raising=False)
-        monkeypatch.setattr(builtins, "__import__", without_uvicorn)
+        # `importlib.util.find_spec`, not `cli_module.find_spec`: strict mypy refuses
+        # to read a name a module did not explicitly re-export, and setting it is
+        # what the patch needs anyway.
+        monkeypatch.setattr(
+            cli_module,
+            "find_spec",
+            lambda name: None if name == "uvicorn" else find_spec(name),
+        )
 
         code = main(["--configs", str(REPO_ROOT / "configs"), "--port", "0"])
 
@@ -215,6 +213,29 @@ class TestTheMissingExtraPath:
         message = capsys.readouterr().err
         assert "uvicorn is not installed" in message
         assert '".[service]"' in message
+
+    def test_an_injected_server_needs_no_uvicorn(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`main` needs a server only if it is going to start one.
+
+        The probe is skipped when the caller supplies `serve`, which is what lets the
+        default test tier — whose `dev` extra deliberately has no `uvicorn` — drive
+        the argument wiring at all.
+        """
+        # `importlib.util.find_spec`, not `cli_module.find_spec`: strict mypy refuses
+        # to read a name a module did not explicitly re-export, and setting it is
+        # what the patch needs anyway.
+        monkeypatch.setattr(
+            cli_module,
+            "find_spec",
+            lambda name: None if name == "uvicorn" else find_spec(name),
+        )
+        served: dict[str, object] = {}
+        code = main(
+            ["--configs", str(REPO_ROOT / "configs"), "--port", "0"],
+            serve=lambda app, **kwargs: served.update(kwargs),
+        )
+        assert code == 0
+        assert served["host"] == "127.0.0.1"
 
 
 class TestRuntimeWiring:

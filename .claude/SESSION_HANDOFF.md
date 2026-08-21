@@ -206,6 +206,29 @@ after they were set. Read them back with
 `[Environment]::GetEnvironmentVariable(name,'User')` and inject them, rather than
 concluding they are absent.
 
+### The push failed CI, and that is the third time this session the lesson repeated
+
+`mypy src tests` was clean locally and failed on **both** runners: `uvicorn` is in the
+`service` extra and **not** in `dev`, so CI could not resolve the import — and my
+machine could, because I had installed uvicorn by hand to run the service. Exactly
+session 4's finding ("a green local run does not prove the push tier is green") and
+session 10's ("a local gate that does not match the remote one is not a gate"), on a
+line of packaging I wrote in this same session while explicitly reasoning about which
+optional modules need a mypy override.
+
+The fix is ADR-0008's rule unchanged — the type checker models what the packaging
+says — but the useful part was *how* it was fixed. Rather than patching and
+re-pushing, I built a throwaway `.[dev]` venv, which is what CI provisions, and it
+immediately found **two more failures the developer venv hides**: the bind tests call
+`main()`, which imported `uvicorn` even though they inject their own `serve`. That
+produced a better design than the one CI rejected — `main` now *probes* for a server
+instead of importing one, and only when it is going to start it, so a caller who
+supplies `serve` needs no server installed at all.
+
+**Carry this:** when a change touches packaging, run the throwaway environment
+*before* the push, not after CI says so. Three commands, and it is strictly stronger
+than the local gate.
+
 ### Where to go next
 
 **Do not start with P5 (batching).** It is real work, but it optimises a path nobody
@@ -361,7 +384,7 @@ surface stays legal.
 
 **S2 — the code** (`0759d1a`, with the close-out increment on top). `src/pii_reduction/service/`: a config builder over server-side templates, a run
 trigger over both entry points, a metadata-only status view, and
-`pii-reduction-service` as a third console script. 60 new tests.
+`pii-reduction-service` as a third console script. 61 new tests.
 
 ### What makes the rung rule real rather than stated
 
@@ -452,7 +475,7 @@ prose:
 
 ### State
 
-1089 default-tier tests (1029 at session start), 97 deselected; ruff clean;
+1090 default-tier tests (1029 at session start), 97 deselected; ruff clean;
 `mypy src tests` clean (151 files). No published benchmark number was touched, so
 none moved. `configs/service_templates.yaml` is Class A throughout, with the Unity
 Catalog variant commented out — the workspace-pointing template used for the run

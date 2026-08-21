@@ -138,10 +138,20 @@ ignore_missing_imports = true
 # do so lazily for exactly that reason. Without this, `mypy src tests` passes on a
 # developer machine with the extras installed and fails in the push tier that
 # deliberately installs neither — which is how CI found it on the first real run.
-# `fastapi` is deliberately absent from the override list below. It is an optional
-# extra like the others, but unlike them it is also in `dev`, so it is present
-# wherever the default tier runs — including CI. If it goes missing that is a
+# `fastapi` is deliberately absent from the override list below: it is also in `dev`,
+# so it is present wherever the default tier runs, and if it goes missing that is a
 # packaging error worth failing on rather than typing around.
+#
+# `uvicorn` is the opposite case and is listed, because it is in the `service` extra
+# and **not** in `dev`. It is a *server*: the default tier never serves — the tests
+# inject `serve` — so putting it in `dev` would install a server nobody starts in
+# order to satisfy a type checker. This override is ADR-0008's rule applied
+# unchanged: the type checker models what the packaging already says.
+#
+# Found by CI, not locally, for the reason session 4 first recorded: the dev machine
+# had uvicorn installed by hand, so `mypy src tests` passed here and failed on both
+# runners. Reproduced afterwards in a throwaway `.[dev]` venv, which is the check
+# that should have come first.
 [[tool.mypy.overrides]]
 module = [
   "presidio_analyzer",
@@ -154,5 +164,8 @@ module = [
   # for it lazily to reuse a session the Databricks runtime already built.
   "pyspark",
   "pyspark.*",
+  # `service` extra only, never `dev` — see the note above.
+  "uvicorn",
+  "uvicorn.*",
 ]
 ignore_missing_imports = true
