@@ -354,6 +354,7 @@ As built. Every path below exists; nothing here is aspirational.
 │   ├── 16_BENCHMARK_REPORT_10K.md  # the 10k-document two-chain comparison
 │   ├── 18_RUNBOOK_DATABRICKS.md    # run it on your own table, in ten minutes
 │   ├── 19_SERVICE_LAYER.md         # rung 4: the HTTP API, and what it refuses
+│   ├── 20_ALTERNATIVE_RECONCILIATION.md  # a second implementation, compared item by item
 │   └── adr/                        # decision records, indexed in adr/README.md
 ├── databricks.yml · resources/  # Asset Bundle + job skeleton (never deployed)
 ├── configs/
@@ -456,6 +457,8 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 - **Shipped providers, licences and measured results:** `docs/15_PROVIDERS.md`
 - **Running it on your own Databricks table:** `docs/18_RUNBOOK_DATABRICKS.md`
 - **The service layer (rung 4) and what it refuses to do:** `docs/19_SERVICE_LAYER.md`
+- **A second implementation of the same problem, compared item by item — what was
+  adopted, what was refused, and why:** `docs/20_ALTERNATIVE_RECONCILIATION.md`
 - **Decision records:** `docs/adr/`
 
 ## License

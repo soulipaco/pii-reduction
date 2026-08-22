@@ -357,8 +357,24 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 11 (2026-08-21) — **rung 4 is built: the service layer
-exists, and both of its runtimes have been executed.** ADR-0026 decided its shape (a
+Last updated: session 12 (2026-08-21/22) — **this repository was compared against the
+reference implementation at `..\pii_alternative`, and four changes came out of it.**
+`docs/20_ALTERNATIVE_RECONCILIATION.md` is the record and the deliverable: 4 adopted,
+19 already covered, 9 deferred with named conditions, 8 rejected, 1 disputed, 1 place
+where the alternative was right about this repository. What landed: a **markup guard
+at the provider boundary plus an independently written output fidelity check**
+(ADR-0027 — the failure class nothing here could see, because damage inside an eligible
+region is invisible to the round-trip invariant and to the over-redaction gate);
+**Delta column mapping** for the column names a ServiceNow export produces, which would
+have failed the runbook's first real write; a **reachability decomposition of recall**
+(ADR-0028 — 90 of 315 ground-truth entities on the incident corpus are in regions no
+provider is ever offered, and hybrid recall over what *was* offered is 0.996 against an
+overall 0.711); and a **parquet-engine preflight** so a missing dependency fails in the
+first second rather than after the run. **41/41 gates re-run; no published number
+moved.** The session-11 pickup list below resumes unchanged, and `docs/20` §9 adds four
+ranked follow-ons of its own, headed by a markup-bearing corpus slice so ADR-0027 stops
+being a capability with no measurement. Previously: session 11 (2026-08-21) — **rung 4
+is built: the service layer exists, and both of its runtimes have been executed.** ADR-0026 decided its shape (a
 thin HTTP API, hosted later as a Databricks App rather than built as one), the
 privacy contract was extended to rendered output, API responses and request payloads
 *before* any endpoint was written, and the surface was then driven over real HTTP —
@@ -418,6 +434,7 @@ the session-9 rows in the Complete table and the queue below.
 | P4 | `databricks.yml` + `resources/` — one job, one task, the same entry point; CLI-free path documented; zero hard-coded workspace values, pinned by a glob-discovered guard. **Never deployed.** Also caught here: `mypy src tests` (the CI invocation) had been broken by P2/P3 for two increments — 21 errors, all in `tests/` — because `/qa` ran only `mypy src`; both skills were aligned with CI in the session close-out | 1015 default (+14); `mypy src tests` clean |
 | S1 | **ADR-0026: rung 4 is a thin HTTP API**, and a Databricks App is how it gets hosted rather than a second surface to build. `AGENTS.md` rule 8 and a new `docs/09` section extend the observability rule from logs to every channel crossing the process boundary — rendered output, response bodies, error payloads, redirects, downloads — and to the **inbound** half (uploads, query strings, access-logged bodies, a framework's own 422 echoing the input it rejected). Span offsets and per-entity confidence moved off *Safe to log*, where the prose had been wrong since it was written and the shipped `ALLOWED_FIELDS` never agreed with it. A Class A carve-out keeps the Phase 9 demo surface legal without creating a service endpoint; a future side-by-side view now carries seven conditions (added: read under the end user's identity, record each disclosure) instead of five | 1029 default, unchanged — docs only; landed **before** any endpoint existed, which is the order the privacy auditor asked for when ADR-0025 shipped |
 | S2 | **The service layer** (`src/pii_reduction/service/`): a config **builder** over server-side templates, a run **trigger** over both entry points, a metadata-only **status view**, and `pii-reduction-service` as a third console script. Four static guards make the rung rule code rather than prose — nothing outside `service/` imports it; `service/` may not name providers, reducers, parsers, language, entities, evaluation, sources, outputs, synthetic, or anything under `processing/` except `pipeline`; exactly one file may import the Databricks surface and still may not name `pyspark`; and `config/`, now the sanctioned relay, is bounded to `contracts/` and `entities/`. No endpoint accepts text and none returns, streams or links to any — enforced by a reflection test over every model rather than by a filter | 1090 default (+61); driven over real HTTP three times during the increment, and on the workspace once (docs/19 *Verified, by running it*) |
+| T1 | **The alternative reconciliation** — `docs/20_ALTERNATIVE_RECONCILIATION.md`, every item classified with its evidence including the rejections; ADR-0027 (markup is machine syntax: clip spans out of it at the provider boundary, and check the written output with an independently written assertion — `validation.require_markup_preserved`, on by default); ADR-0028 (recall decomposed into what the parser offered and what it never did); Delta column mapping when a column name needs it; parquet preflight at construction. Three of the four are for failure classes with **zero support in any corpus here**, which is exactly why they were invisible | 1168 default (+78), 92 integration, 41/41 gates on both corpora and both chains — **no published number moved**. Both auditors found the markup guard *leaking* in three variants of one mistake (a guard against over-redaction causing under-redaction); all fixed, and ADR-0027 carries them |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -1218,11 +1235,12 @@ and after on the 10k pack, published beside the existing numbers.
 
 ### What session 11 left open, in the order it would pick them up
 
-> **Paused for session 12, not cancelled.** The owner set a different course — a
-> comparison against the reference implementation at `..\pii_alternative` (see the
-> status line above and the session-11 addendum in `.claude/SESSION_HANDOFF.md`).
-> This list is the queue to return to, and item 1 is still the one that turns a
-> decision into a deployment.
+> **Resumed.** Session 12 ran the comparison the owner asked for against
+> `..\pii_alternative`; it is complete and recorded in
+> `docs/20_ALTERNATIVE_RECONCILIATION.md`. This list is live again, and item 1 is
+> still the one that turns a decision into a deployment. `docs/20` §9 adds four
+> ranked follow-ons that do **not** displace it — the first of them, a markup-bearing
+> corpus slice, is what would give ADR-0027 a measurement.
 
 1. **Host the service.** Everything below rung 4 is executed; rung 4 itself has been
    *run* and never *hosted*. A Databricks App is the decided hosting (ADR-0026) and

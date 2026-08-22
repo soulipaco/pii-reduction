@@ -7,7 +7,7 @@ Keep it factual: what was verified, how, and what is still unknown.
 Sessions 1–8 are archived verbatim in
 [`docs/archive/SESSION_HANDOFF_S1-S8.md`](../docs/archive/SESSION_HANDOFF_S1-S8.md);
 the index below says what each established. The newest session's block is the live
-"start here" — currently **session 11**, at the end of this file.
+"start here" — currently **session 12**, at the end of this file.
 
 ---
 
@@ -591,3 +591,136 @@ parity contract, and the standing prohibition on moving a published benchmark nu
 without re-running it. An adopted idea that changes any of those needs its own ADR in
 the same change, as ADR-0026 did.
 
+
+---
+
+## Session 12 — 2026-08-21/22 — The alternative implementation, compared and partly adopted
+
+**Start here:** the comparison the owner asked for is **done**, and
+[`docs/20_ALTERNATIVE_RECONCILIATION.md`](../docs/20_ALTERNATIVE_RECONCILIATION.md)
+is the deliverable — every item classified with its evidence, **including the
+rejections**. Four changes landed. The session-11 pickup list (plan §8, headed by
+*host the service*) is **live again**; `docs/20` §9 adds four ranked follow-ons that
+sit beside it rather than in front of it.
+
+**What this session was.** A second implementation of the same problem exists at
+`..\pii_alternative` — a different author, a different design, built and run against
+a real 45,366-row ServiceNow/chat workbook on Databricks serverless, with a transfer
+pack written for "a different repo with a different design". The brief: decide what
+of it this repository should do, and implement only that. Not a merge, not a list.
+
+**Totals: 4 adopted · 19 already covered · 9 deferred with named conditions · 8
+rejected · 1 disputed · 1 place where they were right about us · 4 recorded as docs.**
+
+### What landed, and why each was invisible before
+
+| what | evidence that it matters here |
+|---|---|
+| **ADR-0027 — markup is machine syntax.** A model-inferred span is clipped out of HTML/BBCode/URLs/entities at the provider boundary, and `validation.require_markup_preserved` (on by default) checks the *written output* with a deliberately independent assertion | Their single most damaging failure: spaCy returns `[code]<div` as a **PERSON at 0.85**, and redaction destroys the tag. **2,687 of 105,279 cells.** Here: the round-trip invariant cannot see it (the damage is *inside* an eligible segment), the over-redaction gate cannot see it (a `<div>` is not a protected token), and **no corpus here contains markup at all** |
+| **Delta column mapping**, set only when a column name needs it | `DELTA_INVALID_CHARACTERS_IN_COLUMN_NAMES`. A ServiceNow export puts a space in nearly every column; `docs/18` invites an operator to name one; every fixture here is a plain identifier, so the runbook's **first real write would have failed** |
+| **ADR-0028 — reachability decomposition of recall** | Their whole-cell recall check reported 8,346 "misses" where 24 were real — ~500×, because the rest sat in regions the parser is required to preserve. Here: **90 of 315 incident-corpus entities are unreachable**, and hybrid recall over what *was* offered is **0.996 against an overall 0.711** |
+| **Parquet engine preflight at construction** | Their `pyarrow`-missing-at-write killed a run after 18 minutes. Ours raised the same error at the same moment. Five lines |
+
+### The three most useful things to carry forward
+
+1. **The failure classes that mattered were the ones with zero corpus support.** All
+   three substantive adoptions are for shapes no fixture, pack or stress corpus here
+   contains. Everything the corpora *do* cover was already handled, usually better.
+   Coverage of the measured surface said nothing about the unmeasured one.
+2. **"Already implemented" needed probing, not reading.** Nineteen items were verified
+   against the code, three by running something: the reconciler's behaviour on their
+   two motivating overlap failures (impossible here, by priority rather than by
+   length), pydantic's refusal of a YAML-boolean language code, and the timing of the
+   parquet import.
+3. **Their strongest single claim is wrong here and it took a probe to say so.**
+   "Longest span wins is the only correct overlap rule" — both failures behind it are
+   impossible under ADR-0005's priority ordering. One residual asymmetry is real,
+   recorded as `docs/20` D9, and unmeasured on any corpus.
+
+### What was deliberately *not* adopted, in one line each
+
+Case augmentation, the row-scoped gazetteer and protected terms, per-segment language
+detection (**43–46% of their transcript cells are multilingual** — that is the evidence
+this repository's standing deferral never had), and segment batching: all real, all
+**unmeasurable on any corpus here**, all deferred with the condition that reopens them.
+Rejected outright: their multilingual PERSON denylist (corpus-tuned word list in five
+languages we do not ship), the labelled-address recognizer (ADR-0002, `AGENTS.md` rule
+6), a `PII` type for untyped spans (closed taxonomy, rule 7), and `ai_mask` as a
+provider — **on their measurement, which is worth reading before anyone proposes it**:
+no offsets, no types, and not reproducible across rows.
+
+Their two owner-ruled policy decisions were **not inherited**. One of them is real
+input to *our* open speaker-prefix ADR: a production deployment chose "preserve", and
+measured what it cost.
+
+### Privacy
+
+The workbook was **never opened** — `openpyxl` is not installed, no Excel adapter
+exists, and none was added. Every alternative figure quoted anywhere in this repository
+comes from their sanitized counts-only reports. **One thing to know if you read their
+pack:** its prose uses person names from its own corpus and its `knowledge/01` §4.2
+says those are real agent names. Four had reached this repository's new fixtures and
+docstrings before that was noticed; all were replaced with this project's own synthetic
+pool. Check any example you lift from there.
+
+### Both auditors found the markup guard leaking, and that is the session's lesson
+
+Session 5's rule paid again, harder than usual. **Three variants of one mistake**, all
+in `_clip_out_of_markup`, all in the direction ADR-0027's own decision 1 forbids —
+*a guard against over-redaction that causes under-redaction has made the trade
+backwards*:
+
+1. `<Grace Okafor>` was read as a tag (the pattern matched any bracketed word run), so
+   a chat-style display name fell "wholly inside markup" and the span was discarded.
+   Fixed by requiring a **known** element name.
+2. A name inside a URL path (`…/u/Grace.Okafor`) was discarded for the same reason.
+   Fixed: a span wholly inside a region is now *judged* — dropped only when its own
+   surface carries a bracket, is a tag/attribute name, or holds fewer than two letters.
+3. An untouched quoted surname (`"Small"`) and a digit-only ADDRESS were deleted
+   because the "did the clip shorten this?" flag was computed **after** the punctuation
+   trim, so trimming a quote counted as clipping. On a real ServiceNow column, where a
+   URL somewhere in the cell is near-universal, this would have removed candidates
+   silently on most rows.
+
+**None was visible to a corpus, a gate or a metric** — no corpus here has markup. They
+were found by reading the diff against the doctrine it claimed to follow. A fourth,
+smaller: clipping last can produce a widened span clipped back to its origin, so
+`detect()` now drops exact duplicates rather than letting a provider corroborate itself.
+
+Two review suggestions were **not** taken, with the reason recorded where someone would
+look: adding `pyarrow` to `test_package.py`'s `OPTIONAL_MODULES` (pandas imports pyarrow
+itself, so the guard can never be clean — measured, and the comment there says so), and
+moving `processing/fidelity.py` to `outputs/` (it runs before anything is written).
+
+Still open and **pre-existing**, raised by the architecture review and deliberately not
+fixed here: `BaseProvider._extend_left` takes a `siblings` argument that its only
+production caller does not pass, so ADR-0021's sibling-conflict refusal never fires in
+production and `test_span_extension.py`'s comment claiming otherwise is wrong. Passing
+it would change detection behaviour and needs its own measurement.
+
+### State
+
+**1168 default-tier tests** (1090 at session start), 97 deselected; 92 integration;
+ruff clean; `mypy src tests` clean (154 files). **41/41 benchmark gates re-run on both
+corpora and both chains after every increment and again after the audit fixes — no
+published number moved, and none was touched.** New: `tests/test_markup_guard.py` (50),
+`tests/test_reachability.py` (14), plus additions to the Databricks-adapter, outputs and
+incident-corpus suites.
+
+Not run: Databricks (no session opened this session — A2's column-mapping options are
+**unit-tested and unverified on a workspace**, and every place that claim appears says
+so), and no pack benchmark (they need a download).
+
+### Where to go next
+
+1. **The session-11 list, unchanged** — host the service, the durable run store, the
+   identity question, batching (P5), schema introspection.
+2. **`docs/20` §9's four**, of which the first is the one this session most wants:
+   **a markup-bearing corpus slice**, so ADR-0027 stops being a capability with no
+   measurement of its own. Second: the **shape-only source profiler**, so an operator
+   pointing `docs/18` at a real table can see eligible share, parser-fallback rate and
+   language mix *before* configuring instead of guessing.
+3. If P5 (batching) is picked up, read `docs/20` D5/D6 **first**: joining segments into
+   one document per (cell, language) is a 4.7× win *and* makes Spark partitioning,
+   ordering and intermediate-landing part of the answer. All three produced
+   successful, clean-looking runs with wrong output for them, in ~50% of cells.
