@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ["TEMPLATES", "TemplateSpec", "templates_for"]
+__all__ = ["PLAIN", "TEMPLATES", "TRANSCRIPT", "TemplateSpec", "templates_for"]
 
 PLAIN = "plain"
 TRANSCRIPT = "transcript"

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from pii_reduction import __version__
@@ -32,6 +32,7 @@ from pii_reduction.processing.pipeline import build_pipeline
 from pii_reduction.synthetic.corpus import build_corpus, write_corpus
 from pii_reduction.synthetic.fetch import DEFAULT_CACHE_DIR
 from pii_reduction.synthetic.incidents import incident_templates
+from pii_reduction.synthetic.markup_notes import markup_templates
 from pii_reduction.synthetic.packs import (
     DEFAULT_REGISTRY,
     PACKS,
@@ -39,7 +40,7 @@ from pii_reduction.synthetic.packs import (
     fetch_dataset,
     pack_spec,
 )
-from pii_reduction.synthetic.templates import templates_for
+from pii_reduction.synthetic.templates import TemplateSpec, templates_for
 
 __all__ = ["main"]
 
@@ -48,6 +49,9 @@ DEFAULT_CORPUS_DIR = Path("tests/fixtures/corpus")
 #: corpus and beside it, because it is generated rather than fetched: there is no
 #: source to rebuild it from, only this generator and its seed.
 DEFAULT_INCIDENTS_DIR = Path("tests/fixtures/incidents")
+#: The markup corpus (ADR-0029). Committed for the same reason and measured for a
+#: different one: ADR-0027's guard and check had no corpus at all before it.
+DEFAULT_MARKUP_DIR = Path("tests/fixtures/markup")
 DEFAULT_CONFIGS_DIR = Path("configs")
 DEFAULT_PACK_DIR = Path("demo/packs")
 #: These two define the committed corpus. `configs/benchmark_gates.yaml` records them
@@ -59,6 +63,8 @@ DEFAULT_DOCUMENTS_PER_LANGUAGE = 34
 #: takes the over-redaction metric's support from 102 to 687 across the two
 #: committed corpora.
 DEFAULT_INCIDENTS_PER_LANGUAGE = 30
+#: Three templates per language, so 30 gives ten of each shape.
+DEFAULT_MARKUP_PER_LANGUAGE = 30
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -90,6 +96,14 @@ def _build_parser() -> argparse.ArgumentParser:
     incidents.add_argument(
         "--documents-per-language", type=int, default=DEFAULT_INCIDENTS_PER_LANGUAGE
     )
+
+    markup = subparsers.add_parser(
+        "build-markup",
+        help="generate the markup corpus that measures the ADR-0027 guard (ADR-0029)",
+    )
+    markup.add_argument("--out", type=Path, default=DEFAULT_MARKUP_DIR)
+    markup.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    markup.add_argument("--documents-per-language", type=int, default=DEFAULT_MARKUP_PER_LANGUAGE)
 
     download = subparsers.add_parser(
         "fetch-dataset",
@@ -158,6 +172,17 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+#: Command -> (profile name, template callable, document-id prefix).
+#:
+#: Ids are prefixed differently per profile so a document from one corpus can never be
+#: mistaken for a document from another in a manifest or a metric row.
+_CORPUS_PROFILES: dict[str, tuple[str, Callable[[str], tuple[TemplateSpec, ...]], str]] = {
+    "build-corpus": ("benchmark", templates_for, "doc"),
+    "build-incidents": ("incident_notes", incident_templates, "inc"),
+    "build-markup": ("markup", markup_templates, "mk"),
+}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Exit codes: 0 success, 1 a gate failed or a run had failing fields, 2 the
     command could not run.
@@ -182,14 +207,18 @@ def _run(argv: Sequence[str] | None) -> int:
     if args.command == "run":
         return _run_dataset(args)
 
-    if args.command in {"build-corpus", "build-incidents"}:
-        incidents = args.command == "build-incidents"
+    if args.command in {"build-corpus", "build-incidents", "build-markup"}:
+        # One dispatch for three profiles rather than three builders: every invariant
+        # `build_corpus` enforces — span validation, split assignment, deterministic
+        # value sequencing — is enforced identically for all of them, and a fourth
+        # profile is a row here rather than a parallel generator that would drift.
+        profile, templates, prefix = _CORPUS_PROFILES[args.command]
         corpus = build_corpus(
             seed=args.seed,
             documents_per_language=args.documents_per_language,
-            templates=incident_templates if incidents else templates_for,
-            id_prefix="inc" if incidents else "doc",
-            profile="incident_notes" if incidents else "benchmark",
+            templates=templates,
+            id_prefix=prefix,
+            profile=profile,
         )
         written = write_corpus(corpus, args.out)
         print(

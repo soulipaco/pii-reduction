@@ -1,0 +1,541 @@
+document_id,language,document_type,tier,split,text
+mk_0001,en,plain,3,calibration,"Incident INC00100000 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> James Whitfield &lt;maria.rossi@example.net&gt;<br>
+<b>Callback:</b> +1 202 555 0128<br>
+<b>Asset:</b> AST-A90000 on DEMO-PC-6900<br>
+</div>[/code]
+Knowledge article KB000002700 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0002,en,plain,3,test,"Ticket: INC00100037
+Owner: <a href='https://directory.example.test/u/1' title='Peter Novak'>profile</a>
+Contact: peter.novak@example.com&nbsp;/&nbsp;+1 202 555 0143
+Change: CHG0030000
+"
+mk_0003,en,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Logged INC00100074 for DEMO-PC-6907.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.0.0]runbook[/url] applied under CHG0030017.
+2026-04-03 11:31:52 - Service Desk: Caller James Whitfield reachable on +1 202 555 0141;​ see <i>KB000002713</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to james.whitfield@example.net.</p>
+"
+mk_0004,en,plain,3,calibration,"Incident INC00100111 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> Helen Marsh &lt;maria.rossi@example.com&gt;<br>
+<b>Callback:</b> +1 202 555 0122<br>
+<b>Asset:</b> AST-B90029 on DEMO-PC-6914<br>
+</div>[/code]
+Knowledge article KB000002726 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0005,en,plain,3,test,"Ticket: INC00100148
+Owner: <a href='https://directory.example.test/u/1' title='Peter Novak'>profile</a>
+Contact: peter.novak@example.net&nbsp;/&nbsp;+1 202 555 0139
+Change: CHG0030034
+"
+mk_0006,en,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Logged INC00100185 for DEMO-PC-6921.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.1.1]runbook[/url] applied under CHG0030051.
+2026-04-03 11:31:52 - Service Desk: Caller Maria Rossi reachable on +1 202 555 0137;​ see <i>KB000002739</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to peter.novak@example.net.</p>
+"
+mk_0007,en,plain,3,calibration,"Incident INC00100222 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> Helen Marsh &lt;peter.novak@example.org&gt;<br>
+<b>Callback:</b> +1 202 555 0138<br>
+<b>Asset:</b> AST-C90058 on DEMO-PC-6928<br>
+</div>[/code]
+Knowledge article KB000002752 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0008,en,plain,3,test,"Ticket: INC00100259
+Owner: <a href='https://directory.example.test/u/1' title='Grace Okafor'>profile</a>
+Contact: maria.rossi@example.com&nbsp;/&nbsp;+1 202 555 0142
+Change: CHG0030068
+"
+mk_0009,en,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Logged INC00100296 for DEMO-PC-6935.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.2.2]runbook[/url] applied under CHG0030085.
+2026-04-03 11:31:52 - Service Desk: Caller Helen Marsh reachable on +1 202 555 0130;​ see <i>KB000002765</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to grace.okafor@example.com.</p>
+"
+mk_0010,en,plain,3,test,"Incident INC00100333 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> Peter Novak &lt;daniel.ferreira@example.com&gt;<br>
+<b>Callback:</b> +1 202 555 0122<br>
+<b>Asset:</b> AST-D90087 on DEMO-PC-6942<br>
+</div>[/code]
+Knowledge article KB000002778 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0011,en,plain,3,dev,"Ticket: INC00100370
+Owner: <a href='https://directory.example.test/u/1' title='Helen Marsh'>profile</a>
+Contact: james.whitfield@example.org&nbsp;/&nbsp;+1 202 555 0131
+Change: CHG0030102
+"
+mk_0012,en,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Logged INC00100407 for DEMO-PC-6949.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.3.3]runbook[/url] applied under CHG0030119.
+2026-04-03 11:31:52 - Service Desk: Caller Grace Okafor reachable on +1 202 555 0121;​ see <i>KB000002791</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to omar.haddad@example.net.</p>
+"
+mk_0013,en,plain,3,test,"Incident INC00100444 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> James Whitfield &lt;helen.marsh@example.com&gt;<br>
+<b>Callback:</b> +1 202 555 0137<br>
+<b>Asset:</b> AST-E90116 on DEMO-PC-6956<br>
+</div>[/code]
+Knowledge article KB000002804 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0014,en,plain,3,test,"Ticket: INC00100481
+Owner: <a href='https://directory.example.test/u/1' title='Grace Okafor'>profile</a>
+Contact: daniel.ferreira@example.net&nbsp;/&nbsp;+1 202 555 0126
+Change: CHG0030136
+"
+mk_0015,en,transcript,4,calibration,"2026-04-03 09:12:04 - Service Desk: Logged INC00100518 for DEMO-PC-6963.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.4.4]runbook[/url] applied under CHG0030153.
+2026-04-03 11:31:52 - Service Desk: Caller James Whitfield reachable on +1 202 555 0121;​ see <i>KB000002817</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to peter.novak@example.org.</p>
+"
+mk_0016,en,plain,3,test,"Incident INC00100555 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> James Whitfield &lt;peter.novak@example.com&gt;<br>
+<b>Callback:</b> +1 202 555 0132<br>
+<b>Asset:</b> AST-F90145 on DEMO-PC-6970<br>
+</div>[/code]
+Knowledge article KB000002830 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0017,en,plain,3,test,"Ticket: INC00100592
+Owner: <a href='https://directory.example.test/u/1' title='Grace Okafor'>profile</a>
+Contact: omar.haddad@example.net&nbsp;/&nbsp;+1 202 555 0131
+Change: CHG0030170
+"
+mk_0018,en,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Logged INC00100629 for DEMO-PC-6977.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.5.5]runbook[/url] applied under CHG0030187.
+2026-04-03 11:31:52 - Service Desk: Caller Aisha Bello reachable on +1 202 555 0131;​ see <i>KB000002843</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to daniel.ferreira@example.com.</p>
+"
+mk_0019,en,plain,3,calibration,"Incident INC00100666 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> Grace Okafor &lt;james.whitfield@example.net&gt;<br>
+<b>Callback:</b> +1 202 555 0140<br>
+<b>Asset:</b> AST-G90174 on DEMO-PC-6984<br>
+</div>[/code]
+Knowledge article KB000002856 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0020,en,plain,3,test,"Ticket: INC00100703
+Owner: <a href='https://directory.example.test/u/1' title='Aisha Bello'>profile</a>
+Contact: peter.novak@example.com&nbsp;/&nbsp;+1 202 555 0134
+Change: CHG0030204
+"
+mk_0021,en,transcript,4,dev,"2026-04-03 09:12:04 - Service Desk: Logged INC00100740 for DEMO-PC-6991.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.6.6]runbook[/url] applied under CHG0030221.
+2026-04-03 11:31:52 - Service Desk: Caller Helen Marsh reachable on +1 202 555 0128;​ see <i>KB000002869</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to peter.novak@example.net.</p>
+"
+mk_0022,en,plain,3,test,"Incident INC00100777 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> Daniel Ferreira &lt;maria.rossi@example.com&gt;<br>
+<b>Callback:</b> +1 202 555 0121<br>
+<b>Asset:</b> AST-H90203 on DEMO-PC-6998<br>
+</div>[/code]
+Knowledge article KB000002882 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0023,en,plain,3,test,"Ticket: INC00100814
+Owner: <a href='https://directory.example.test/u/1' title='Daniel Ferreira'>profile</a>
+Contact: helen.marsh@example.org&nbsp;/&nbsp;+1 202 555 0122
+Change: CHG0030238
+"
+mk_0024,en,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Logged INC00100851 for DEMO-PC-7005.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.7.0]runbook[/url] applied under CHG0030255.
+2026-04-03 11:31:52 - Service Desk: Caller Peter Novak reachable on +1 202 555 0138;​ see <i>KB000002895</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to daniel.ferreira@example.com.</p>
+"
+mk_0025,en,plain,3,test,"Incident INC00100888 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> Omar Haddad &lt;helen.marsh@example.net&gt;<br>
+<b>Callback:</b> +1 202 555 0134<br>
+<b>Asset:</b> AST-J90232 on DEMO-PC-7012<br>
+</div>[/code]
+Knowledge article KB000002908 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0026,en,plain,3,calibration,"Ticket: INC00100925
+Owner: <a href='https://directory.example.test/u/1' title='Aisha Bello'>profile</a>
+Contact: grace.okafor@example.com&nbsp;/&nbsp;+1 202 555 0127
+Change: CHG0030272
+"
+mk_0027,en,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Logged INC00100962 for DEMO-PC-7019.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.8.1]runbook[/url] applied under CHG0030289.
+2026-04-03 11:31:52 - Service Desk: Caller Grace Okafor reachable on +1 202 555 0143;​ see <i>KB000002921</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to helen.marsh@example.net.</p>
+"
+mk_0028,en,plain,3,test,"Incident INC00100999 — customer correspondence
+[code]<div class='mail'>
+<b>From:</b> Helen Marsh &lt;daniel.ferreira@example.com&gt;<br>
+<b>Callback:</b> +1 202 555 0124<br>
+<b>Asset:</b> AST-K90261 on DEMO-PC-7026<br>
+</div>[/code]
+Knowledge article KB000002934 was sent; see <a href='https://support.example.test/kb'>the article</a>.
+"
+mk_0029,en,plain,3,calibration,"Ticket: INC00101036
+Owner: <a href='https://directory.example.test/u/1' title='Omar Haddad'>profile</a>
+Contact: james.whitfield@example.com&nbsp;/&nbsp;+1 202 555 0123
+Change: CHG0030306
+"
+mk_0030,en,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Logged INC00101073 for DEMO-PC-7033.
+2026-04-03 10:44:19 - Automation: [url=https://runbook.example.test/v4.9.2]runbook[/url] applied under CHG0030323.
+2026-04-03 11:31:52 - Service Desk: Caller Aisha Bello reachable on +1 202 555 0140;​ see <i>KB000002947</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Confirmation sent to aisha.bello@example.net.</p>
+"
+mk_0031,de,plain,3,test,"Vorfall INC00101110 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Miriam Köhler &lt;lukas.schneider@example.org&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 032<br>
+<b>Inventar:</b> AST-L90290 auf DEMO-PC-7040<br>
+</div>[/code]
+Wissensartikel KB000002960 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0032,de,plain,3,test,"Vorgang: INC00101147
+Besitzer: <a href='https://directory.example.test/u/1' title='Tobias Lang'>Profil</a>
+Kontakt: katrin.wagner@example.net&nbsp;/&nbsp;+49 30 23125 020
+Aenderung: CHG0030340
+"
+mk_0033,de,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: INC00101184 fuer DEMO-PC-7047 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.10.3]Handbuch[/url] unter CHG0030357 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Lukas Schneider erreichbar unter +49 30 23125 041;​ siehe <i>KB000002973</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an katrin.wagner@example.net gesendet.</p>
+"
+mk_0034,de,plain,3,test,"Vorfall INC00101221 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Stefan Bauer &lt;lukas.schneider@example.org&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 033<br>
+<b>Inventar:</b> AST-M90319 auf DEMO-PC-7054<br>
+</div>[/code]
+Wissensartikel KB000002986 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0035,de,plain,3,calibration,"Vorgang: INC00101258
+Besitzer: <a href='https://directory.example.test/u/1' title='Anja Hoffmann'>Profil</a>
+Kontakt: tobias.lang@example.com&nbsp;/&nbsp;+49 30 23125 043
+Aenderung: CHG0030374
+"
+mk_0036,de,transcript,4,dev,"2026-04-03 09:12:04 - Service Desk: INC00101295 fuer DEMO-PC-7061 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.11.4]Handbuch[/url] unter CHG0030391 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Katrin Wagner erreichbar unter +49 30 23125 036;​ siehe <i>KB000002999</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an anja.hoffmann@example.net gesendet.</p>
+"
+mk_0037,de,plain,3,dev,"Vorfall INC00101332 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Lukas Schneider &lt;katrin.wagner@example.net&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 036<br>
+<b>Inventar:</b> AST-N90348 auf DEMO-PC-7068<br>
+</div>[/code]
+Wissensartikel KB000003012 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0038,de,plain,3,test,"Vorgang: INC00101369
+Besitzer: <a href='https://directory.example.test/u/1' title='Jürgen Müller'>Profil</a>
+Kontakt: anja.hoffmann@example.org&nbsp;/&nbsp;+49 30 23125 025
+Aenderung: CHG0030408
+"
+mk_0039,de,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: INC00101406 fuer DEMO-PC-7075 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.12.5]Handbuch[/url] unter CHG0030425 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Jan Becker erreichbar unter +49 30 23125 039;​ siehe <i>KB000003025</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an stefan.bauer@example.org gesendet.</p>
+"
+mk_0040,de,plain,3,calibration,"Vorfall INC00101443 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Jan Becker &lt;lukas.schneider@example.org&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 029<br>
+<b>Inventar:</b> AST-P90377 auf DEMO-PC-7082<br>
+</div>[/code]
+Wissensartikel KB000003038 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0041,de,plain,3,test,"Vorgang: INC00101480
+Besitzer: <a href='https://directory.example.test/u/1' title='Jürgen Müller'>Profil</a>
+Kontakt: jan.becker@example.com&nbsp;/&nbsp;+49 30 23125 038
+Aenderung: CHG0030442
+"
+mk_0042,de,transcript,4,dev,"2026-04-03 09:12:04 - Service Desk: INC00101517 fuer DEMO-PC-7089 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.13.6]Handbuch[/url] unter CHG0030459 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Lukas Schneider erreichbar unter +49 30 23125 022;​ siehe <i>KB000003051</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an tobias.lang@example.com gesendet.</p>
+"
+mk_0043,de,plain,3,test,"Vorfall INC00101554 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Anja Hoffmann &lt;anja.hoffmann@example.net&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 035<br>
+<b>Inventar:</b> AST-Q90406 auf DEMO-PC-7096<br>
+</div>[/code]
+Wissensartikel KB000003064 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0044,de,plain,3,test,"Vorgang: INC00101591
+Besitzer: <a href='https://directory.example.test/u/1' title='Anja Hoffmann'>Profil</a>
+Kontakt: katrin.wagner@example.net&nbsp;/&nbsp;+49 30 23125 039
+Aenderung: CHG0030476
+"
+mk_0045,de,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: INC00101628 fuer DEMO-PC-7103 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.14.0]Handbuch[/url] unter CHG0030493 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Miriam Köhler erreichbar unter +49 30 23125 026;​ siehe <i>KB000003077</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an juergen.mueller@example.net gesendet.</p>
+"
+mk_0046,de,plain,3,test,"Vorfall INC00101665 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Katrin Wagner &lt;miriam.koehler@example.net&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 040<br>
+<b>Inventar:</b> AST-R90435 auf DEMO-PC-7110<br>
+</div>[/code]
+Wissensartikel KB000003090 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0047,de,plain,3,test,"Vorgang: INC00101702
+Besitzer: <a href='https://directory.example.test/u/1' title='Stefan Bauer'>Profil</a>
+Kontakt: tobias.lang@example.net&nbsp;/&nbsp;+49 30 23125 034
+Aenderung: CHG0030510
+"
+mk_0048,de,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: INC00101739 fuer DEMO-PC-7117 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.15.1]Handbuch[/url] unter CHG0030527 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Lukas Schneider erreichbar unter +49 30 23125 027;​ siehe <i>KB000003103</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an juergen.mueller@example.com gesendet.</p>
+"
+mk_0049,de,plain,3,test,"Vorfall INC00101776 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Stefan Bauer &lt;jan.becker@example.net&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 037<br>
+<b>Inventar:</b> AST-S90464 auf DEMO-PC-7124<br>
+</div>[/code]
+Wissensartikel KB000003116 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0050,de,plain,3,calibration,"Vorgang: INC00101813
+Besitzer: <a href='https://directory.example.test/u/1' title='Jürgen Müller'>Profil</a>
+Kontakt: juergen.mueller@example.com&nbsp;/&nbsp;+49 30 23125 022
+Aenderung: CHG0030544
+"
+mk_0051,de,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: INC00101850 fuer DEMO-PC-7131 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.16.2]Handbuch[/url] unter CHG0030561 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Jan Becker erreichbar unter +49 30 23125 027;​ siehe <i>KB000003129</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an lukas.schneider@example.com gesendet.</p>
+"
+mk_0052,de,plain,3,test,"Vorfall INC00101887 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Stefan Bauer &lt;lukas.schneider@example.net&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 027<br>
+<b>Inventar:</b> AST-T90493 auf DEMO-PC-7138<br>
+</div>[/code]
+Wissensartikel KB000003142 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0053,de,plain,3,calibration,"Vorgang: INC00101924
+Besitzer: <a href='https://directory.example.test/u/1' title='Katrin Wagner'>Profil</a>
+Kontakt: tobias.lang@example.com&nbsp;/&nbsp;+49 30 23125 037
+Aenderung: CHG0030578
+"
+mk_0054,de,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: INC00101961 fuer DEMO-PC-7145 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.17.3]Handbuch[/url] unter CHG0030595 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Anja Hoffmann erreichbar unter +49 30 23125 043;​ siehe <i>KB000003155</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an tobias.lang@example.com gesendet.</p>
+"
+mk_0055,de,plain,3,calibration,"Vorfall INC00101998 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Tobias Lang &lt;miriam.koehler@example.com&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 023<br>
+<b>Inventar:</b> AST-U90522 auf DEMO-PC-7152<br>
+</div>[/code]
+Wissensartikel KB000003168 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0056,de,plain,3,test,"Vorgang: INC00102035
+Besitzer: <a href='https://directory.example.test/u/1' title='Lukas Schneider'>Profil</a>
+Kontakt: miriam.koehler@example.org&nbsp;/&nbsp;+49 30 23125 033
+Aenderung: CHG0030612
+"
+mk_0057,de,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: INC00102072 fuer DEMO-PC-7159 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.18.4]Handbuch[/url] unter CHG0030629 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Miriam Köhler erreichbar unter +49 30 23125 034;​ siehe <i>KB000003181</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an jan.becker@example.net gesendet.</p>
+"
+mk_0058,de,plain,3,test,"Vorfall INC00102109 — Kundenkorrespondenz
+[code]<div class='mail'>
+<b>Von:</b> Lukas Schneider &lt;jan.becker@example.org&gt;<br>
+<b>Rueckruf:</b> +49 30 23125 043<br>
+<b>Inventar:</b> AST-V90551 auf DEMO-PC-7166<br>
+</div>[/code]
+Wissensartikel KB000003194 wurde gesendet; siehe <a href='https://support.example.test/kb'>den Artikel</a>.
+"
+mk_0059,de,plain,3,calibration,"Vorgang: INC00102146
+Besitzer: <a href='https://directory.example.test/u/1' title='Stefan Bauer'>Profil</a>
+Kontakt: lukas.schneider@example.com&nbsp;/&nbsp;+49 30 23125 026
+Aenderung: CHG0030646
+"
+mk_0060,de,transcript,4,calibration,"2026-04-03 09:12:04 - Service Desk: INC00102183 fuer DEMO-PC-7173 eroeffnet.
+2026-04-03 10:44:19 - Automatisierung: [url=https://runbook.example.test/v4.19.5]Handbuch[/url] unter CHG0030663 verteilt.
+2026-04-03 11:31:52 - Service Desk: Anrufer Jürgen Müller erreichbar unter +49 30 23125 037;​ siehe <i>KB000003207</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Bestaetigung an tobias.lang@example.com gesendet.</p>
+"
+mk_0061,el,plain,3,calibration,"Περιστατικό INC00102220 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Άννα Βασιλείου &lt;maria.papadopoulou@example.org&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0034<br>
+<b>Πάγιο:</b> AST-W90580 στο DEMO-PC-7180<br>
+</div>[/code]
+Το άρθρο KB000003220 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0062,el,plain,3,test,"Αίτημα: INC00102257
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Νίκος Αντωνίου'>προφίλ</a>
+Επικοινωνία: giorgos.dimitriou@example.org&nbsp;/&nbsp;+30 210 000 0037
+Αλλαγή: CHG0030680
+"
+mk_0063,el,transcript,4,calibration,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00102294 για DEMO-PC-7187.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.0.6]οδηγός[/url] με αλλαγή CHG0030697.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Γιώργος Δημητρίου στο +30 210 000 0021·​ δείτε <i>KB000003233</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο eleni.pappa@example.com.</p>
+"
+mk_0064,el,plain,3,calibration,"Περιστατικό INC00102331 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Νίκος Αντωνίου &lt;maria.papadopoulou@example.org&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0035<br>
+<b>Πάγιο:</b> AST-X90609 στο DEMO-PC-7194<br>
+</div>[/code]
+Το άρθρο KB000003246 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0065,el,plain,3,test,"Αίτημα: INC00102368
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Κώστας Ιωάννου'>προφίλ</a>
+Επικοινωνία: nikos.antoniou@example.org&nbsp;/&nbsp;+30 210 000 0021
+Αλλαγή: CHG0030714
+"
+mk_0066,el,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00102405 για DEMO-PC-7201.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.1.0]οδηγός[/url] με αλλαγή CHG0030731.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Μαρία Παπαδοπούλου στο +30 210 000 0032·​ δείτε <i>KB000003259</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο eleni.pappa@example.org.</p>
+"
+mk_0067,el,plain,3,test,"Περιστατικό INC00102442 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Σοφία Καραγιάννη &lt;kostas.ioannou@example.org&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0033<br>
+<b>Πάγιο:</b> AST-Y90638 στο DEMO-PC-7208<br>
+</div>[/code]
+Το άρθρο KB000003272 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0068,el,plain,3,test,"Αίτημα: INC00102479
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Κώστας Ιωάννου'>προφίλ</a>
+Επικοινωνία: maria.papadopoulou@example.com&nbsp;/&nbsp;+30 210 000 0029
+Αλλαγή: CHG0030748
+"
+mk_0069,el,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00102516 για DEMO-PC-7215.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.2.1]οδηγός[/url] με αλλαγή CHG0030765.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Νίκος Αντωνίου στο +30 210 000 0021·​ δείτε <i>KB000003285</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο eleni.pappa@example.net.</p>
+"
+mk_0070,el,plain,3,calibration,"Περιστατικό INC00102553 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Δημήτρης Λέκκας &lt;eleni.pappa@example.com&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0038<br>
+<b>Πάγιο:</b> AST-Z90667 στο DEMO-PC-7222<br>
+</div>[/code]
+Το άρθρο KB000003298 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0071,el,plain,3,test,"Αίτημα: INC00102590
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Κώστας Ιωάννου'>προφίλ</a>
+Επικοινωνία: maria.papadopoulou@example.com&nbsp;/&nbsp;+30 210 000 0036
+Αλλαγή: CHG0030782
+"
+mk_0072,el,transcript,4,dev,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00102627 για DEMO-PC-7229.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.3.2]οδηγός[/url] με αλλαγή CHG0030799.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Γιώργος Δημητρίου στο +30 210 000 0025·​ δείτε <i>KB000003311</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο giorgos.dimitriou@example.net.</p>
+"
+mk_0073,el,plain,3,calibration,"Περιστατικό INC00102664 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Γιώργος Δημητρίου &lt;nikos.antoniou@example.org&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0023<br>
+<b>Πάγιο:</b> AST-A90696 στο DEMO-PC-7236<br>
+</div>[/code]
+Το άρθρο KB000003324 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0074,el,plain,3,test,"Αίτημα: INC00102701
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Νίκος Αντωνίου'>προφίλ</a>
+Επικοινωνία: eleni.pappa@example.net&nbsp;/&nbsp;+30 210 000 0022
+Αλλαγή: CHG0030816
+"
+mk_0075,el,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00102738 για DEMO-PC-7243.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.4.3]οδηγός[/url] με αλλαγή CHG0030833.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Άννα Βασιλείου στο +30 210 000 0041·​ δείτε <i>KB000003337</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο dimitris.lekkas@example.org.</p>
+"
+mk_0076,el,plain,3,test,"Περιστατικό INC00102775 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Νίκος Αντωνίου &lt;dimitris.lekkas@example.com&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0028<br>
+<b>Πάγιο:</b> AST-B90725 στο DEMO-PC-7250<br>
+</div>[/code]
+Το άρθρο KB000003350 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0077,el,plain,3,test,"Αίτημα: INC00102812
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Άννα Βασιλείου'>προφίλ</a>
+Επικοινωνία: maria.papadopoulou@example.net&nbsp;/&nbsp;+30 210 000 0040
+Αλλαγή: CHG0030850
+"
+mk_0078,el,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00102849 για DEMO-PC-7257.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.5.4]οδηγός[/url] με αλλαγή CHG0030867.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Σοφία Καραγιάννη στο +30 210 000 0034·​ δείτε <i>KB000003363</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο dimitris.lekkas@example.com.</p>
+"
+mk_0079,el,plain,3,dev,"Περιστατικό INC00102886 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Ελένη Παππά &lt;kostas.ioannou@example.net&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0038<br>
+<b>Πάγιο:</b> AST-C90754 στο DEMO-PC-7264<br>
+</div>[/code]
+Το άρθρο KB000003376 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0080,el,plain,3,test,"Αίτημα: INC00102923
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Γιώργος Δημητρίου'>προφίλ</a>
+Επικοινωνία: giorgos.dimitriou@example.net&nbsp;/&nbsp;+30 210 000 0026
+Αλλαγή: CHG0030884
+"
+mk_0081,el,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00102960 για DEMO-PC-7271.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.6.5]οδηγός[/url] με αλλαγή CHG0030901.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Σοφία Καραγιάννη στο +30 210 000 0024·​ δείτε <i>KB000003389</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο dimitris.lekkas@example.com.</p>
+"
+mk_0082,el,plain,3,test,"Περιστατικό INC00102997 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Νίκος Αντωνίου &lt;dimitris.lekkas@example.org&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0025<br>
+<b>Πάγιο:</b> AST-D90783 στο DEMO-PC-7278<br>
+</div>[/code]
+Το άρθρο KB000003402 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0083,el,plain,3,test,"Αίτημα: INC00103034
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Κώστας Ιωάννου'>προφίλ</a>
+Επικοινωνία: sofia.karagianni@example.net&nbsp;/&nbsp;+30 210 000 0040
+Αλλαγή: CHG0030918
+"
+mk_0084,el,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00103071 για DEMO-PC-7285.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.7.6]οδηγός[/url] με αλλαγή CHG0030935.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Ελένη Παππά στο +30 210 000 0041·​ δείτε <i>KB000003415</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο sofia.karagianni@example.net.</p>
+"
+mk_0085,el,plain,3,test,"Περιστατικό INC00103108 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Γιώργος Δημητρίου &lt;maria.papadopoulou@example.org&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0023<br>
+<b>Πάγιο:</b> AST-E90812 στο DEMO-PC-7292<br>
+</div>[/code]
+Το άρθρο KB000003428 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0086,el,plain,3,dev,"Αίτημα: INC00103145
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Γιώργος Δημητρίου'>προφίλ</a>
+Επικοινωνία: maria.papadopoulou@example.org&nbsp;/&nbsp;+30 210 000 0029
+Αλλαγή: CHG0030952
+"
+mk_0087,el,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00103182 για DEMO-PC-7299.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.8.0]οδηγός[/url] με αλλαγή CHG0030969.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Νίκος Αντωνίου στο +30 210 000 0042·​ δείτε <i>KB000003441</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο dimitris.lekkas@example.com.</p>
+"
+mk_0088,el,plain,3,calibration,"Περιστατικό INC00103219 — αλληλογραφία πελάτη
+[code]<div class='mail'>
+<b>Από:</b> Σοφία Καραγιάννη &lt;kostas.ioannou@example.org&gt;<br>
+<b>Επιστροφή κλήσης:</b> +30 210 000 0021<br>
+<b>Πάγιο:</b> AST-F90841 στο DEMO-PC-7306<br>
+</div>[/code]
+Το άρθρο KB000003454 στάλθηκε· δείτε <a href='https://support.example.test/kb'>το άρθρο</a>.
+"
+mk_0089,el,plain,3,test,"Αίτημα: INC00103256
+Κάτοχος: <a href='https://directory.example.test/u/1' title='Γιώργος Δημητρίου'>προφίλ</a>
+Επικοινωνία: anna.vasileiou@example.org&nbsp;/&nbsp;+30 210 000 0021
+Αλλαγή: CHG0030986
+"
+mk_0090,el,transcript,4,test,"2026-04-03 09:12:04 - Service Desk: Καταγράφηκε INC00103293 για DEMO-PC-7313.
+2026-04-03 10:44:19 - Αυτοματισμός: [url=https://runbook.example.test/v4.9.1]οδηγός[/url] με αλλαγή CHG0031003.
+2026-04-03 11:31:52 - Service Desk: Ο καλών Ελένη Παππά στο +30 210 000 0030·​ δείτε <i>KB000003467</i>.
+2026-04-03 12:05:40 - Service Desk: <p>Επιβεβαίωση στο maria.papadopoulou@example.net.</p>
+"
