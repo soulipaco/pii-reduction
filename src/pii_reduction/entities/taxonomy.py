@@ -38,6 +38,7 @@ __all__ = [
     "is_known",
     "known_labels",
     "line_bounded_labels",
+    "markup_guarded_labels",
     "require_known",
 ]
 
@@ -58,6 +59,14 @@ class EntityDefinition:
     priority: int
     description: str
     detected_at_baseline: bool = True
+    #: Does this entity have a machine-checkable grammar of its own?
+    #:
+    #: A static fact about the surface, like ``surface_may_span_lines``. A string that
+    #: matches the email or phone grammar *is* one, whatever surrounds it — so the
+    #: markup guard (ADR-0027) never touches those spans: dropping one would be a leak,
+    #: which is strictly worse than the over-redaction the guard exists to prevent.
+    #: PERSON and ADDRESS are model-inferred and carry no such grammar.
+    format_defined: bool = False
     #: May a single instance of this entity legitimately span more than one line?
     #:
     #: A static fact about the surface, not a policy: a person's name never contains a
@@ -74,6 +83,7 @@ TAXONOMY: Mapping[str, EntityDefinition] = MappingProxyType(
             replacement="<EMAIL>",
             priority=100,
             description="Email address. Deterministic recognizer at baseline.",
+            format_defined=True,
             surface_may_span_lines=False,
         ),
         PHONE: EntityDefinition(
@@ -81,6 +91,7 @@ TAXONOMY: Mapping[str, EntityDefinition] = MappingProxyType(
             replacement="<PHONE>",
             priority=90,
             description="Telephone number. Deterministic recognizer at baseline.",
+            format_defined=True,
             surface_may_span_lines=False,
         ),
         ADDRESS: EntityDefinition(
@@ -139,6 +150,19 @@ def line_bounded_labels() -> frozenset[str]:
     """
     return frozenset(
         label for label, definition in TAXONOMY.items() if not definition.surface_may_span_lines
+    )
+
+
+def markup_guarded_labels() -> frozenset[str]:
+    """Labels the markup guard may clip (ADR-0027).
+
+    The complement of ``format_defined``: EMAIL and PHONE are exempt because a string
+    matching their grammar is that thing regardless of the tag beside it, and clipping
+    one would leak an address the run was asked to remove. One definition, read by the
+    provider boundary, for the same reason as :func:`line_bounded_labels`.
+    """
+    return frozenset(
+        label for label, definition in TAXONOMY.items() if not definition.format_defined
     )
 
 

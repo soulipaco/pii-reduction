@@ -42,6 +42,7 @@ from pii_reduction.outputs.local import write_json
 from pii_reduction.outputs.registry import build_output
 from pii_reduction.parsers.registry import build_parser
 from pii_reduction.processing.errors import ProcessingError
+from pii_reduction.processing.fidelity import MarkupCheckError, markup_losses
 from pii_reduction.processing.field_processor import FieldProcessor, ProviderChain
 from pii_reduction.providers.base import BaseProvider
 from pii_reduction.providers.registry import build_provider, provider_distributions
@@ -546,6 +547,28 @@ class Pipeline:
                     raise ProcessingError(
                         f"dataset {self.config.dataset.name!r}: source column "
                         f"{processor.column!r} was modified; reduction must be non-destructive"
+                    )
+        if rules.require_markup_preserved:
+            for processor in self._processors:
+                if processor.output_column not in outcome.frame.columns:
+                    continue
+                try:
+                    loss = markup_losses(
+                        dataset.frame[processor.column], outcome.frame[processor.output_column]
+                    )
+                except MarkupCheckError as error:
+                    # A check that cannot run must not escape this stage as somebody
+                    # else's exception type; the caller is promised `ProcessingError`.
+                    raise ProcessingError(
+                        f"dataset {self.config.dataset.name!r}: {error}"
+                    ) from error
+                if loss:
+                    raise ProcessingError(
+                        f"dataset {self.config.dataset.name!r}: reduction of column "
+                        f"{processor.column!r} destroyed {loss.tags} markup tag(s) across "
+                        f"{loss.rows} row(s); a detected span ran into machine syntax "
+                        "(ADR-0027). Counts only — no text is reported. Set "
+                        "validation.require_markup_preserved: false to accept it"
                     )
 
 

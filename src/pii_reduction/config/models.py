@@ -169,6 +169,12 @@ class ValidationSettings(ConfigModel):
     require_row_count_match: bool = True
     require_original_unchanged: bool = True
     require_output_columns: bool = True
+    #: Fidelity, not recall (ADR-0027): a reduction that destroyed an HTML or BBCode
+    #: tag damaged structure that had to survive, so it stops the run. On by default
+    #: because the damage is invisible to every other check the pipeline runs — the
+    #: round-trip invariant protects what a parser marked ineligible, and this is
+    #: about what happens *inside* an eligible region.
+    require_markup_preserved: bool = True
     roundtrip_parser_test: bool = True
     leakage_check: LeakageCheckSettings = LeakageCheckSettings()
 

@@ -408,11 +408,27 @@ validation:
   require_row_count_match: true
   require_original_unchanged: true
   require_output_columns: true
+  require_markup_preserved: true
   roundtrip_parser_test: true
   leakage_check:
     enabled: true
     benchmark_only: true
 ```
+
+**Two severities, and only one blocks.** Everything under `validation:` is a
+*fidelity* check: it asserts that the output kept something it had to keep, and a
+failure stops the run with a non-zero exit (ADR-0023's fail-closed posture). A
+detector *missing* a name is a **recall** failure, which the benchmark reports and no
+production run gates on — recall is never 1.0, so gating on it means nothing ever
+ships, while not gating on fidelity means shipping structural damage that stays
+invisible until something downstream tries to parse the output.
+
+`require_markup_preserved` (ADR-0027) is the one that reaches *inside* an eligible
+region: it counts known HTML and BBCode tag names that the reduction destroyed. Its
+implementation deliberately shares nothing with the provider-boundary markup guard —
+a validator that imports the detector's idea of markup rubber-stamps a shared mistake.
+Turning it off is a decision, not a workaround: it says this dataset accepts
+structural damage inside the text offered for reduction.
 
 ## Benchmark configuration
 

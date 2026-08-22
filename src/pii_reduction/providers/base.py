@@ -8,12 +8,16 @@ A provider that misbehaves fails loudly here rather than corrupting text downstr
 The base also performs *repairs* rather than only checking. A span of a line-bounded
 entity type that crosses a line break is split into one span per line
 (``BaseProvider._bound_to_line``, ADR-0016 — every fragment is kept, not just the
-longest). A PERSON span may additionally be widened over one preceding token, opt-in
-per instance (``BaseProvider._extend_left``, ADR-0021); that is the one repair which
-does not narrow. Validation runs first, so a genuinely malformed span still raises
-rather than being quietly reshaped, and neither repair can invalidate it: splitting
-only narrows, and widening moves ``start`` left within a line without touching
-``end``.
+longest). A PERSON span may then be widened over one preceding token, opt-in per
+instance (``BaseProvider._extend_left``, ADR-0021); that is the one repair which does
+not narrow. **Last**, a span of a model-inferred entity type is clipped back out of any
+HTML, BBCode, URL or entity region it overlaps (``BaseProvider._clip_out_of_markup``,
+ADR-0027) — last because the widening step can otherwise pull a span back into a tag,
+and because clipping only narrows, so nothing after it is needed.
+
+Validation runs first, so a genuinely malformed span still raises rather than being
+quietly reshaped, and no repair can invalidate it: splitting and clipping only narrow,
+and widening moves ``start`` left within a line without touching ``end``.
 """
 
 from __future__ import annotations
@@ -26,13 +30,25 @@ from typing import Protocol, runtime_checkable
 from pii_reduction.contracts.entities import EntityMatch
 from pii_reduction.entities.errors import UnknownEntityLabelError
 from pii_reduction.entities.mapping import DropCounter
-from pii_reduction.entities.taxonomy import PERSON, line_bounded_labels, require_known
-from pii_reduction.patterns import is_identifier_shaped
+from pii_reduction.entities.taxonomy import (
+    PERSON,
+    line_bounded_labels,
+    markup_guarded_labels,
+    require_known,
+)
+from pii_reduction.patterns import (
+    MARKUP_DELIMITER_PATTERN,
+    MARKUP_TOKEN_VOCABULARY,
+    is_identifier_shaped,
+    markup_free_fragments,
+    markup_regions,
+)
 from pii_reduction.providers.errors import ProviderError
 
 __all__ = [
     "LINE_BOUNDED_ENTITIES",
     "LINE_BREAK_SPLIT_RE",
+    "MARKUP_GUARDED_ENTITIES",
     "BaseProvider",
     "PIIProvider",
     "extend_person_span_left",
@@ -58,6 +74,17 @@ LINE_BOUNDED_ENTITIES: frozenset[str] = line_bounded_labels()
 #: multilingual text this project handles. The two are deliberately kept in step; a
 #: shared home is warranted if a third consumer appears.
 LINE_BREAK_SPLIT_RE = re.compile("\r\n|\r|\n")
+
+#: Entity types the markup guard may clip (ADR-0027). Derived from the taxonomy for
+#: the same reason as :data:`LINE_BOUNDED_ENTITIES`: "does this entity have a grammar
+#: of its own?" is a static fact about the entity, and restating it here is how the two
+#: definitions drift. EMAIL and PHONE are absent — clipping one would leak.
+MARKUP_GUARDED_ENTITIES: frozenset[str] = markup_guarded_labels()
+
+#: Characters trimmed from the edge of a span that a markup region was clipped out of.
+#: A fragment left behind by clipping routinely begins or ends on the joiner that held
+#: it to the tag, and redacting that joiner damages the syntax the clip just preserved.
+_MARKUP_EDGE = " \t\r\n.,;:!?()[]{}\"'`*-\u2013\u2014@/\\&#+=<>"
 
 #: The token immediately before a span, and the whitespace separating them.
 _PRECEDING_TOKEN_RE = re.compile(r"(\S+)([ \t]+)$")
@@ -279,7 +306,37 @@ class BaseProvider(ABC):
         self._validate(detected, text=text, requested=requested)
         matches = [bounded for match in detected for bounded in self._bound_to_line(match, text)]
         matches = [candidate for match in matches for candidate in self._extend_left(match, text)]
-        return sorted(matches, key=lambda match: (match.start, match.end, match.entity_type))
+        # **Last, and that ordering is load-bearing.** The ADR-0021 extension widens a
+        # span leftward over one capitalised token, and a token can end in a tag —
+        # `Γιώργος</b>` is capitalised, is not identifier-shaped, and would be
+        # swallowed whole. Clipping before the extension would therefore be undone by
+        # it. Clipping last cannot be undone by anything, and it costs nothing:
+        # ADR-0021 offers the widened span *and* the original, so if the widening is
+        # clipped back the reconciler sees two identical candidates and treats the
+        # second as corroboration (`_find_identical`).
+        #
+        # `markup_regions` is computed once per call and only when the cheap hint
+        # fires, then shared by every candidate: the answer is a property of the text,
+        # not of the span.
+        regions = markup_regions(text)
+        matches = [
+            clipped
+            for match in matches
+            for clipped in self._clip_out_of_markup(match, text, regions)
+        ]
+        # Exact duplicates are dropped, which clipping-last can now produce: a widened
+        # span clipped back to the span it was widened from. Left in, one provider
+        # would appear in `supporting_matches` as its own corroboration, which is the
+        # one thing that field is not.
+        seen: set[tuple[int, int, str]] = set()
+        unique: list[EntityMatch] = []
+        for candidate in matches:
+            key = (candidate.start, candidate.end, candidate.entity_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(candidate)
+        return sorted(unique, key=lambda match: (match.start, match.end, match.entity_type))
 
     def detect_batch(
         self,
@@ -351,6 +408,123 @@ class BaseProvider(ABC):
             return []
         self.drop_counter.record_declared(self.name, "line_bounded_split")
         return fragments
+
+    def _clip_out_of_markup(
+        self, match: EntityMatch, text: str, regions: Sequence[tuple[int, int]]
+    ) -> list[EntityMatch]:
+        """Clip a model-inferred span back out of HTML, BBCode, URLs and entities.
+
+        ADR-0027. An NER model has no notion of markup: handed a quoted HTML fragment
+        it reads ``[code]<div`` as running text and returns it as a PERSON with the
+        same 0.85 the real names get. Reducing that span destroys the tag — and the
+        damage is *inside* a region the parser correctly marked eligible, so neither
+        the round-trip invariant nor the over-redaction gate can see it. The reference
+        implementation measured the blast radius at 2,687 of 105,279 cells before it
+        built this guard, on a corpus where 72% of one ServiceNow journal column
+        carries markup (`docs/20_ALTERNATIVE_RECONCILIATION.md`).
+
+        Four decisions, each load-bearing:
+
+        * **Clip, never drop — including when clipping leaves nothing.** ``Grace
+          Okafor</div>`` must still lose the name; only the tag is handed back. A span
+          lying *wholly* inside a region is discarded only when its own surface
+          carries a bracket character, which makes it machine syntax (``code]<div``);
+          a plain surface inside a URL path is a name and is kept, because dropping it
+          would leak it.
+        * **Format-defined entities are exempt** (:data:`MARKUP_GUARDED_ENTITIES`).
+          A string matching the email or phone grammar is that thing whatever sits
+          beside it, and clipping one is a leak — strictly worse than the
+          over-redaction this guard prevents.
+        * **Every surviving fragment is kept**, as in :meth:`_bound_to_line` and for
+          the same reason: a name split by a tag is a name on both sides of it, and
+          keeping only the longest half leaks the other. This diverges from the
+          reference implementation, which keeps one fragment; the divergence is
+          recorded in ADR-0027.
+        * **The plausibility drop is gated on the text containing markup at all**,
+          which ``regions`` already answers. On markup-free text this method returns
+          the span untouched, which is why no published benchmark number moves.
+
+        **Both plausibility drops apply only to a surface the markup produced** — a
+        fragment the clip actually shortened, or a span lying wholly inside a region
+        (:meth:`_span_inside_markup`). A surface with fewer than two letters is not a
+        name (an emoticon is not, and neither is a lone digit run), and once the angle
+        brackets are gone ``div`` and ``href`` read to a model as proper nouns. But
+        neither test may be applied to a span markup never touched: the vocabulary
+        holds real surnames (``Small``, ``Link``, ``Name``) and an ADDRESS surface is
+        legitimately digit-only, so judging an untouched span by either would delete
+        a real entity — under-redaction, which is the error this guard must not
+        commit. The edge trim still applies to every span in a markup-bearing text; it
+        only ever removes punctuation.
+        """
+        if not regions or match.entity_type not in MARKUP_GUARDED_ENTITIES:
+            return [match]
+
+        outside = markup_free_fragments(match.start, match.end, regions)
+        if not outside:
+            return self._span_inside_markup(match, text)
+
+        fragments: list[EntityMatch] = []
+        for start, end in outside:
+            # **Before the trim.** Computing it afterwards makes punctuation trimming
+            # count as "the markup clipped this", which re-opens the plausibility drops
+            # to a span markup never touched: `"Small"` in a cell holding a URL trims
+            # to `Small`, hits the tag vocabulary, and the surname is deleted. The
+            # architecture review of this increment found exactly that.
+            clipped = (start, end) != (match.start, match.end)
+            while start < end and text[start] in _MARKUP_EDGE:
+                start += 1
+            while end > start and text[end - 1] in _MARKUP_EDGE:
+                end -= 1
+            if start >= end:
+                continue
+            surface = text[start:end]
+            if clipped and sum(1 for character in surface if character.isalpha()) < 2:
+                continue
+            if clipped and surface.lower() in MARKUP_TOKEN_VOCABULARY:
+                continue
+            fragments.append(
+                match
+                if (start, end) == (match.start, match.end)
+                else match.model_copy(update={"start": start, "end": end})
+            )
+
+        if not fragments:
+            # Fragments existed and every one of them failed a plausibility check, so
+            # nothing name-like survived outside the markup. Dropping is right here.
+            self.drop_counter.record_declared(self.name, "markup_dropped")
+            return []
+        if fragments != [match]:
+            self.drop_counter.record_declared(self.name, "markup_clipped")
+        return fragments
+
+    def _span_inside_markup(self, match: EntityMatch, text: str) -> list[EntityMatch]:
+        """Decide a span that lies **wholly** inside a markup region.
+
+        **Dropping it blind is a leak**, and the privacy audit of this increment caught
+        exactly that: a PERSON span inside a URL path (`…/u/Grace.Okafor`) clips to
+        nothing and would have gone out unredacted — the invisible error, produced by
+        the guard that exists to prevent the visible one.
+
+        So the surface is judged rather than assumed, on the three tests that can be
+        made structurally. It is machine syntax, and discarded, when it carries a
+        bracket character (``code]<div`` — the failure this guard was built for), when
+        it is a tag or attribute name (``div``), or when it holds fewer than two
+        letters (an emoticon). Otherwise it is a name that happens to sit inside
+        machine syntax, and it is kept: redacting it damages a URL, which is the
+        visible error this project chooses every time it has the choice (ADR-0016,
+        ADR-0021, ADR-0023).
+        """
+        surface = text[match.start : match.end]
+        trimmed = surface.strip(_MARKUP_EDGE)
+        if (
+            MARKUP_DELIMITER_PATTERN.search(surface)
+            or sum(1 for character in trimmed if character.isalpha()) < 2
+            or trimmed.lower() in MARKUP_TOKEN_VOCABULARY
+        ):
+            self.drop_counter.record_declared(self.name, "markup_dropped")
+            return []
+        self.drop_counter.record_declared(self.name, "markup_kept_inside_region")
+        return [match]
 
     def _resolve_scope(self, entities: Collection[str] | None) -> frozenset[str]:
         supported = self.supported_entities()

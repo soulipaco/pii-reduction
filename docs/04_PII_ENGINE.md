@@ -39,7 +39,7 @@ One narrow carve-out, stated because the code has always relied on it: `EntityMa
 
 ### Provider output normalization
 
-Three things happen before a candidate leaves the provider layer, so no downstream
+Four things happen before a candidate leaves the provider layer, so no downstream
 layer ever sees a malformed span:
 
 - **Labels**, in each adapter's own mapping table — provider-native strings never
@@ -50,6 +50,18 @@ layer ever sees a malformed span:
   types those are is a static fact on `EntityDefinition.surface_may_span_lines`, not a
   per-layer list; `ADDRESS` is excluded because a postal address written across
   several lines is one address.
+- **Machine syntax**, in the shared base: a span of a model-inferred entity type is
+  clipped back out of any HTML tag, BBCode tag, URL, HTML entity or zero-width run it
+  overlaps, and every surviving fragment is kept (ADR-0027). An NER model has no
+  notion of markup and reads `[code]<div` as prose, returning it as a PERSON at the
+  same 0.85 a real name gets; reducing that span destroys the tag, *inside* a region
+  the parser correctly marked eligible, where no structural invariant can see it.
+  EMAIL and PHONE are exempt — a static fact on `EntityDefinition.format_defined`,
+  not a per-layer list — because a string matching their grammar is that thing
+  whatever sits beside it, and clipping one would leak. **This clip runs last**, after
+  the coverage repair below, because widening a span leftward can otherwise pull it
+  back into a tag. The written output is checked separately and by an independently
+  written assertion; see *Validation* in `docs/06_CONFIGURATION_CONTRACT.md`.
 - **Coverage**, optionally and per provider instance: a PERSON span may be widened
   over one preceding token when that is structurally safe (ADR-0021). This is the one
   repair that does not narrow, and it is off unless an instance opts in — the shipped
