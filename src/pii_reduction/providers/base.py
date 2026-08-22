@@ -278,6 +278,29 @@ class BaseProvider(ABC):
     ) -> list[EntityMatch]:
         """Detect candidates. ``entities`` is already narrowed to what this provider supports."""
 
+    def _detect_batch(
+        self,
+        texts: Sequence[str],
+        *,
+        languages: Sequence[str | None],
+        entities: frozenset[str],
+    ) -> list[list[EntityMatch]]:
+        """Detect candidates for several texts. Default: one ``_detect`` call each.
+
+        The hook a provider with native batching overrides (ADR-0033). It sits *below*
+        the repair chain deliberately: everything :meth:`_finalize` does — validation,
+        line-bounding, the ADR-0021 extension, the ADR-0027 markup clip, de-duplication
+        — is a property of one text and its own spans, so batching must not get a
+        second copy of it to drift from.
+
+        ``languages`` is positional-aligned with ``texts`` and already the right
+        length; :meth:`detect_batch` checks that before calling.
+        """
+        return [
+            self._detect(text, language=language, entities=entities)
+            for text, language in zip(texts, languages, strict=True)
+        ]
+
     def detect(
         self,
         text: str,
@@ -297,6 +320,12 @@ class BaseProvider(ABC):
             return []
 
         detected = self._detect(text, language=language, entities=requested)
+        return self._finalize(detected, text=text, requested=requested)
+
+    def _finalize(
+        self, detected: list[EntityMatch], *, text: str, requested: frozenset[str]
+    ) -> list[EntityMatch]:
+        """Validate and repair one text's raw candidates. Shared by both entry points."""
         # Validate before repairing: a span that already runs past the end of the text
         # is a provider bug, and it must surface as an actionable ProviderError naming
         # the provider and offsets rather than as an IndexError from the repair code.
@@ -345,16 +374,60 @@ class BaseProvider(ABC):
         languages: Sequence[str | None] | None = None,
         entities: Collection[str] | None = None,
     ) -> list[list[EntityMatch]]:
-        """Default: one call per text. Providers with native batching should override."""
+        """Detect over several texts at once, output-identical to ``detect`` per text.
+
+        **Identical output is the contract, not an aspiration** (ADR-0033): a provider
+        that batches must return exactly what the same texts would have produced one at
+        a time. The shared contract suite asserts it for every provider, and
+        `tests/test_batched_detection.py` asserts it over three committed corpora for
+        the one provider that actually batches.
+
+        Empty and non-``str`` texts take the same route they take in :meth:`detect` —
+        an empty text yields no matches, and a non-``str`` is a ``ProviderError`` — so
+        a caller cannot get a different answer by changing how many texts it passes.
+        """
         if languages is not None and len(languages) != len(texts):
             raise ProviderError(
                 f"provider {self.name!r}: got {len(languages)} languages for {len(texts)} texts"
             )
         resolved = list(languages) if languages is not None else [None] * len(texts)
-        return [
-            self.detect(text, language=language, entities=entities)
-            for text, language in zip(texts, resolved, strict=True)
+        for text in texts:
+            if not isinstance(text, str):
+                raise ProviderError(
+                    f"provider {self.name!r}: detect_batch() requires str, "
+                    f"got {type(text).__name__}. Null values are handled by the field processor"
+                )
+
+        requested = self._resolve_scope(entities)
+        if not requested:
+            return [[] for _ in texts]
+
+        # An empty text is dropped *before* the batch and re-inserted after. The
+        # scalar path returns early on one, and a provider's batch API is entitled to
+        # its own opinion about a zero-length document; neither should be able to make
+        # the two paths disagree.
+        indexed = [
+            (position, text, language)
+            for position, (text, language) in enumerate(zip(texts, resolved, strict=True))
+            if text
         ]
+        results: list[list[EntityMatch]] = [[] for _ in texts]
+        if not indexed:
+            return results
+
+        detected = self._detect_batch(
+            [text for _, text, _ in indexed],
+            languages=[language for _, _, language in indexed],
+            entities=requested,
+        )
+        if len(detected) != len(indexed):
+            raise ProviderError(
+                f"provider {self.name!r}: _detect_batch returned {len(detected)} results "
+                f"for {len(indexed)} texts"
+            )
+        for (position, text, _), raw in zip(indexed, detected, strict=True):
+            results[position] = self._finalize(raw, text=text, requested=requested)
+        return results
 
     def _bound_to_line(self, match: EntityMatch, text: str) -> list[EntityMatch]:
         """Split a span that crosses a line break into one span per line.

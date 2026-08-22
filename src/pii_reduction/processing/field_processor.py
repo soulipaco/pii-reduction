@@ -15,7 +15,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from pii_reduction.contracts.entities import ResolvedEntity
+from pii_reduction.contracts.entities import EntityMatch, ResolvedEntity
 from pii_reduction.contracts.language import LanguageResult
 from pii_reduction.contracts.results import ProcessedFieldResult, ProcessingStatus
 from pii_reduction.entities.reconcile import ReconciliationPolicy, reconcile
@@ -158,17 +158,41 @@ class FieldProcessor:
         reduced = 0
         entity_counts: dict[str, int] = {}
 
-        for segment in parsed.processable_segments:
-            if not segment.text:
+        # **One detection call per provider per row, not per segment** (ADR-0033).
+        # A provider with native batching gets the row's whole segment list in one
+        # call; the default implementation still loops, so nothing changes for a
+        # provider that has no batch path. The batch is single-language by
+        # construction — `language` is resolved once above, for the row — which is
+        # what lets the Presidio adapter hand it straight to `analyze_iterator`.
+        #
+        # Batching *across rows* is deliberately not done: it would move detection
+        # outside the per-row try/except that ADR-0023's `quarantine_row` depends on,
+        # so one bad row would take its whole batch with it.
+        segments = [segment for segment in parsed.processable_segments if segment.text]
+        segment_texts = [segment.text for segment in segments]
+        by_segment: list[list[EntityMatch]] = [[] for _ in segments]
+        for provider in chain.providers:
+            scope = chain.entities_for(provider.name, self.entities)
+            if not scope or not chain.serves_language(provider.name, language.language):
                 continue
-            matches = []
-            for provider in chain.providers:
-                scope = chain.entities_for(provider.name, self.entities)
-                if not scope or not chain.serves_language(provider.name, language.language):
-                    continue
-                matches.extend(
-                    provider.detect(segment.text, language=language.language, entities=scope)
-                )
+            # `strict=True` because a misaligned result is the worst outcome available
+            # here: spans computed on one segment applied to another would leave the
+            # real entity in cleartext *and* destroy unrelated text at those offsets.
+            # `BaseProvider.detect_batch` already checks the hook's result count, but
+            # nothing forbids a provider from overriding the public method instead, so
+            # the call site refuses to trust it silently.
+            for accumulated, found in zip(
+                by_segment,
+                provider.detect_batch(
+                    segment_texts,
+                    languages=[language.language] * len(segment_texts),
+                    entities=scope,
+                ),
+                strict=True,
+            ):
+                accumulated.extend(found)
+
+        for segment, matches in zip(segments, by_segment, strict=True):
             detected += len(matches)
 
             resolution = reconcile(matches, policy=chain.policy, text=segment.text)

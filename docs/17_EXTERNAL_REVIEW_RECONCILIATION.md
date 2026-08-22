@@ -87,6 +87,11 @@ re-checked twice), which neither review disputes.
 
 ### 1.4 Detection is row-at-a-time; `detect_batch` has no caller — confirmed
 
+> *Superseded in session 13 by ADR-0033 — see D10. `detect_batch` now has a caller, the
+> line references below are stale, and the "batch-oriented inference" sentence is no
+> longer true. The paragraph is left as verified at `985e8ea`, which is what this
+> document is for.*
+
 Grep confirms `detect_batch` appears only at its definitions
 ([base.py:148, 284](../src/pii_reduction/providers/base.py)); the field processor
 calls `detect` once per processable segment. The dataset is materialised three times
@@ -409,10 +414,10 @@ existing corpus, and have its costs recorded.
 | D7 | Residual verification without ground truth (A P0-5, B P0-2 — both call it the most important missing capability) | **DEFER** | Reopens when the owner selects the next major phase. It competes with the Phase-7 Greek model for that slot and needs its own design doc: a second-detector scan over reduced output, validated against the existing manifests (§6.5), never the reducer re-pointed at its own output (docs/10 §10). |
 | D8 | Distributed audit/metrics fan-out (A P0-3, B #4) | **DEFER** | Condition: the serverless sandbox incident closes (a databricks-marked test already watches). Designing an unexecutable path would break this repo's own Databricks evidence rule. |
 | D9 | Key rotation, KMS integration, re-tokenization, cross-worker collision authority (A P0-4 remainder, B #8) | **DEFER** | Condition: first real consumer of pseudonymized output. Key *identity* is D2; lifecycle without a consumer is speculative construction. Charter keeps reversible mapping out of scope. |
-| D10 | Provider batching / `detect_batch` wiring / row-loop rewrite (A P1-1, B #5) | **DEFER** | Condition: Phase 7 provider work (where batching becomes load-bearing for transformer providers) or a demonstrated throughput need. Throughput is context, never a gate (ADR-0009); nothing published is dishonest today. |
+| D10 | Provider batching / `detect_batch` wiring / row-loop rewrite (A P1-1, B #5) | ~~**DEFER**~~ → **DONE (session 13, ADR-0033)** | The deferral's real reason was that nobody knew what batching was worth. Measured: 96% of a Presidio detection is the spaCy pass, and `nlp.pipe` through `BatchAnalyzerEngine` is 1.6–1.8× on multi-segment columns, output-identical over 576 corpus segments. Shipped as **within-row** batching; the *row-loop rewrite* half stays refused, because batching across rows would break ADR-0023's per-row quarantine. Throughput remains context, never a gate (ADR-0009). |
 | D11 | Rejected candidates persisted to the audit table (A P1-6) | **DEFER** | Condition: a consumer who needs per-candidate rejection data. Costs an audit-schema change that `append` reruns and the parity test depend on; aggregate counts exist and are published. |
 | D12 | Long-text cap / chunker (A P2, B #5 partial) | **DEFER** | Condition: evidence of over-long documents in a target corpus. With D1 done, an over-long failure quarantines visibly instead of leaking, which removes the privacy half of the risk. |
-| D13 | Note-history parser (A P1-3; charter UC-03) | **DEFER** | Condition: the speaker-prefix ADR decision (session 8's most serious open item) lands first — both concern prefix semantics and the second must not prejudge the first. `LabelledLineParser` makes the eventual cost low. |
+| D13 | Note-history parser (A P1-3; charter UC-03) | **DEFER** | Condition **met (session 13)**: the speaker-prefix decision landed as ADR-0032, so this no longer waits on it. Still deferred on its own merits — `LabelledLineParser` makes the eventual cost low, and ADR-0032 already puts the note author in scope for a `transcript`-parsed column via `preserve_prefix: false`. |
 | D14 | Publication + NOTICE emission (A P1-8) | **DEFER** | Owner decision, not an engineering increment. NOTICE-on-distribution is already recorded in plan §8. |
 | D15 | Incremental/merge/checkpoint/restart, streaming, scheduling/SLOs, deployment bundle (both P1/P2) | **DEFER** | Roadmap Phase 10 territory, unchanged by the reviews. |
 | D16 | Policy engine with role/purpose/consumer dimensions; approval lifecycle; human review queue; approved-run-manifest consumption (both P2) | **DEFER** | Both reviews agree this is new construction ("a second product built beside this one"). Condition: an actual adopter with a governance consumer. |
@@ -467,6 +472,8 @@ phase, competing with the Phase-7 Greek model), distributed evidence (D8 —
 infra-blocked), and everything in D15–D18.
 
 The speaker-prefix ADR (session 8's own open item, corroborated by review A's T8)
-remains the most serious *design* decision open and is deliberately not bundled
-here: it needs its own session and its own ADR, per ADR-0022's reasoning that a
-corpus must not motivate and validate a fix in the same commit.
+was the most serious *design* decision open, and was deliberately not bundled here:
+it needed its own session and its own ADR, per ADR-0022's reasoning that a corpus
+must not motivate and validate a fix in the same commit. **It landed in session 13 as
+[ADR-0032](adr/0032-the-speaker-prefix-stays-preserved-by-default.md)**, with the
+measurement on both corpora and both chains, and it unblocks D13.

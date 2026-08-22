@@ -64,6 +64,7 @@ default email recognizer, which is why the deterministic provider stays in the c
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -130,10 +131,23 @@ DEFAULT_OPTIONS: dict[str, Any] = {
 #: cache is what keeps model initialization to once per process (or worker).
 _ENGINE_CACHE: dict[tuple[tuple[str, str], ...], Any] = {}
 
+#: Batch wrappers, keyed by the identity of the analyzer they wrap. See `_batch_engine`.
+_BATCH_ENGINE_CACHE: dict[int, Any] = {}
+
+#: Texts per `nlp.pipe` chunk inside `analyze_iterator` (ADR-0033).
+#:
+#: Measured on the committed corpora, English plain text, best of five: the gain is
+#: flat from 32 upward within measurement noise — 1.69x at 32, 1.75x at 64, 1.77x at
+#: 128, 1.74x at 256 — while a larger value only holds more parsed `Doc` objects in
+#: memory at once, which on a Databricks worker is the constraint that matters rather
+#: than throughput. 32 is the knee, not the maximum.
+PRESIDIO_BATCH_SIZE = 32
+
 
 def reset_engine_cache() -> None:
     """Drop cached engines. For tests; a running pipeline should never need this."""
     _ENGINE_CACHE.clear()
+    _BATCH_ENGINE_CACHE.clear()
 
 
 def _build_engine(models: dict[str, str]) -> Any:
@@ -168,6 +182,24 @@ def _engine_for(models: dict[str, str]) -> Any:
         engine = _build_engine(models)
         _ENGINE_CACHE[key] = engine
     return engine
+
+
+def _batch_engine(engine: Any) -> Any:
+    """The batch wrapper for an analyzer, cached alongside it.
+
+    `BatchAnalyzerEngine` holds no models of its own — it delegates to the analyzer it
+    wraps — but constructing one per call would still be per-row garbage on the hot
+    path. Keyed by the analyzer's identity so it follows `_ENGINE_CACHE`'s lifetime
+    exactly: one per model set, per process, which is `AGENTS.md`'s
+    "initialize expensive NLP models once per process/worker".
+    """
+    wrapper = _BATCH_ENGINE_CACHE.get(id(engine))
+    if wrapper is None:
+        from presidio_analyzer import BatchAnalyzerEngine
+
+        wrapper = BatchAnalyzerEngine(analyzer_engine=engine)
+        _BATCH_ENGINE_CACHE[id(engine)] = wrapper
+    return wrapper
 
 
 class PresidioProvider(BaseProvider):
@@ -258,6 +290,17 @@ class PresidioProvider(BaseProvider):
         """The cached analyzer engine. Loads models on first use, once per process."""
         return _engine_for(self._models)
 
+    def _native_labels_to_request(self, entities: frozenset[str]) -> list[str]:
+        """The native labels to ask Presidio for, given the normalized scope.
+
+        The instance table, not ``NATIVE_LABELS``: a promoted label has to be *asked
+        for*. Q4 measured that an unrequested label never arrives, so promotion
+        implemented only in the mapping table would be a silent no-op (ADR-0020).
+        """
+        return sorted(
+            {native for native, normalized in self._mapping.table.items() if normalized in entities}
+        )
+
     def _detect(
         self, text: str, *, language: str | None, entities: frozenset[str]
     ) -> list[EntityMatch]:
@@ -266,12 +309,7 @@ class PresidioProvider(BaseProvider):
             # still runs, and the run metrics record the language distribution.
             return []
 
-        # The instance table, not NATIVE_LABELS: a promoted label has to be *asked
-        # for*. Q4 measured that an unrequested label never arrives, so promotion
-        # implemented only in the mapping table would be a silent no-op (ADR-0020).
-        native_requested = sorted(
-            {native for native, normalized in self._mapping.table.items() if normalized in entities}
-        )
+        native_requested = self._native_labels_to_request(entities)
         if not native_requested:
             return []
 
@@ -281,7 +319,74 @@ class PresidioProvider(BaseProvider):
             entities=native_requested,
             score_threshold=0.0,
         )
+        return self._normalize(results, language=language, entities=entities)
 
+    def _detect_batch(
+        self,
+        texts: Sequence[str],
+        *,
+        languages: Sequence[str | None],
+        entities: frozenset[str],
+    ) -> list[list[EntityMatch]]:
+        """One spaCy pass over the whole batch instead of one per text (ADR-0033).
+
+        **96% of a Presidio detection is the spaCy pass**, and `nlp.pipe` is the only
+        part of it that gets faster in bulk. `BatchAnalyzerEngine.analyze_iterator`
+        runs exactly that pass through `NlpEngine.process_batch` and then calls the
+        ordinary `analyze` per text with the artifacts already computed — so the
+        recognizers, the context enhancer and the scores are the ones the scalar path
+        produces. Output identity is asserted, not assumed.
+
+        `analyze_iterator` takes **one** language for the whole call, so the batch is
+        grouped by language here. In the shipped pipeline each group is the whole
+        batch, because a row's language is resolved once before any segment is
+        detected — but the contract allows a mixed batch and this must not be the
+        place that quietly refuses one.
+        """
+        native_requested = self._native_labels_to_request(entities)
+        results: list[list[EntityMatch]] = [[] for _ in texts]
+        if not native_requested:
+            return results
+
+        by_language: dict[str, list[int]] = {}
+        for position, language in enumerate(languages):
+            if language is None or language not in self._models:
+                # Same ruling as `_detect`: an unsupported language yields nothing and
+                # is not an error. Its slot stays the empty list it was seeded with.
+                continue
+            by_language.setdefault(language, []).append(position)
+
+        batcher = None
+        for language, positions in by_language.items():
+            if len(positions) == 1:
+                # **One text is not a batch, and routing it through the batch
+                # machinery costs about 3%** — measured on the plain-text corpus,
+                # where a row is exactly one segment and this is therefore the common
+                # case, not the corner one. Delegating to the scalar path also makes
+                # identity for a single text true by construction rather than by
+                # assertion.
+                position = positions[0]
+                results[position] = self._detect(
+                    texts[position], language=language, entities=entities
+                )
+                continue
+            if batcher is None:
+                batcher = _batch_engine(self.engine())
+            analyzed = batcher.analyze_iterator(
+                [texts[position] for position in positions],
+                language=language,
+                entities=native_requested,
+                score_threshold=0.0,
+                batch_size=PRESIDIO_BATCH_SIZE,
+            )
+            for position, raw in zip(positions, analyzed, strict=True):
+                results[position] = self._normalize(raw, language=language, entities=entities)
+        return results
+
+    def _normalize(
+        self, results: Any, *, language: str, entities: frozenset[str]
+    ) -> list[EntityMatch]:
+        """Presidio results to normalized matches. The one place the mapping happens."""
         matches: list[EntityMatch] = []
         for result in results:
             normalized = self._mapping.normalize(result.entity_type, counter=self.drop_counter)

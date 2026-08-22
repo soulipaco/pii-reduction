@@ -38,3 +38,5 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0029](0029-a-corpus-for-the-markup-guard.md) | A committed markup corpus, because ADR-0027 shipped without one — and its first run found that markup **destroys PERSON recall**, not just structure |
 | [0030](0030-the-service-journals-what-it-was-asked.md) | The service journals **what it was asked**; `<dataset>_run_metrics` records **what a run did**. Two records, joinable, deliberately not merged |
 | [0031](0031-a-source-can-be-asked-what-it-has.md) | `SourceAdapter.schema()` — column names **without reading the rows**, so a picker or a config check costs a metastore lookup rather than a table scan |
+| [0032](0032-the-speaker-prefix-stays-preserved-by-default.md) | The speaker prefix stays **preserved by default**; `preserve_prefix: false` is the ruled, measured opt-in for transcripts whose speakers are people |
+| [0033](0033-batched-detection-within-a-row.md) | Detection batches **within a row** (1.6–1.8× on multi-segment columns, output-identical); across rows is refused because it would break ADR-0023's per-row quarantine |

@@ -561,6 +561,25 @@ Model initialization must occur once per process or worker.
 
 Providers that support batching should expose a batch API.
 
+**The pipeline batches a row's segments, and deliberately not across rows** (ADR-0033).
+`FieldProcessor` makes one `detect_batch` call per provider per row; the Presidio
+adapter routes it through one `nlp.pipe`, which is worth 1.6–1.8× on a column whose
+rows hold several segments and nothing on a column whose rows hold one.
+
+Two structural rules follow, and both are about keeping this from becoming a second
+implementation:
+
+- **A provider overrides `_detect_batch`, below the repair chain**, never the public
+  `detect_batch`. Validation, line-bounding, span extension, the markup clip and
+  de-duplication are properties of one text and live once, in `BaseProvider._finalize`,
+  which both entry points call.
+- **Batching may not change output.** `detect_batch` must return exactly what the same
+  texts produce one at a time.
+
+**Across-row batching is refused, not deferred.** It would move detection outside the
+per-row failure isolation that ADR-0023's `quarantine_row` depends on, so one malformed
+row would take its whole batch with it.
+
 ### Spark execution
 
 Potential strategies include:

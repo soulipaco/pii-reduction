@@ -110,7 +110,23 @@ class PIIProvider(Protocol):
     ) -> list[list[EntityMatch]]: ...
 ```
 
-`detect_batch` may have a default implementation but providers should override it when native batching exists.
+`detect_batch` has a default implementation — one `detect` per text — and providers
+override it when native batching exists. **`PresidioProvider` does** (ADR-0033), through
+`BatchAnalyzerEngine.analyze_iterator`, which runs one `nlp.pipe` over the batch.
+
+Two rules bind any override:
+
+- **Output identity.** `detect_batch` must return exactly what the same texts produce
+  one at a time. It is asserted for every provider by the shared contract suite and,
+  for Presidio, over every segment of all three committed corpora.
+- **Override `_detect_batch`, not `detect_batch`.** The repair chain — validation,
+  ADR-0016 line-bounding, the ADR-0021 extension, the ADR-0027 markup clip,
+  de-duplication — lives in `BaseProvider._finalize` and runs for both entry points. An
+  override above it would be a second copy of that logic.
+
+The pipeline batches **within a row**, not across rows: across-row batching would move
+detection outside the per-row failure isolation that ADR-0023's `quarantine_row`
+depends on. See ADR-0033 for what that costs and what it buys.
 
 ## Provider families
 
