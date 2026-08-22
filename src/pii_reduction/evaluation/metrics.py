@@ -27,12 +27,15 @@ __all__ = [
     "FragmentLeakageMetric",
     "LeakageMetric",
     "OverRedactionMetric",
+    "ReachabilityMetric",
     "detection_metrics",
     "detection_metrics_by",
     "fragment_leakage_metrics",
+    "is_reachable",
     "leakage_metrics",
     "over_redaction_metrics",
     "precision_recall_f1",
+    "reachability_metrics",
 ]
 
 
@@ -243,6 +246,76 @@ def _prediction_slice_key(
         else:
             values.append(attributes.get(dimension, ""))
     return tuple(values)
+
+
+@dataclass(frozen=True)
+class ReachabilityMetric:
+    """How much of the ground truth the detector was ever *offered* (ADR-0028).
+
+    A parser divides a field into processable segments and structure it preserves
+    byte-for-byte (`AGENTS.md` rule 5). Only the processable part reaches a provider,
+    so a ground-truth entity lying in the preserved part **cannot** be detected by any
+    provider, any threshold or any repair rule. Recall counts it as a miss all the
+    same, and a reader has no way to tell that miss from one a better model would fix.
+
+    The incident-notes corpus makes the difference concrete: its tier-4 work notes put
+    the author's name in the speaker prefix, which `TranscriptParser` marks as
+    structure, so tier-4 PERSON recall is 0.000 in all three languages and cannot move
+    (ADR-0022). ``unreachable_rate`` is what says so in the metric grain instead of in
+    a footnote, and ``reachable`` is the denominator a detection claim should use.
+
+    The reference implementation this idea comes from measured the same hazard at
+    ~500× on real ServiceNow journals — 8,346 cells of one column "still containing an
+    email" against 24 genuine body-level misses in it (27 across two columns; see
+    `docs/20_ALTERNATIVE_RECONCILIATION.md`).
+
+    **Unreachable is not a defect and not an excuse.** It is a *scope* statement: the
+    configuration decided that region is out of scope. A rising unreachable rate on a
+    corpus that used to be reachable means the parser's idea of the format drifted.
+    """
+
+    reachable: int
+    unreachable: int
+
+    @property
+    def total(self) -> int:
+        return self.reachable + self.unreachable
+
+    @property
+    def unreachable_rate(self) -> float:
+        return _ratio(self.unreachable, self.total)
+
+
+def is_reachable(truth: TruthSpan, ranges: Sequence[tuple[int, int]]) -> bool:
+    """Does this ground-truth span lie wholly inside one processable range?
+
+    Wholly, and inside **one** — an entity straddling a segment boundary is offered to
+    a provider in pieces, and a provider that never sees the whole surface cannot
+    return it. Treating such a span as reachable would credit the detector with an
+    opportunity it did not have.
+    """
+    return any(start <= truth.start and truth.end <= end for start, end in ranges)
+
+
+def reachability_metrics(
+    truths: Iterable[TruthSpan],
+    eligible_ranges: Mapping[str, Sequence[tuple[int, int]]],
+) -> ReachabilityMetric:
+    """Split ground truth into what the detector was offered and what it never saw.
+
+    ``eligible_ranges`` maps document id to that document's processable ranges, in the
+    document's own coordinates. A document missing from the mapping contributes
+    unreachable entities: the caller could not locate a processable region for it, and
+    counting the truth as reachable would assert an opportunity nobody can point to.
+    """
+    reachable = 0
+    unreachable = 0
+    for truth in truths:
+        if is_reachable(truth, eligible_ranges.get(truth.document_id, ())):
+            reachable += 1
+        else:
+            unreachable += 1
+    return ReachabilityMetric(reachable=reachable, unreachable=unreachable)
 
 
 def leakage_metrics(

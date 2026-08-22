@@ -75,6 +75,51 @@ TP / (TP + FN)
 
 High recall means fewer PII entities are missed.
 
+**Read it beside the reachability decomposition below.** A ground-truth entity that
+sits in a region the configured parser preserves is never offered to a provider, so it
+counts as a miss that nothing could have caught. Recall alone cannot tell that from a
+miss a better model would close.
+
+### Reachability, and recall over what was offered (ADR-0028)
+
+```text
+unreachable_entity_rate  = entities outside every processable segment / all entities
+reachable_strict_recall  = strict recall computed over the reachable entities only
+```
+
+A parser divides a field into processable segments and structure it preserves
+byte-for-byte (`AGENTS.md` rule 5). Only the processable part reaches a provider. An
+entity is **reachable** when its span lies wholly inside **one** processable segment —
+wholly and one, because a span straddling a boundary is offered in pieces and a
+provider that never sees the whole surface cannot return it.
+
+Both rows are emitted at the overall grain of every benchmark run, and the summary
+line prints them only when the unreachable count is non-zero. **They are additive: no
+gate reads them and no published number changed when they were introduced.**
+
+Measured when the metric landed (session 12):
+
+| corpus | chain | unreachable | strict recall | reachable strict recall |
+|---|---|---|---|---|
+| committed benchmark corpus | either | **0 / 180** | as published | identical |
+| `tests/fixtures/incidents` | `deterministic_only` | 90 / 315 (0.286) | 0.571 | **0.800** |
+| `tests/fixtures/incidents` | `deterministic_presidio` | 90 / 315 (0.286) | 0.711 | **0.996** |
+
+The 90 are exactly the tier-4 work-note authors, which the transcript parser treats as
+speaker prefixes (ADR-0022). On the hybrid chain the engine finds 224 of the 225
+entities it was ever offered — the gap between 0.711 and 0.996 is a *scope* decision
+with an open design question behind it (the speaker-prefix ADR), not a detection
+result.
+
+Two rules for quoting these:
+
+1. **Never quote `reachable_strict_recall` without the unreachable share beside it.**
+   The whole point is that one number without the other misleads; publishing the
+   flattering half alone is the same error pointed the other way.
+2. **An unreachable entity is a scope statement, not a defect and not an excuse.** What
+   the number is *for* is drift: a rising unreachable rate on a corpus that used to be
+   reachable means the parser's idea of the source format has changed.
+
 ### F1
 
 ```text

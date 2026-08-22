@@ -398,7 +398,11 @@ contracts
 processing/orchestrator depends on those interfaces.
 
 execution surfaces (cli.py, benchmark.py, databricks/) depend on processing/;
-nothing on the runtime path depends on them.
+nothing on the runtime path depends on them. They may also reach an interface
+layer directly — benchmark.py builds the configured parser to compute
+reachability (ADR-0028) — because an execution surface sits above all of them.
+An interface layer may not reach a sibling: that is the edge that would have
+been created by computing reachability inside evaluation/.
 
 service/ (rung 4, ADR-0026) sits above the execution surfaces. It may depend on
 config/, processing/, contracts/ and observability/, and on databricks/ through

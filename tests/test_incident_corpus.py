@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 
 from pii_reduction.entities.taxonomy import PERSON
+from pii_reduction.evaluation.matching import TruthSpan
+from pii_reduction.evaluation.metrics import is_reachable
 from pii_reduction.parsers.registry import build_parser
 from pii_reduction.patterns import is_identifier_shaped
 from pii_reduction.synthetic.corpus import build_corpus, load_corpus
@@ -108,22 +110,34 @@ class TestTheFindingsItProduced:
 
         If this test ever fails, the parser's structure/body split has changed and
         ADR-0022's explanation of that 0.000 is stale.
+
+        It uses the same ``is_reachable`` predicate the benchmark's reachability
+        decomposition uses (ADR-0028), rather than its own arithmetic: two definitions
+        of "the provider was offered this span" is one more than the question has.
         """
         parser = build_parser("transcript", {})
         unreachable = 0
         for document in corpus.documents:
             if document.document_type != "transcript":
                 continue
-            parsed = parser.parse(document.text)
             spans = [
-                (segment.source_start, segment.source_start + len(segment.text))
-                for segment in parsed.processable_segments
-                if segment.source_start is not None
+                (segment.source_start, segment.source_end)
+                for segment in parser.parse(document.text).processable_segments
+                if segment.source_start is not None and segment.source_end is not None
             ]
             for entity in corpus.entities:
                 if entity.document_id != document.document_id or entity.entity_type != PERSON:
                     continue
-                if not any(start <= entity.start < end for start, end in spans):
+                span = TruthSpan(
+                    document_id=entity.document_id,
+                    entity_id=entity.entity_id,
+                    entity_type=entity.entity_type,
+                    start=entity.start,
+                    end=entity.end,
+                    language=entity.language,
+                    difficulty_tier=entity.difficulty_tier,
+                )
+                if not is_reachable(span, spans):
                     unreachable += 1
         assert unreachable > 0, (
             "no tier-4 PERSON sits in the speaker prefix any more; the gate file's "

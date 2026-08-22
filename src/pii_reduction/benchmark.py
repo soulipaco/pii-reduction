@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,13 +31,17 @@ from pii_reduction.evaluation.metrics import (
     FragmentLeakageMetric,
     LeakageMetric,
     OverRedactionMetric,
+    ReachabilityMetric,
     detection_metrics,
     detection_metrics_by,
     fragment_leakage_metrics,
+    is_reachable,
     leakage_metrics,
     over_redaction_metrics,
+    reachability_metrics,
 )
 from pii_reduction.evaluation.report import MetricRow, render_table
+from pii_reduction.parsers.registry import build_parser
 from pii_reduction.processing.pipeline import build_pipeline
 from pii_reduction.sources.local import PandasSource
 from pii_reduction.synthetic.corpus import Corpus, load_corpus
@@ -95,6 +99,16 @@ class BenchmarkOutcome:
     #: ``redact``/``pseudonymize`` it is a leak the full-surface metric cannot see.
     fragment_leakage: FragmentLeakageMetric
     over_redaction: OverRedactionMetric
+    #: ADR-0028: how much of the ground truth the configured parser ever offered to a
+    #: provider. An entity in a preserved region cannot be detected by anything, so a
+    #: recall number that does not separate the two blends a scope decision with a
+    #: detector limit.
+    reachability: ReachabilityMetric = field(
+        default_factory=lambda: ReachabilityMetric(reachable=0, unreachable=0)
+    )
+    #: Strict detection over the reachable ground truth only — the denominator a
+    #: detection claim should use. Equal to ``strict`` when nothing is unreachable.
+    reachable_strict: DetectionMetric = field(default_factory=lambda: DetectionMetric(0, 0, 0))
     rows: tuple[MetricRow, ...] = ()
     # repr is suppressed on both: a bare `outcome` in a notebook cell would otherwise
     # dump every reduced document to the screen and into the saved notebook.
@@ -201,6 +215,8 @@ def run_benchmark(
 
     predictions: list[Prediction] = []
     reduced_texts: dict[str, str] = {}
+    #: Document id -> the processable ranges its configured parser produced (ADR-0028).
+    eligible_ranges: dict[str, tuple[tuple[int, int], ...]] = {}
     chains: set[str] = set()
     strategies: set[str] = set()
     #: Documents that actually ran. Accumulated here rather than derived from the
@@ -241,6 +257,7 @@ def run_benchmark(
         )
         runs.append(outcome.run)
 
+        eligible_ranges.update(_eligible_ranges(policy.parser, policy.parser_options, subset))
         scored.update(str(document_id) for document_id in subset["document_id"])
         predictions.extend(
             Prediction(
@@ -272,7 +289,12 @@ def run_benchmark(
     strategy = ", ".join(sorted(strategies))
     chain = ", ".join(sorted(chains))
 
+    reachability = reachability_metrics(truths, eligible_ranges)
+    reachable_truths = [
+        truth for truth in truths if is_reachable(truth, eligible_ranges.get(truth.document_id, ()))
+    ]
     strict = detection_metrics(truths, predictions, mode=STRICT)
+    reachable_strict = detection_metrics(reachable_truths, predictions, mode=STRICT)
     relaxed = detection_metrics(truths, predictions, mode=RELAXED)
     leakage = leakage_metrics(truths, reduced_texts, surfaces, strategy=strategy)
     fragment_leakage = fragment_leakage_metrics(
@@ -308,6 +330,8 @@ def run_benchmark(
         leakage=leakage,
         fragment_leakage=fragment_leakage,
         over_redaction=over_redaction,
+        reachability=reachability,
+        reachable_strict=reachable_strict,
     )
     return BenchmarkOutcome(
         benchmark_run_id=run_id,
@@ -318,6 +342,8 @@ def run_benchmark(
         leakage=leakage,
         fragment_leakage=fragment_leakage,
         over_redaction=over_redaction,
+        reachability=reachability,
+        reachable_strict=reachable_strict,
         rows=tuple(rows),
         runs=tuple(runs),
         runtime=tuple(runtime),
@@ -328,6 +354,44 @@ def run_benchmark(
         documents=len(scored),
         splits=tuple(splits) if splits else (),
     )
+
+
+def _eligible_ranges(
+    parser_name: str, parser_options: Mapping[str, object], subset: pd.DataFrame
+) -> dict[str, tuple[tuple[int, int], ...]]:
+    """The processable ranges of each document, under the parser its config names.
+
+    Built here rather than in `evaluation/` on purpose: `evaluation/` depends on
+    `contracts/` and nothing else, and giving it a parser dependency would put a
+    sideways edge between two interface layers (`docs/01_ARCHITECTURE.md`). A
+    benchmark entry point is an execution surface and may reach both.
+
+    The parser is constructed once per document type, not once per document — same
+    reason `build_pipeline` is: a per-row constructor is the anti-pattern `docs/07`
+    exists to prevent, in miniature.
+    """
+    missing = [column for column in ("document_id", "text") if column not in subset.columns]
+    if missing:
+        # Loud, because the quiet version is the failure this metric exists to expose:
+        # with no text column every lookup returns nothing, every entity is classified
+        # unreachable, and the run reports a plausible number that is entirely wrong.
+        raise KeyError(
+            f"corpus frame is missing {', '.join(missing)}; reachability cannot be "
+            "computed and reporting it as zero would be a silent wrong answer"
+        )
+
+    parser = build_parser(parser_name, dict(parser_options))
+    ranges: dict[str, tuple[tuple[int, int], ...]] = {}
+    for record in subset.to_dict(orient="records"):
+        text = record.get("text")
+        if not isinstance(text, str):
+            continue
+        ranges[str(record["document_id"])] = tuple(
+            (segment.source_start, segment.source_end)
+            for segment in parser.parse(text).processable_segments
+            if segment.source_start is not None and segment.source_end is not None
+        )
+    return ranges
 
 
 def _optional_float(value: object) -> float | None:
@@ -350,6 +414,8 @@ def _build_rows(
     leakage: LeakageMetric,
     fragment_leakage: FragmentLeakageMetric,
     over_redaction: OverRedactionMetric,
+    reachability: ReachabilityMetric,
+    reachable_strict: DetectionMetric,
 ) -> list[MetricRow]:
     def row(
         *,
@@ -386,6 +452,11 @@ def _build_rows(
         "fragment_leakage_rate": fragment_leakage.rate,
         "document_clean_rate": leakage.document_clean_rate,
         "over_redaction_rate": over_redaction.rate,
+        # ADR-0028. Additive: no gate reads these, and neither replaces a published
+        # number. `unreachable_entity_rate` says how much of the truth the parser
+        # never offered; `reachable_strict_recall` is recall over what it did.
+        "unreachable_entity_rate": reachability.unreachable_rate,
+        "reachable_strict_recall": reachable_strict.recall,
     }
     for name, value in overall.items():
         support = (
@@ -393,6 +464,8 @@ def _build_rows(
             if name == "over_redaction_rate"
             else leakage.documents_with_pii
             if name == "document_clean_rate"
+            else reachable_strict.support
+            if name == "reachable_strict_recall"
             else strict.support
         )
         rows.append(
@@ -473,6 +546,17 @@ def summarise(outcome: BenchmarkOutcome) -> str:
         f"document clean rate={outcome.leakage.document_clean_rate:.3f} "
         f"over-redaction={outcome.over_redaction.rate:.3f}"
     )
+    if outcome.reachability.unreachable:
+        # Printed only when it is non-zero, so it reads as a finding about this corpus
+        # rather than as decoration on every run.
+        text += (
+            f"\nunreachable entities={outcome.reachability.unreachable}"
+            f"/{outcome.reachability.total} "
+            f"({outcome.reachability.unreachable_rate:.3f}) — in regions the parser "
+            f"preserves, so no provider was ever offered them; "
+            f"strict recall over the reachable {outcome.reachable_strict.support} "
+            f"is {outcome.reachable_strict.recall:.3f}"
+        )
     if outcome.runs:
         hashes = ", ".join(sorted({run.config_hash[:12] for run in outcome.runs}))
         rates = " ".join(
