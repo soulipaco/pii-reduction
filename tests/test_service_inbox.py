@@ -338,6 +338,16 @@ def inbox_client(tmp_path: Path) -> Iterator[tuple[TestClient, Path]]:
     template = document["templates"]["corpus_inbox"]
     template["source"]["path"] = inbox.as_posix()
     template["destination"]["path"] = (tmp_path / "out").as_posix() + "/"
+    # **The shipped template detects language, and detection needs the `language`
+    # extra** — which the default test tier deliberately does not install (ADR-0009).
+    # `detect` is right for a real inbox, where nobody knows what arrives; the corpus
+    # this test feeds it carries its own `language` column, so the fixture uses that
+    # and the tier stays model-free and extra-free.
+    #
+    # This is the failure §8's Q1 already recorded once: a green local run does not
+    # prove the push tier is green, because a developer machine has the extras. It
+    # reached CI a second time before being caught here.
+    template["language"] = {"mode": "column", "language_column": "language"}
     templates_file.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
 
     store = RunStore({"local": local_runtime})

@@ -124,6 +124,11 @@ templates:
       preserve_original: true
       failure_mode: quarantine_row
     language:
+      # `detect` is the right default for an inbox: nobody knows what arrives. It
+      # needs the `language` extra (`pip install -e ".[language]"`, ADR-0012) — a
+      # core-only install will fail every row with `LanguageNotAvailableError`. Use
+      # `mode: static` with a `language:` value, or `mode: column`, when the answer is
+      # already known.
       mode: detect
 
 # A Unity Catalog template looks like this. It is COMMENTED OUT because the catalog,
