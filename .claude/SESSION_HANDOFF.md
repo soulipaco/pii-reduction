@@ -700,12 +700,35 @@ it would change detection behaviour and needs its own measurement.
 
 ### State
 
-**1168 default-tier tests** (1090 at session start), 97 deselected; 92 integration;
-ruff clean; `mypy src tests` clean (154 files). **41/41 benchmark gates re-run on both
-corpora and both chains after every increment and again after the audit fixes — no
-published number moved, and none was touched.** New: `tests/test_markup_guard.py` (50),
-`tests/test_reachability.py` (14), plus additions to the Databricks-adapter, outputs and
-incident-corpus suites.
+**1187 default-tier tests** (1090 at session start), 97 deselected; 92 integration;
+ruff clean; `mypy src tests` clean (156 files). **56 gates across three corpora and both
+chains** — 41 existing, re-run after every increment and again after each audit round,
+plus 15 new ones on the markup corpus. **No published number moved, and none was
+touched**; the incident corpus rebuilds byte-identical after the `PLAIN`/`TRANSCRIPT`
+constant change. New: `tests/test_markup_guard.py` (50), `tests/test_markup_corpus.py`
+(19), `tests/test_reachability.py` (14), plus additions to the Databricks-adapter,
+outputs and incident-corpus suites.
+
+**Six commits**, all clean: the markup guard (ADR-0027), the reachability decomposition
+(ADR-0028), the Delta/parquet fixes, the reconciliation record (`docs/20`), the markup
+corpus (ADR-0029), and its gates plus the review fixes.
+
+### The markup corpus paid for itself on its first run
+
+ADR-0029 exists because ADR-0027 shipped a detection change with **no corpus support at
+all**. Its first run found something **neither implementation had recorded**: markup does
+not merely cause the false positives the reference catalogue documents — **it destroys
+PERSON recall**, 0.322 against 0.821 on the committed corpus. Isolated by changing one
+thing at a time: `From: <name>` is found, `<b>From:</b> <name> &lt;…&gt;<br>` returns
+**no span at all**. That is the leak direction, and it sits upstream of every remedy
+either project built — no guard, repair or reconciler rule can reach a span the model
+never emits.
+
+**Both reviewers found the increment's claims outrunning its automation** (CI rebuilt
+two corpora while the ADR said three; the gate file was never validated; nothing ran the
+gates; the dispatch duplicated the profile table's keys), and the privacy audit caught an
+honest-reporting defect: the placement claim was true of en/de and silently omitted
+Greek, which runs the other way. All fixed.
 
 Not run: Databricks (no session opened this session — A2's column-mapping options are
 **unit-tested and unverified on a workspace**, and every place that claim appears says
