@@ -2,8 +2,23 @@
 
 Written at the end of session 14, for whoever does the last step. Everything here is a
 short, bounded task with an exit criterion. **The engineering is done** — this is
-presentation and publication, and one licence obligation that becomes real the moment
-the repository stops being private.
+presentation and publication.
+
+Six sections, in the order they should be done:
+
+| | task | where |
+|---|---|---|
+| 1 | `NOTICE` | **done** — landed ahead of the visibility change |
+| 2 | screenshots of the control panel | this repository |
+| 3 | description + topics | this repository, GitHub-side |
+| 4 | decisions | **done** — all four recorded with reasoning |
+| 5 | **the GitHub profile** — pins, bio, profile README, portfolio hub | github.com/soulipaco |
+| 6 | the core-only check before pushing | local |
+
+**§5 is the one a reader is most likely to skip and should not.** A LinkedIn post sends
+people to the repository; a good share of them then click the profile, and there are
+currently **no pinned repositories at all**, so the first thing they see is a list
+sorted by last commit.
 
 Read `docs/22_EVIDENCE.md` first: it is the executed record, and it is what the
 front-page claims rest on.
@@ -154,7 +169,88 @@ disagree with the reasoning rather than guess at it.
   estate scanner; do not show a workspace URL). It also carries a LinkedIn post skeleton
   that leads with the Greek failure rather than a feature.
 
-## 5. One check worth running before publishing anything
+## 5. The GitHub **profile**, not just this repository
+
+A LinkedIn post sends people to the repository; a good number of them then click the
+**profile**. That was missing from the first draft of this handover and it is the gap
+that undercuts everything else.
+
+State as observed on 2026-08-22 — the profile is **not** bare, which changes what is
+worth doing:
+
+| | current | verdict |
+|---|---|---|
+| name, avatar, location | set (`Onur Uslu`, Athens / Istanbul, real avatar) | fine, leave |
+| profile README (`soulipaco/soulipaco`) | **exists and is good** — honest about maturity differing by repository, links the portfolio hub and LinkedIn | keep; two edits below |
+| **pinned repositories** | **none at all** | **the biggest gap** |
+| bio | *"Experienced Business Analyst with a proven track record in spearheading digital transformations…"* | **mismatched** — see below |
+| `blog` / website field | empty | one-line fix |
+| `technical-portfolio` hub | 10 repos curated; **does not mention this project** | add it |
+
+### 5.1 Pin repositories — the highest-value five minutes
+
+With nothing pinned, a visitor sees the repository list **sorted by last update**, so
+learning-stage notebooks sit beside released systems with equal weight. The profile
+README already says the progression is intentional; pinning is what makes that visible
+before anyone reads a word.
+
+Six slots. Suggested order, strongest first:
+
+1. **`pii-reduction`** — the newest and the most defensible (56 gates, 36 ADRs, an
+   evidence page that lists what was *not* executed).
+2. `contact-center-new-hire-intelligence` — the released accelerator.
+3. `structure-aware-rag-databricks`
+4. `prophet-forecasting-mlops`
+5. `databricks-genie-deployment-kit`
+6. `technical-portfolio` — the hub, so a visitor who wants the full picture has a door.
+
+Pinning is UI-only (github.com/soulipaco → *Customize your pins*); there is no `gh`
+command for it.
+
+### 5.2 The bio is the one real mismatch
+
+*"Experienced Business Analyst…"* is the first line under the name, and someone arriving
+from a post about a PII reduction engine reads it and stops. The repositories are
+engineering: Databricks accelerators, MLOps, retrieval pipelines, a benchmarked NLP
+system.
+
+The fix is not to delete the analyst framing — it is genuine, and the combination is the
+interesting part. Something closer to:
+
+> Business analyst turned data/AI engineer. I build governed Databricks systems and
+> publish the numbers, including the ones that are bad. Athens / Istanbul.
+
+Whatever the wording, it should say **both** halves. Bio is 160 characters.
+
+### 5.3 Two edits to the profile README
+
+It is well written; it is simply out of date by one project.
+
+- **Add `pii-reduction` to *Selected work*, first**, with a line in the same voice as
+  the others. Suggested: *"a structure-aware, multilingual PII reduction engine for
+  Databricks where every published number is a regression gate — including the ones it
+  gets wrong."*
+- **Fill the website field** (`blog`) with the portfolio hub or LinkedIn, so the profile
+  header has a clickable destination.
+
+### 5.4 Add it to the `technical-portfolio` hub
+
+The hub curates ten repositories and does not mention this one. Its existing entries
+follow a pattern — what it is, what state it is in, an **Inspect:** line of deep links.
+Match it, and be as honest about state as the other entries are: this one *has* recorded
+Databricks execution, and it also has a distributed path that has never run.
+
+Useful deep links for the Inspect line: `docs/22_EVIDENCE.md` (what was executed),
+`docs/adr/README.md` (36 decisions), `docs/14_IMPLEMENTATION_PLAN.md` §8 (the measured
+baseline).
+
+### 5.5 This repository's own About box
+
+Covered in §3 — description and topics are both still empty (`gh repo view` confirms
+`description: ""`, `repositoryTopics: null`). The About box is what shows in search
+results and in the pinned card, so it is doing double duty once §5.1 is done.
+
+## 6. One check worth running before publishing anything
 
 ```bash
 uv venv /tmp/venv-core --python 3.11
