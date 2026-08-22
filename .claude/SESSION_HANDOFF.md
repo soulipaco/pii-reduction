@@ -1353,20 +1353,23 @@ was cut from the existing tag — notes describing 0.1.0 *as tagged*, with the t
 known failures beside the headline numbers, and an explicit note that `main` has moved
 on since and that the ADR-0034/35/36 work sits under `[Unreleased]`.
 
-**It moved the score to 87, not past 90.** Worth recording, because the prediction was
-that it would clear the flagship threshold and it did not. What the release *did* do is
-close the flagship gate's **evidence** checklist — `tests`, `ci`, `validation_record`,
-`release`, `visuals`, `sample` are now all true, and `verification` is 25/25. Only the
-numeric threshold is left, and the remaining 13 points are:
+**It moved the score to 87, not past 90** — the prediction was that it would clear the
+flagship threshold in one step, and it did not. What it *did* close was the flagship
+gate's **evidence** checklist: `tests`, `ci`, `validation_record`, `release`, `visuals`
+and `sample` all true, `verification` 25/25.
 
-| missing | points | judgement |
+The owner then asked for the remaining gaps to be closed, and three of the four were —
+each defensible on its own merits, which was the condition for doing any of them:
+
+| was missing | points | what was done |
 |---|---:|---|
-| `lockfile` | 3 | a real absence; adding one is engineering on a finished repo, and a library is not an application |
-| `setup_guidance` | 4 | **detector vocabulary, not substance** — it greps the README for *"installation"* / *"quick start"*; this README says *"See it work in two minutes"* over a runnable block |
-| `homepage` | 2 | genuinely empty, and there is no live site to point at |
-| topic alignment | 4 | only `databricks` and `unity-catalog` intersect the tool's `focus_topics`; two more accurate ones would score it |
+| `setup_guidance` | 4 | An **Installation** section. The install path really did exist in three places under a heading nobody scans for; it is now one section with the extras table, the spaCy models and why they are not dependencies, and the two commands that verify the result. The detector greps for the literal word *"installation"* — that is a side effect, not the reason, and the README was **not** reworded around the matcher. |
+| `lockfile` | 3 | `uv.lock`, plus a **`uv lock --check` job** so it cannot drift. The lock is deliberately *not* what CI installs: the published numbers stay produced against ordinary `pyproject.toml` resolution, because freezing that would change what the gates measure. Its own job, so nothing it installs can weaken `quality`'s no-provider-extra assertion. |
+| topic alignment | 4 | Two topics added — `data-engineering` and `lakehouse` — both accurate for a batch pipeline over Delta and Unity Catalog, and both in the tool's `focus_topics`. |
+| `homepage` | 2 | **Not done.** There is no live site, and inventing one is the single change here that would have been presentation rather than substance. |
 
-**None of these was done, because each would be done for the score.** The README was
-deliberately not reworded to match the matcher. `live_runtime_proof` is false for the
-same reason — the detector looks for the literal phrase *"live databricks evidence"*
-and this README describes the hosted App instead.
+**98/100, `flagship_candidate`, rank 1**, and `config/portfolio.json` now carries the
+curated `flagship` role — added *after* the tool reached that decision independently,
+not to produce it. `live_runtime_proof` stays false and is left alone: it greps for the
+literal phrase *"live databricks evidence"*, and this README describes the hosted App
+instead.
