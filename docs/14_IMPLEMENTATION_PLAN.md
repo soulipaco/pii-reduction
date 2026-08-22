@@ -353,15 +353,35 @@ hold.
 
 ## 8. Status and work queue
 
-> **Session 13's course is `docs/21_FINALIZATION.md`** — what "done" means, the open
-> items to park, and the release steps. Read it before picking anything up from the
-> queue below.
+> **The project is finished at `v0.1.0` (session 13, 2026-08-22).** `docs/21_FINALIZATION.md`
+> was the course and every part of it is done: the pickup list is empty, every open item
+> has a recorded disposition in *Parked, with the condition that would reopen it* below,
+> and the release is cut. `CHANGELOG.md` is the entry point for someone arriving cold.
+> **Nothing in this section is a pending instruction.** What remains unbuilt is listed
+> as parked, each with the condition that would reopen it — not as a queue.
 
 **This section is the live one.** Sections 1–7 are the session-2 plan as written;
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 12 (2026-08-22) — **rung 4 is hosted.** A Databricks App runs the
+Last updated: session 13 (2026-08-22) — **the project is finished and tagged `v0.1.0`.**
+Three things landed. **ADR-0032 settled the speaker-prefix question**, open since
+session 8 and called "the most serious open design item" in three documents: the prefix
+stays *preserved* by default, and `preserve_prefix: false` — which had shipped since
+Increment A2 and which nobody had ever measured — is the ruled per-column opt-in for
+transcripts whose speakers are people. Measured on both corpora and both chains: it
+takes the incident corpus's strict F1 0.761 → 0.844 and its 90 unreachable entities to
+0, and costs the benchmark corpus's PERSON precision 0.771 → 0.744 for no recall gain.
+`docs/06`'s claim that "there is no configuration that currently fixes it" was **false**
+and is corrected. **ADR-0033 closed the last pickup-list item**, batching: 96% of a
+Presidio detection is the spaCy pass, and batching a row's segments through
+`BatchAnalyzerEngine` is 1.6–1.8× on multi-segment columns and unchanged on
+single-segment ones — output-identical over 576 corpus segments, with all 56 gates
+unchanged. Across-row batching is refused, because it would break ADR-0023's per-row
+quarantine. And **every remaining open item was parked with a named reopening
+condition** — see the register below. No published number moved.
+
+Previously, session 12 (2026-08-22) — **rung 4 is hosted.** A Databricks App runs the
 service, deployed with `apps create` / `apps deploy --source-code-path` — which needs no
 bundle, so the expired-Terraform-key bug two sessions recorded as the blocker never
 applied to Apps at all. Driven over real HTTPS through the App proxy; the
@@ -451,6 +471,10 @@ the session-9 rows in the Complete table and the queue below.
 | S2 | **The service layer** (`src/pii_reduction/service/`): a config **builder** over server-side templates, a run **trigger** over both entry points, a metadata-only **status view**, and `pii-reduction-service` as a third console script. Four static guards make the rung rule code rather than prose — nothing outside `service/` imports it; `service/` may not name providers, reducers, parsers, language, entities, evaluation, sources, outputs, synthetic, or anything under `processing/` except `pipeline`; exactly one file may import the Databricks surface and still may not name `pyspark`; and `config/`, now the sanctioned relay, is bounded to `contracts/` and `entities/`. No endpoint accepts text and none returns, streams or links to any — enforced by a reflection test over every model rather than by a filter | 1090 default (+61); driven over real HTTP three times during the increment, and on the workspace once (docs/19 *Verified, by running it*) |
 | T1 | **The alternative reconciliation** — `docs/20_ALTERNATIVE_RECONCILIATION.md`, every item classified with its evidence including the rejections; ADR-0027 (markup is machine syntax: clip spans out of it at the provider boundary, and check the written output with an independently written assertion — `validation.require_markup_preserved`, on by default); ADR-0028 (recall decomposed into what the parser offered and what it never did); Delta column mapping when a column name needs it; parquet preflight at construction. Three of the four are for failure classes with **zero support in any corpus here**, which is exactly why they were invisible | 1187 default (+97), 92 integration, **56 gates across three corpora** and both chains — **no published number moved**. Both auditors found the markup guard *leaking* in three variants of one mistake (a guard against over-redaction causing under-redaction), and then found ADR-0029's claims outrunning its automation; all fixed, and both ADRs carry them |
 | T2 | **A durable run store** (ADR-0030) — `--run-journal PATH` appends every run-state transition to JSON lines and reloads it at startup, so `GET /runs/{id}` survives a restart instead of 404-ing a run that happened. A record recovered non-terminal is rewritten to `failed`/`interrupted`, because `running` for a dead process is the one state a caller waits on. The service journals **what it was asked**; `<dataset>_run_metrics` still records **what a run did** — two records, joinable by `engine_run_id`/`config_hash`, deliberately not merged. Both reviewers found real defects: the operator's journal path was relayed into an HTTP 500 body (a Volume path would disclose catalog and schema to an unauthenticated caller), a chained pydantic error carried the malformed line, and a tolerated truncated tail was never *repaired* — so the next append welded onto it and the service stopped starting, blaming a second writer that never existed | 1207 default (+20 from `tests/test_service_run_journal.py`), 56 gates unchanged; driven over real HTTP across a killed process **and** a kill mid-run |
+
+| T3 | **ADR-0031** — schema introspection: `SourceAdapter.schema()` and `pii-reduction describe`, column names without reading a row *(session 12; see the addendum below)* | 1226 default, 56 gates unchanged |
+| U1 | **ADR-0032: the speaker-prefix decision**, open since session 8 and named "the most serious open design item" in three documents. The prefix stays **preserved** by default — the only setting under which `AGENTS.md` rule 5 and the README's "preserves speaker metadata exactly" hold unconditionally — and `preserve_prefix: false`, which shipped in Increment A2 and had never been measured, is the ruled per-column opt-in for transcripts whose speakers are people. Measured both directions: incidents strict F1 0.761 → **0.844**, leakage 0.289 → **0.114**, unreachable 90 → **0**, tier-4 PERSON off 0.000 in all three languages; benchmark corpus PERSON precision 0.771 → **0.744** for **no** recall gain, and the two documents that change are Greek and change in the *body*, so the cost is the ADR-0016 input-change class, not destroyed role labels. Also found: **`over_redaction_rate` is 0.000 through both destroyed Greek words**, which is the second reason the default is *preserve*. `docs/06`'s "there is no configuration that currently fixes it" was **false** and is corrected | 1232 default (+6), 95 integration (+3), 56 gates unchanged — **no shipped default and no published number changed** |
+| U2 | **ADR-0033: batched detection**, the last pickup-list item. `_detect_batch` added below the repair chain (`_finalize` extracted so a batching provider cannot acquire a second copy of ADR-0016/0021/0027), `PresidioProvider` overrides it through `BatchAnalyzerEngine.analyze_iterator`, and `FieldProcessor` calls it once per provider per row. **1.56–1.77× on multi-segment columns, unchanged on single-segment ones**; across-row batching refused because it would move detection outside ADR-0023's per-row quarantine. Output identity verified over **576 segments** — every processable segment of all three corpora, three languages, both Presidio instances — before the wiring was written, and asserted by test | 1240 default (+8), 97 integration (+2), **56/56 gates unchanged on both chains**; `ruff`, `mypy src tests` clean |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -1312,8 +1336,15 @@ and after on the 10k pack, published beside the existing numbers.
    is therefore load-bearing rather than cautious, and whoever grants this App data
    access is granting it to the service principal. Full statement in `docs/19`.
 
-4. **Batching (P5).** `detect_batch` still has no caller; the platform direction that
-   `docs/17` D10 named as its reopening condition has now arrived twice over.
+4. ~~**Batching (P5).**~~ **Done (session 13, ADR-0033) — and the deferral's real
+   reason turned out to be that nobody had measured it.** 96% of a Presidio detection
+   is the spaCy pass; batching a row's segments through
+   `BatchAnalyzerEngine.analyze_iterator` is **1.56–1.77×** on multi-segment columns
+   (3–5 segments per row) and unchanged on single-segment ones, which is what a
+   plain-text column is. Output-identical over 576 corpus segments, 56/56 gates
+   unchanged. Batching **across** rows is refused, not deferred: it would move
+   detection outside the per-row `try`/`except` ADR-0023's `quarantine_row` depends on,
+   trading fail-closed row isolation for a further ~1.35×.
 5. ~~**Schema introspection in the engine.**~~ **Done (session 12), as the engine
    change it was scoped to be** (ADR-0031). `SourceAdapter.schema()` returns a source's
    column names **without reading a row** — a header line for CSV, the footer for
@@ -1330,9 +1361,10 @@ and after on the 10k pack, published beside the existing numbers.
    `describe` into `pii-reduction-databricks`, which is where a `spark_table` source
    can actually be described.
 
-Unchanged and unsequenced: the speaker-prefix ADR (still the most serious open design
-item), the Phase-7 Greek model, the distributed path, and the deferred items in
-`docs/17` §7.
+**The pickup list is empty.** The speaker-prefix ADR — the item this line carried for
+four sessions — landed as ADR-0032. What is left unbuilt (the Phase-7 Greek model, the
+distributed path, `docs/17` §7's deferrals) is parked with a named reopening condition
+in *Parked, with the condition that would reopen it* at the end of this section.
 
 ### After the queue
 
@@ -1438,9 +1470,12 @@ PERSON strict recall, hybrid chain: tier 3 is 1.000 (en) / 1.000 (de) / 0.933 (e
    name-like, and the Greek word is.
 2. **A work-note author is never offered to a provider.** The transcript parser treats
    `2026-04-03 09:12:04 - Peter Novak:` as structure — right for a role label, wrong for
-   a person — so those names cannot be redacted by anything. Verified structurally by a
-   test. Not fixed here: redacting inside a speaker prefix collides with the
-   reconstruction guarantee and needs its own decision.
+   a person — so under the shipped default those names cannot be redacted by anything.
+   Verified structurally by a test. Not fixed when this corpus landed, because
+   redacting inside a speaker prefix collides with the reconstruction guarantee and
+   needed its own decision. **That decision is ADR-0032 (session 13)**: preserve stays
+   the default, `preserve_prefix: false` is the measured opt-in, and the 0.000 rows
+   above are the price of a ruled default rather than an unclosed defect.
 
 Also exposed: `fragment_leakage_rate` exceeds `leakage_rate` on *both* chains here, and
 unlike ADR-0020's gap it is an attribution artefact — name-derived emails mean a leaked
@@ -1448,27 +1483,116 @@ PERSON carries an unrelated EMAIL's windows, and the ambient exclusion does not 
 windows sitting inside another unredacted entity. The metric is not changed to suit a
 corpus introduced alongside it.
 
-### Known deferrals carried forward
+### Parked, with the condition that would reopen it
 
-- Greek PERSON is licence-bound to `xx_ent_wiki_sm` until Phase 7 (ADR-0007), **the
-  gap is diagnosed** (Q4, ADR-0019) as span absorption, `LOC`/`MISC` label confusion
-  and the άνω τελεία, and **two of the three are now acted on**: ADR-0020's promotion
-  and ADR-0021's span extension. Greek PERSON recall by tier went 0.222/0.111/0.167/0.000
-  to 0.556/0.667/0.333/0.000. Tier 4 has not moved and is not expected to — it is span
-  absorption, which neither remedy reaches. The corpus is deliberately not made easier
-  to improve any of these numbers.
-- **Presidio drops spaCy's `MISC` label entirely**, before this project's adapter. It
-  bounds every future label-level remedy: on the Greek slice the model emits 41 `MISC`
-  spans and Presidio surfaces none of them under any requested entity name. Reaching
-  them needs a spaCy recognizer registered into Presidio or a separate provider
-  adapter — neither built, both scoped in ADR-0020.
+**Every open item in this repository has a disposition here.** An open item with no
+recorded decision is how a finished project reads as an abandoned one, so the rule for
+this section is: nothing appears without the condition under which someone should pick
+it up. Nothing here is a queue.
+
+#### Detection and corpora
+
+- **Greek PERSON is licence-bound** to `xx_ent_wiki_sm` (ADR-0007: `el_core_news_*` is
+  CC BY-NC-SA and cannot enter an MIT project). **PARKED — Phase 7 work.** The gap is
+  diagnosed to the mechanism (Q4, ADR-0019: span absorption, `LOC`/`MISC` label
+  confusion, the άνω τελεία) and **two of the three mechanisms are acted on** —
+  ADR-0020's promotion and ADR-0021's span extension took Greek PERSON recall by tier
+  from 0.222/0.111/0.167/0.000 to 0.556/0.667/0.333/0.000. Tier 4 has not moved and is
+  not expected to: it is span absorption, which neither remedy reaches. **Reopens when a
+  permissively-licensed Greek NER model exists** — a model problem, not a rule problem.
+  ADR-0019 already refused the corpus-side "fix", and the corpus is deliberately not
+  made easier.
+- **Presidio drops spaCy's `MISC` label entirely**, before this project's adapter, and
+  that bounds every label-level remedy: the Greek slice emits 41 `MISC` spans and
+  Presidio surfaces none under any requested entity name. **PARKED. Reopens with a
+  spaCy recognizer registered into Presidio, or a separate provider adapter** — neither
+  built, both scoped in ADR-0020, both Phase 7.
+- **Markup destroys PERSON recall**, 0.322 against 0.821, because the model returns *no
+  span* on markup-dense clauses (ADR-0029 — a finding neither this project nor the
+  reference implementation had recorded; their catalogue documents only the
+  false-positive direction). **PARKED.** The remedy — strip markup before detection and
+  map offsets back — changes the model's **input**, which §8's Q2 measured as trading
+  one error for another twice (`split_lines` and `key_value` each leaked a Greek name),
+  and which ADR-0032 has now measured a third time. **Reopens when someone can measure
+  it: `tests/fixtures/markup` exists for exactly that**, with gates on both chains, so
+  the before/after is a command rather than a project.
+- **ADDRESS stays in the taxonomy, undetected**, until a capable provider exists
+  (ADR-0002). **PARKED — Phase 7.** `AGENTS.md` rule 6 forbids the regex route, ADR-0002
+  refused it on probe evidence, and `docs/20` R2 refused it again when the reference
+  implementation offered one.
+- **A permissively-licensed public transcript corpus free of real PII** — the slot
+  MultiWOZ's rejection left empty (ADR-0018). **PARKED. Reopens if such a corpus is
+  found**; Bitext renders both packs meanwhile, and `docs/20` records that no candidate
+  surfaced in the comparison either.
+- **The speaker-prefix question — CLOSED**, not parked. ADR-0032.
+
+#### Engine and pipeline
+
+- **Pseudonymization collision detection is per process, not global** (ADR-0013 §4).
+  **PARKED. Reopens with a consumer of pseudonymized output** — `docs/17` D9, where key
+  rotation, KMS and re-tokenization sit together, because lifecycle without a consumer
+  is speculative construction and the charter keeps reversible mapping out of scope.
+- **Language detection is per field, not per segment**; code-switching needs the
+  per-segment form. **PARKED. Reopens with a corpus that code-switches** — none of the
+  three committed corpora does, so there is nothing to measure a change against.
+- **Batching across rows — REFUSED, not parked.** Worth a further ~1.35× beyond what
+  ADR-0033 ships, and it would move detection outside the per-row failure isolation
+  ADR-0023's `quarantine_row` depends on. It reopens only with a design that keeps that
+  isolation — a batch that re-runs its members individually when one raises — and then
+  with its own measurement, because the retry path changes the arithmetic.
+- **Within-row batching — DONE**, ADR-0033.
+
+#### Platform and deployment
+
+- **The distributed Spark path is shipped and infra-blocked.** Databricks'
+  `ISOLATION_STARTUP_FAILURE` on this workspace's serverless sandbox is infrastructure,
+  not code. **PARKED with no work attached: a `databricks`-marked test flips from skip
+  to assertion the day it is fixed**, with no change to this repository. `docs/17` D8
+  (distributed audit/metrics fan-out) is parked behind the same event, because
+  designing an unexecutable path would break this repo's own Databricks evidence rule.
+- **`bundle deploy` is blocked** by Databricks CLI v0.280.0's expired Terraform signing
+  key. **PARKED — an upstream bug.** `bundle validate` passes, and `databricks.yml` plus
+  `resources/` are committed and reviewed. **The correction session 12 made matters more
+  than the block does: this never affected Apps**, which deploy through `apps create` /
+  `apps deploy --source-code-path` and need no bundle at all. Two sessions had recorded
+  hosting as blocked by it; it was not.
+- **The Databricks App is stopped, not deleted** (2026-08-22). It proved what it was
+  created to prove, and compute is not free. The App object, its `SUCCEEDED` deployment
+  and the staged workspace source all survive, so `apps start` + `apps deploy` brings it
+  back; only `apps delete` would destroy the service principal. **Nothing to decide.**
+- **The service does not consume `SourceAdapter.schema()`**, deliberately: `service/`
+  may not import `sources/`, and an endpoint returning every column would let a caller
+  enumerate what a template withheld. **PARKED with the better of two named shapes**
+  (ADR-0031): validate every template against `schema()` at `create_app` startup and
+  expose no endpoint — the same typo caught, earlier, with nothing crossing HTTP. Also
+  not built: wiring `describe` into `pii-reduction-databricks`.
 - **Licence obligations are recorded but not emitted.** MASSIVE is CC BY 4.0 and Bitext
   is share-alike; both facts reach a pack's `meta.json` (`license`, `share_alike`,
-  `attribution_required`, `source_url`, `transformation`), but no NOTICE file is
-  written. Nothing is published today, so nothing is owed yet — this becomes real the
-  moment a pack is distributed.
-- ADDRESS stays in the taxonomy, undetected, until a capable provider exists (ADR-0002).
-- Pseudonymization collision detection is per process, not global (ADR-0013 §4).
-- Language detection is per field, not per segment; code-switching would need the
-  per-segment form.
-- The pipeline is row-at-a-time; `detect_batch` exists and **still has no caller** — Increment F shipped without one, and wiring it is P5.
+  `attribution_required`, `source_url`, `transformation`), but no `NOTICE` is written.
+  **PARKED because nothing is owed: nothing is published.** **Reopens the moment a pack
+  is distributed or this repository is made public**, and then it must land in the same
+  change (`docs/17` D14).
+
+#### Everything else
+
+- **`docs/17` §7's decision table** is the register for the two external reviews: 6
+  ACCEPT (all shipped), 14 DEFER each with a named condition, 4 REJECT, 3 DISPUTED. Two
+  rows changed in session 13 — D10 (batching) is **done**, and D13's (note-history
+  parser) blocking condition is **met** by ADR-0032, leaving it deferred on its own
+  merits.
+- **`docs/20` §9's ranked follow-ons** are parked with conditions in that document: the
+  markup remedy (above), the shape-only source profiler, case augmentation, and the
+  row-scoped gazetteer with protected terms.
+- **Roadmap Phases 7–10** — a better Greek model, an AI/BI dashboard,
+  production-hardening patterns, MLflow tracking — were never in the charter's
+  definition of done. **PARKED as roadmap, not as debt** (`docs/21`, *What finalization
+  does not mean*).
+- **A UI over the service.** ADR-0026 decided rung 4 is an API; a UI is a client of it.
+  `docs/09`'s conditions for a Class B display surface are **not** met by hosting, and
+  that is a measurement rather than a caution (`docs/19`: the App authenticates the end
+  user and authorizes as its own service principal, whose default on-behalf-of-user
+  scopes carry no data scope). **Reopens only with the explicit opt-in *and* a run path
+  using the caller's token**, and then as its own ADR.
+- Two parked ideas with their rationale in the session-3 handoff (archived in
+  `docs/archive/SESSION_HANDOFF_S1-S8.md`): **MLflow trace redaction**, and **GLiNER for
+  the Greek gap** — the latter subject to **ADR-0015 (CPU-only)**.

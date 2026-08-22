@@ -206,3 +206,16 @@ A release is portfolio-ready when a new reviewer can:
 7. understand known failure modes,
 8. verify tests and deterministic demo outputs,
 9. see no proprietary information or secrets in the repository.
+
+*Status (session 13, 2026-08-22): **all nine met**, and the release is cut — `v0.1.0`,
+`CHANGELOG.md`. Item 7 is the one worth pointing at, because it is the one a project
+is most tempted to skip: the known failure modes are stated in the README, in
+`CHANGELOG.md`'s *Known limitations*, in the gate files' own headers, and in
+`docs/14_IMPLEMENTATION_PLAN.md` §8's register of what is parked and what would reopen
+it. Two of them — the Greek PERSON gap and the over-redaction of identifier-dense Greek
+text — are gated so they cannot get worse, which is a stronger claim than documenting
+them.*
+
+*The four use cases above are **not** the definition of done, and UC-03 remains unmet
+by design: no `note_history` parser exists. `docs/17` D13 records the deferral, and
+ADR-0032 removed its blocking condition without changing the deferral.*

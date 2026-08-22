@@ -4,14 +4,18 @@
 
 This roadmap is intentionally phased. The project should become useful early and add sophistication only after measurable baselines exist.
 
-> **Status and precedence (session 10).** Phases 0–6 are built; Phase 6's
-> distributed exit criterion is the one that remains unmet, and it is annotated in
-> place below. **This document is no longer the live sequence.** ADR-0025 makes
-> Azure Databricks the primary deployment target, so Databricks-facing capability —
-> config-nameable Unity Catalog IO, a runbook, a deployable job, batching — comes
-> before Phase 7's provider expansion. The live queue is
-> `docs/14_IMPLEMENTATION_PLAN.md` §8; the phase order below is kept as the record
-> of how the build actually went, not rewritten to match current priorities.
+> **Status (session 13).** **Phases 0–6 are built and Phase 11 is done: `v0.1.0` is
+> released.** Phase 6's distributed exit criterion is the one that remains unmet, and
+> it is annotated in place below. **Phases 7–10 were never in the charter's definition
+> of done** and are parked as roadmap rather than as debt (`docs/21_FINALIZATION.md`,
+> *What finalization does not mean*).
+>
+> **This document is not the live sequence.** ADR-0025 makes Azure Databricks the
+> primary deployment target, so Databricks-facing capability — config-nameable Unity
+> Catalog IO, a runbook, a deployable job, batching — came before Phase 7's provider
+> expansion, and did. The register of what is parked and what would reopen it is
+> `docs/14_IMPLEMENTATION_PLAN.md` §8; the phase order below is kept as the record of
+> how the build actually went, not rewritten to match current priorities.
 
 ---
 
@@ -348,33 +352,39 @@ Potential additions:
 
 ---
 
-# Phase 11 — Release and adoption
+# Phase 11 — Release and adoption — **DONE (`v0.1.0`, 2026-08-22)**
 
 ## Deliverables
 
-- polished README
-- architecture diagram
-- 3-5 minute walkthrough
-- example benchmark results
-- one-command local demo path
-- Databricks quickstart
-- starter issues
-- contribution guide
-- changelog/release notes
+Seven of ten shipped. The three that did not are parked here rather than dropped
+quietly, because a deliverable list with silent omissions is not a record.
 
-## Suggested first public release scope
+| deliverable | state |
+|---|---|
+| polished README | done — revised in session 9's honesty sweep and again at the release |
+| example benchmark results | done — `docs/14` §8: three corpora, both chains, all locked as gates |
+| one-command local demo path | done — `pip install -e ".[dev]"`, then `pii-reduction benchmark` |
+| Databricks quickstart | done — `docs/18_RUNBOOK_DATABRICKS.md`, executed end to end |
+| contribution guide | done — `CONTRIBUTING.md`, `AGENTS.md`, `SECURITY.md` |
+| changelog / release notes | done — `CHANGELOG.md` |
+| documented metrics | done — `docs/08`, and every published number is a gate |
+| architecture diagram | **not shipped.** `docs/01_ARCHITECTURE.md` carries the component boundaries and dependency direction in prose and tables, and static guards enforce them. A diagram would render documentation that already exists and is tested. Parked. |
+| 3–5 minute walkthrough | **not shipped.** A recording is a portfolio artifact rather than a repository one; `docs/13_PORTFOLIO_STORY.md` is the script for it. Parked. |
+| starter issues | **not shipped.** The repository is private and has no contributors to onboard. Reopens if it is made public — in the same change as the `NOTICE` obligation (`docs/17` D14). |
 
-Do not wait for every phase.
+## Suggested first public release scope — met, with one substitution
 
-A strong `v0.1` can include:
+Written in session 2 as a target. What `v0.1.0` shipped against it:
 
-- public demo generator,
-- plain/transcript/note parsers,
-- deterministic + Presidio baseline,
-- three languages,
-- local benchmark,
-- Databricks Delta execution example,
-- documented metrics.
+| planned | shipped |
+|---|---|
+| public demo generator | yes — plus three public-dataset packs from pinned checksummed sources (ADR-0017) |
+| plain/transcript/**note** parsers | plain and transcript; **not** note-history. Deferred as `docs/17` D13, whose blocking condition — the speaker-prefix decision — was met by ADR-0032, so it now rests on its own merits. Charter UC-03 carries the unmet status. |
+| deterministic + Presidio baseline | yes, both chains, both gated |
+| three languages | yes — en, de, el |
+| local benchmark | yes, plus 56 regression gates over three corpora |
+| Databricks Delta execution example | yes — driver-path parity asserted against a real workspace |
+| documented metrics | yes |
 
 ## Prioritization rule
 

@@ -17,9 +17,12 @@ Spark-free, and nothing on the runtime path may import `pyspark`.
 
 The intended shape is a ladder, each rung depending only on the ones below it:
 the engine (this library) → a runbook-driven workspace run → a scheduled job or
-Asset Bundle → a service layer over the engine. **All four rungs exist, and rung 4 is
-deployed: a Databricks App runs the service and answers over HTTPS** (session 12,
-`docs/19_SERVICE_LAYER.md`). Rung 3's bundle is still undeployed — `bundle deploy` is
+Asset Bundle → a service layer over the engine. **All four rungs exist, and rung 4 has
+been hosted: a Databricks App ran the service and answered every endpoint over HTTPS**
+(session 12, `docs/19_SERVICE_LAYER.md`). That App is **stopped, not deleted** — it
+proved what it was created to prove and compute is not free; the App, its `SUCCEEDED`
+deployment and the staged workspace source all survive, so `apps start` plus
+`apps deploy` brings it back. Rung 3's bundle is still undeployed — `bundle deploy` is
 blocked by the Databricks CLI's expired Terraform signing key, which turned out never
 to apply to Apps, since they deploy without a bundle. **Hosting does not make the App
 authorize as the caller**: measured on the deployment, an App authenticates the end
@@ -71,7 +74,15 @@ all of it are in `docs/`, and every non-obvious choice has a decision record und
 
 Every number published below is enforced rather than only reported: they are locked as regression gates in `configs/benchmark_gates.yaml` and checked by CI on the committed corpus. The public-dataset packs carry their own gate sets under `configs/pack_gates/`, measured on their own corpora — never a reason to loosen the synthetic floors.
 
-`docs/14_IMPLEMENTATION_PLAN.md` §8 carries the live status, the measured baseline, and what is queued next.
+**Released as `v0.1.0`** (2026-08-22). `CHANGELOG.md` is the entry point for someone
+arriving cold. `docs/14_IMPLEMENTATION_PLAN.md` §8 carries the measured baseline and
+the register of everything parked, each with the condition that would reopen it —
+**there is no queue.** The charter's definition of done is met in all nine items, and
+what is unbuilt is roadmap rather than debt.
+
+As of the release: **1240 default-tier tests**, 97 integration, **56 regression gates
+across three corpora** and both provider chains, **33 ADRs**, CI green on Linux and
+Windows. No published benchmark number has ever moved without being re-measured.
 
 ### Quickstart
 
@@ -444,7 +455,9 @@ A mature version of this repository should make it possible to answer all of the
 - How does performance differ by document structure?
 - What percentage of fields still contain known PII after reduction?
 - How often does the system over-redact non-PII operational identifiers?
-- Does transcript reconstruction preserve speaker metadata exactly?
+- Does transcript reconstruction preserve speaker metadata exactly? *(Yes, under the
+  shipped default — and ADR-0032 rules on the case where you would rather it did not,
+  because your speakers are named people rather than roles.)*
 - Does the same configuration behave consistently locally and on Databricks?
 - How does throughput scale as text volume increases?
 - What are the quality/cost tradeoffs of deterministic, NER, and AI-based approaches?
@@ -477,8 +490,8 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 - **The service layer (rung 4) and what it refuses to do:** `docs/19_SERVICE_LAYER.md`
 - **A second implementation of the same problem, compared item by item — what was
   adopted, what was refused, and why:** `docs/20_ALTERNATIVE_RECONCILIATION.md`
-- **What is left before this is finished, and what "finished" means:**
-  `docs/21_FINALIZATION.md`
+- **What "finished" meant, and the course that reached it:** `docs/21_FINALIZATION.md`
+- **What shipped, in one page, for someone arriving cold:** `CHANGELOG.md`
 - **Decision records:** `docs/adr/`
 
 ## License

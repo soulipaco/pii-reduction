@@ -7,8 +7,13 @@ Keep it factual: what was verified, how, and what is still unknown.
 Sessions 1–8 are archived verbatim in
 [`docs/archive/SESSION_HANDOFF_S1-S8.md`](../docs/archive/SESSION_HANDOFF_S1-S8.md);
 the index below says what each established. The newest session's block is the live
-"start here" — currently **session 12**, at the end of this file. **Session 13's
-course is `docs/21_FINALIZATION.md`: finish the project.**
+"start here" — currently **session 13**, at the end of this file.
+
+> **The project is finished and tagged `v0.1.0` (session 13, 2026-08-22).** There is no
+> queue. `CHANGELOG.md` is the entry point for someone arriving cold, and
+> `docs/14_IMPLEMENTATION_PLAN.md` §8's *Parked, with the condition that would reopen it*
+> is the complete register of everything unbuilt. Read session 13's block below before
+> assuming anything here is pending.
 
 ---
 
@@ -942,7 +947,7 @@ path — no catalog, schema, table or volume was touched.
 
 ---
 
-## Session 13 — START HERE
+## Session 13 — the finalization session (2026-08-22)
 
 **The brief is: finish this project.** Read
 [`docs/21_FINALIZATION.md`](../docs/21_FINALIZATION.md) first — it is the whole course,
@@ -1021,3 +1026,114 @@ server-side-template design is load-bearing rather than cautious.
    `VIRTUAL_ENV=<scratch> uv pip install -e ".[dev]"`.
 4. **Never move a published number without re-running it.** Three corpora exist so the
    numbers stay honest, not so they can be improved.
+
+---
+
+## Session 13 — 2026-08-22 — **the project is finished and tagged `v0.1.0`**
+
+**Start here if you are picking this up later: there is nothing queued.** `CHANGELOG.md`
+is the entry point. `docs/14_IMPLEMENTATION_PLAN.md` §8 has a new section, ***Parked,
+with the condition that would reopen it***, which is the complete register of everything
+unbuilt — each item with the condition under which someone should pick it up. No item in
+this repository is open without a recorded disposition.
+
+The brief was `docs/21_FINALIZATION.md`: finish the project. All three of its parts were
+done, not the two that would have sufficed. That document is left as written, with an
+executed banner at the top, so the plan and its execution can be compared.
+
+### 1. The speaker-prefix question is decided — ADR-0032
+
+Open since session 8 and called "the most serious open design item" in three documents.
+
+**The decision was easier than four sessions of prose made it look, and the reason is a
+documentation defect.** `docs/06_CONFIGURATION_CONTRACT.md` stated *"there is no
+configuration that currently fixes it."* **That was false.** `preserve_prefix: false` has
+shipped on `TranscriptParser` since Increment A2, is per column, and does exactly this.
+Nobody had measured it, so nobody knew what it cost. So the session measured it, on both
+corpora and both chains, before ruling.
+
+| | incidents (speakers are people) | benchmark corpus (speakers are roles) |
+|---|---|---|
+| strict F1 | 0.761 → **0.844** | 0.910 → 0.902 |
+| leakage | 0.289 → **0.114** | 0.067 → 0.061 |
+| unreachable entities | **90/315 → 0/315** | 0 either way |
+| tier-4 PERSON recall (en/de/el) | 0.000 → **0.333/0.900/0.400** | n/a — no speaker is ground truth |
+| PERSON strict precision | — | 0.771 → **0.744** |
+
+**The ruling: preserve stays the default, and `preserve_prefix: false` is the named,
+measured, per-column opt-in.** Two reasons, and the second is the interesting one.
+
+1. Preserve is the only setting under which `AGENTS.md` rule 5 and the README's
+   "preserves speaker metadata exactly" hold *unconditionally*.
+2. **The error the opt-in introduces is the one this repository's instrumentation cannot
+   see.** Preserving a person's name leaks a span that the corpus, the gates and
+   `unreachable_entity_rate` all report out loud. The opt-in's cost is invisible:
+   `over_redaction_rate` stays **0.000** through it.
+
+**Two findings nobody predicted.** The expected cost was destroyed role labels. Role
+labels are *not* destroyed — `Support Agent`, `Guest`, `Automation`, `Πράκτορας`,
+`Πελάτης` all survive. The two documents that change are Greek and change in the
+**body**: joining the prefix to the body changes the model's input, so `Καλημέρα` becomes
+a false-positive PERSON and a span extends left across `Ονομάζομαι`. That is the **same
+failure class §8's Q2 measured twice** (`split_lines`, `key_value`), now measured a third
+time — which is why ADR-0016 repairs spans instead of re-cutting input.
+
+### 2. Batching is done — ADR-0033, the last pickup-list item
+
+`docs/21` said "do it or park it". It was done, because three measurements changed the
+picture:
+
+- **96% of a Presidio detection is the spaCy pass** (1.57 s of 1.64 s over 272 segments).
+  Nothing else is worth batching.
+- **`BatchAnalyzerEngine` really does batch it.** An earlier reading of it as "just a
+  loop" was **wrong**: `analyze_iterator` runs `NlpEngine.process_batch` — one
+  `nlp.pipe` — then calls the ordinary `analyze` with artifacts already computed.
+- **Segments per row decides everything.** Plain columns are **1.00** segments/row;
+  transcripts are 3–5. Within-row batching is worth 1.87× on a 5-segment row and
+  **nothing** on a 1-segment one.
+
+Shipped: `_detect_batch` as a hook **below** the repair chain (`_finalize` extracted so a
+batching provider cannot acquire a second copy of ADR-0016/0021/0027), a Presidio
+override, and `FieldProcessor` calling it once per provider per row.
+
+| corpus | type | segments/row | before | after | |
+|---|---|---|---|---|---|
+| benchmark | plain | 1.0 | 181.5 rows/s | 181.8 | unchanged |
+| benchmark | transcript | 3.0 | 76.6 rows/s | **119.7** | **1.56×** |
+| incidents | transcript | 5.0 | 46.2 rows/s | **81.7** | **1.77×** |
+| markup | transcript | 4.0 | 51.5 rows/s | **81.2** | **1.58×** |
+
+**Output identity was verified before the wiring was written** — 576 segments, every
+processable segment of all three corpora, three languages, both Presidio instances,
+0 differences — and is now asserted by test. All 56 gates unchanged.
+
+**Two things were refused rather than deferred.** Across-row batching (worth a further
+~1.35×) would move detection outside the per-row `try`/`except` that ADR-0023's
+`quarantine_row` depends on: one bad row would take its whole batch. And a single text is
+routed to the scalar path, because the batch machinery costs ~3% on it and a plain-text
+column is that case on every row.
+
+### 3. The release is cut
+
+`CHANGELOG.md` (which did not exist), tag `v0.1.0`, README front-page pass, roadmap
+Phase 11 marked done with its three unshipped deliverables parked in place rather than
+dropped. `NOTICE` is still **not owed** — nothing is published — and that is stated with
+the condition that makes it real.
+
+### What did not change, and that is the point
+
+**No published number moved. No shipped default changed.** ADR-0032 changes no
+configuration file; ADR-0033 is output-identical by construction and by assertion. The
+56 gates hold at the same floors on both chains across all three corpora.
+
+Final state: **1240 default-tier tests** (+14), **97 integration** (+5), 56 gates,
+**33 ADRs**, `ruff format --check`, `ruff check`, `mypy src tests` all clean.
+
+### The one lesson worth carrying
+
+**Two of this session's three items were blocked by a claim, not by work.** The
+speaker-prefix decision waited four sessions behind a sentence saying no configuration
+could fix it — the configuration had shipped in Increment A2. Batching waited three
+sessions behind a reading of `BatchAnalyzerEngine` as a loop — it is not one. Both were
+resolved by an hour of measurement. **When an item has been open for several sessions,
+check the claim that is holding it before doing the work it seems to need.**

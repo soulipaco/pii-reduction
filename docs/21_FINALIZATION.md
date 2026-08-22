@@ -3,6 +3,30 @@
 Written at the end of session 12 (2026-08-22), for session 13, whose brief is to
 **finish this project**.
 
+> ## Executed — session 13, 2026-08-22. The project is finished at `v0.1.0`.
+>
+> **All three parts, not the two that would have sufficed.** This document is left as
+> written, so the plan and its execution can be compared:
+>
+> - **Part 1 — done.** Every item parked with the condition that would reopen it, in
+>   `docs/14` §8's new *Parked, with the condition that would reopen it* register. Item 1
+>   became **ADR-0032**, and it was decided from a new measurement rather than from
+>   prose: the option `preserve_prefix: false` had shipped since Increment A2 and nobody
+>   had ever measured it, which made this look harder than it was. `docs/06`'s claim that
+>   "there is no configuration that currently fixes it" was **false** and is corrected.
+> - **Part 2 — done, not skipped.** Batching became **ADR-0033** once three measurements
+>   existed: 96% of a Presidio detection is the spaCy pass, `BatchAnalyzerEngine` really
+>   does batch it (an earlier reading of it as "just a loop" was wrong), and the gain
+>   depends entirely on segments per row. Shipped as within-row batching: **1.56–1.77×**
+>   on multi-segment columns, unchanged on single-segment ones, **output-identical over
+>   576 corpus segments**, 56/56 gates unchanged. Across-row batching is **refused**, not
+>   deferred — it would break ADR-0023's per-row quarantine.
+> - **Part 3 — done.** `CHANGELOG.md` exists, `v0.1.0` is tagged, the README's
+>   front-page claims match the current state (including that the App is stopped), and
+>   `NOTICE` is still not owed because nothing is published.
+>
+> **No published number moved**, and no shipped default changed.
+
 Everything below is either a small piece of work with an exit criterion, or a decision
 to park something explicitly. Nothing here is exploration. If session 13 does only
 Part 1 and Part 3, the project is finished by the definition its own charter wrote.
