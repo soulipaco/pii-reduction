@@ -103,11 +103,15 @@ punctuation trim. ADR-0027's decisions 4 and 5 and its *What the two reviews cha
 section carry the detail. On a real ServiceNow column — where a URL somewhere in the
 cell is near-universal — the third would have removed candidates silently on most rows.
 
-**What is *not* claimed.** The guard is exercised by 50 synthetic unit tests and by
-nothing else. The alternative's own numbers for what its guard cost and bought —
+**Now measured.** The guard was exercised by 50 synthetic unit tests and nothing else
+when it shipped; ADR-0029 gave it a corpus in the same session
+(`configs/markup_gates.yaml`, both chains). Their PERSON/ADDRESS/EMAIL trade is still
+*their* number on *their* data and is not adopted as one here. The alternative's own
+numbers for what its guard cost and bought —
 PERSON −3.3%, ADDRESS −1.6%, EMAIL +42, PHONE +41 — are *its* measurement on *its*
-data and are **not adopted as a number here**; this repository has no markup-bearing
-corpus to reproduce them on. Building one is §5's first recommendation.
+data and are **not adopted as a number here**; Reproducing them would need a corpus
+shaped like theirs; `tests/fixtures/markup/` measures the same guard on ours, and found
+something their catalogue does not contain (§9, item 1).
 
 ### A2 — Delta refuses the column names ServiceNow produces
 
@@ -394,10 +398,17 @@ build from before the markup fix) applies to any non-bundle deployment route.
 
 ## 9. What to do next, ranked by the evidence this comparison produced
 
-1. **A markup-bearing synthetic corpus slice**, so A1 stops being a capability with no
-   measurement. It is the only way to reproduce the alternative's PERSON/ADDRESS/EMAIL
-   trade on data this project owns, and it would give the incident-notes corpus a
-   second dimension it was built for (structural damage, beside over-redaction).
+1. ~~**A markup-bearing synthetic corpus slice**~~ — **done in this session**
+   (ADR-0029, `tests/fixtures/markup/`), and it repaid the cost immediately by finding
+   something the alternative's own catalogue does not contain: **markup destroys PERSON
+   recall**, 0.322 against 0.821 on the committed corpus, because the model returns no
+   span at all on markup-dense clauses. Their twenty failures record only the
+   false-positive direction — a tag returned as a name. This is the leak direction, and
+   it is upstream of every remedy either project built. **The replacement for this item
+   is the remedy**: strip markup before detection and map the offsets back. That is a
+   change to the model's *input*, which plan §8 Q2 measured as trading one error for
+   another twice, so it needs its own increment and its own before/after on this
+   corpus — which now exists to measure it.
 2. **The shape-only source profiler (D8)**, so an operator pointing `docs/18` at a real
    table can see eligible share, parser fallback rate and language mix *before*
    configuring — the four numbers the alternative says determine most of the design,

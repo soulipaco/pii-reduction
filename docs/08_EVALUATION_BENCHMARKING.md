@@ -104,12 +104,18 @@ Measured when the metric landed (session 12):
 | committed benchmark corpus | either | **0 / 180** | as published | identical |
 | `tests/fixtures/incidents` | `deterministic_only` | 90 / 315 (0.286) | 0.571 | **0.800** |
 | `tests/fixtures/incidents` | `deterministic_presidio` | 90 / 315 (0.286) | 0.711 | **0.996** |
+| `tests/fixtures/markup` | either | **0 / 270** | as published | identical |
 
 The 90 are exactly the tier-4 work-note authors, which the transcript parser treats as
 speaker prefixes (ADR-0022). On the hybrid chain the engine finds 224 of the 225
 entities it was ever offered — the gap between 0.711 and 0.996 is a *scope* decision
 with an open design question behind it (the speaker-prefix ADR), not a detection
 result.
+
+The markup corpus (ADR-0029) reports **zero** unreachable, which is the answer that
+makes its PERSON recall of 0.322 readable: nothing there is out of scope, so the whole
+gap is detection. That is exactly the distinction this metric exists to draw — the same
+low number means opposite things on the two corpora.
 
 Two rules for quoting these:
 

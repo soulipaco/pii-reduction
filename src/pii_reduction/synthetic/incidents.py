@@ -33,7 +33,7 @@ deliberately dense; neither is a claim about how common that density is.
 from __future__ import annotations
 
 from pii_reduction.synthetic.errors import CorpusError
-from pii_reduction.synthetic.templates import TemplateSpec
+from pii_reduction.synthetic.templates import PLAIN, TRANSCRIPT, TemplateSpec
 
 #: Tier 3 — the incident header. Every line is a field label beside a value, which is
 #: the shape that made English tier-3 PERSON recall 0.333 before ADR-0016, and which
@@ -100,16 +100,16 @@ _NOTES_EL = (
 
 INCIDENT_TEMPLATES: dict[str, tuple[TemplateSpec, ...]] = {
     "en": (
-        TemplateSpec(tier=3, document_type="plain", template=_HEADER_EN),
-        TemplateSpec(tier=4, document_type="transcript", template=_NOTES_EN),
+        TemplateSpec(tier=3, document_type=PLAIN, template=_HEADER_EN),
+        TemplateSpec(tier=4, document_type=TRANSCRIPT, template=_NOTES_EN),
     ),
     "de": (
-        TemplateSpec(tier=3, document_type="plain", template=_HEADER_DE),
-        TemplateSpec(tier=4, document_type="transcript", template=_NOTES_DE),
+        TemplateSpec(tier=3, document_type=PLAIN, template=_HEADER_DE),
+        TemplateSpec(tier=4, document_type=TRANSCRIPT, template=_NOTES_DE),
     ),
     "el": (
-        TemplateSpec(tier=3, document_type="plain", template=_HEADER_EL),
-        TemplateSpec(tier=4, document_type="transcript", template=_NOTES_EL),
+        TemplateSpec(tier=3, document_type=PLAIN, template=_HEADER_EL),
+        TemplateSpec(tier=4, document_type=TRANSCRIPT, template=_NOTES_EL),
     ),
 }
 

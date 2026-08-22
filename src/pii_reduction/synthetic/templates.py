@@ -16,9 +16,13 @@ truth; ``TICKET``/``KB``/``MACHINE``/``VERSION``/``ORDER``/``CHANGE``/``REQUEST`
 ``ASSET`` become protected tokens that must survive reduction untouched
 (``docs/10_TESTING_QA.md`` §6).
 
-These are the *benchmark* corpus's templates. The second profile — the incident-notes
-over-redaction stress corpus — lives in :mod:`pii_reduction.synthetic.incidents` and
-shares this placeholder vocabulary and the same generator (ADR-0022).
+These are the *benchmark* corpus's templates, and there are now three profiles sharing
+this placeholder vocabulary, this ``TemplateSpec`` and the same generator:
+:mod:`pii_reduction.synthetic.incidents` (the over-redaction stress corpus, ADR-0022)
+and :mod:`pii_reduction.synthetic.markup_notes` (the markup corpus, ADR-0029). ``PLAIN``
+and ``TRANSCRIPT`` are exported for them: ``document_type`` is a closed vocabulary, and
+a profile spelling it as a literal can typo a document out of every benchmark selection
+without failing anything.
 """
 
 from __future__ import annotations

@@ -135,6 +135,14 @@ jobs:
           pii-reduction benchmark --corpus tests/fixtures/incidents
           --chain deterministic_presidio --gates configs/incident_gates.yaml
 
+      - name: Markup gates (hybrid chain)
+        # ADR-0029. The set where PERSON recall is 0.322 — the finding that markup
+        # destroys recall, not merely structure. Gated so it cannot get worse, and
+        # deliberately not raised by editing the corpus.
+        run: >
+          pii-reduction benchmark --corpus tests/fixtures/markup
+          --chain deterministic_presidio --gates configs/markup_gates.yaml
+
       - name: Publish the benchmark table to the run summary
         # Synthetic corpus only: every value in this table is generated data, so the
         # table is safe to publish (AGENTS.md rule 8).

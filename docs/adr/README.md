@@ -35,3 +35,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0026](0026-service-layer-is-a-thin-api.md) | Rung 4 is a **thin HTTP API**, hosted as a Databricks App rather than built as one; no service response may carry text |
 | [0027](0027-markup-is-machine-syntax.md) | Clip model-inferred spans out of HTML/BBCode/URLs at the provider boundary, and check the written output with an **independently written** markup assertion |
 | [0028](0028-reachability-decomposition-of-recall.md) | The benchmark reports how much ground truth the parser ever offered a provider, beside recall over it — a miss nothing could have caught is not a detection result |
+| [0029](0029-a-corpus-for-the-markup-guard.md) | A committed markup corpus, because ADR-0027 shipped without one — and its first run found that markup **destroys PERSON recall**, not just structure |

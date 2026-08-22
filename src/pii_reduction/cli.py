@@ -207,7 +207,7 @@ def _run(argv: Sequence[str] | None) -> int:
     if args.command == "run":
         return _run_dataset(args)
 
-    if args.command in {"build-corpus", "build-incidents", "build-markup"}:
+    if args.command in _CORPUS_PROFILES:
         # One dispatch for three profiles rather than three builders: every invariant
         # `build_corpus` enforces — span validation, split assignment, deterministic
         # value sequencing — is enforced identically for all of them, and a fourth

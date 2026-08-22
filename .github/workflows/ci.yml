@@ -105,6 +105,15 @@ jobs:
           pii-reduction benchmark --corpus tests/fixtures/incidents
           --gates configs/incident_gates.yaml
 
+      - name: Markup gates (deterministic chain)
+        # The corpus that gives ADR-0027's guard a number (ADR-0029). This set is
+        # model-free and runs in about a second, so it belongs on every push for the
+        # same reason the incident set does. Its hybrid gates need models and run in
+        # the integration workflow — and only that half could be moved by a model bump.
+        run: >
+          pii-reduction benchmark --corpus tests/fixtures/markup
+          --gates configs/markup_gates.yaml
+
       - name: Corpora are reproducible from their seeds
         # The committed corpora are the ground truth every metric above is scored
         # against. If regenerating one from the same seed does not reproduce it byte
@@ -114,3 +123,5 @@ jobs:
           diff -r tests/fixtures/corpus "${RUNNER_TEMP}/corpus"
           pii-reduction build-incidents --out "${RUNNER_TEMP}/incidents"
           diff -r tests/fixtures/incidents "${RUNNER_TEMP}/incidents"
+          pii-reduction build-markup --out "${RUNNER_TEMP}/markup"
+          diff -r tests/fixtures/markup "${RUNNER_TEMP}/markup"

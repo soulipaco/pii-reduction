@@ -328,8 +328,28 @@ ships instead as a *generated over-redaction stress corpus* at
 `tests/fixtures/incidents/`, carrying no realism claim and never quoted beside the
 packs. See ADR-0022, including the two findings it produced immediately.
 
+### `markup` — the second source-less corpus (ADR-0029)
+
+Notes and work-note histories carrying HTML, BBCode, URLs and entity references.
+**Also no public source, and for the same reason not a pack**: a licence record with no
+licence in it says nothing true. It ships as a generated corpus at
+`tests/fixtures/markup/` with its own gate set, carrying no realism claim and never
+quoted beside the packs.
+
+It exists because ADR-0027 shipped a detection change with **no corpus support at all** —
+every other corpus here is markup-free — and its first run found something neither this
+project nor the reference implementation had recorded: **markup destroys PERSON recall**,
+not merely structure. See ADR-0029.
+
+Its provenance is recorded where the CONTRIBUTING checklist requires: source (generated,
+no external origin), version (seed 42 plus the measuring commit), licence and
+redistribution (none; never publishable), synthetic-versus-real, language coverage,
+document type, and the transformation performed — in ADR-0029 and in the `measured:`
+block of `configs/markup_gates.yaml`.
+
 The first two create structurally different challenges while using the same PII
-engine; the third tests whether operational identifiers survive it.
+engine; the third tests whether operational identifiers survive it, and the fourth
+whether machine syntax does.
 
 ## Data volume targets
 

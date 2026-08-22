@@ -1309,6 +1309,50 @@ Also open from Increment D: a
 permissively-licensed public transcript corpus free of real PII, to replace the one
 MultiWOZ's rejection removed (ADR-0018).
 
+### The markup corpus (ADR-0029)
+
+`tests/fixtures/markup/` — 90 documents, 270 entities, 330 protected tokens, en/de/el,
+tiers 3 and 4, generated and committed. Built because **ADR-0027 shipped a detection
+change with no corpus support at all**: every other corpus here is markup-free, so the
+failure class the guard exists for had no number anywhere. Not a pack, no realism claim
+— same standing as ADR-0022's corpus.
+
+| chain | strict F1 | leakage | PERSON recall | over-redaction |
+|---|---|---|---|---|
+| `deterministic_only` | 0.800 | 0.333 | 0.000 | **0.000** |
+| `deterministic_presidio` | 0.783 | 0.207 | **0.322** | **0.033** |
+
+**One finding dominates, and it is not the one the corpus was built to check.**
+
+**Markup destroys PERSON recall — 0.322 here against 0.821 on the committed corpus.**
+The reference implementation's catalogue records only the false-positive direction (NER
+reading markup as prose and returning a tag as a name). This is the other half, and it
+is the worse one, because a missed name is a leak. Isolated by changing one thing at a
+time against `en_core_web_md`: `From: Grace Okafor` and
+`From: Grace Okafor <grace.okafor@example.com>` are both found;
+`<b>From:</b> Grace Okafor &lt;…&gt;<br>` returns **nothing at all**, as does the same
+name inside an anchor's `title` attribute. The model emits no span, so **no guard,
+repair or reconciler rule can reach it** — this sits upstream of everything ADR-0027
+does.
+
+Where the markup sits explains English and German and **not Greek**: en/de tier 4 are
+both 1.000 while en tier 3 is 0.050 and de tier 3 is 0.000 — those bodies carry markup
+around the sentence rather than inside the clause. **Greek runs the other way — tier 3
+0.400, tier 4 0.000** — so the placement explanation covers two languages of three.
+Greek tier 4 matches the span absorption ADR-0019 diagnosed and ADR-0022 saw at the
+same tier, so markup may not be the operative cause there at all.
+
+Two smaller results: over-redaction 0.033 is **the ADR-0022 mechanism reproduced on new
+text** (10 of 11 destroyed tokens are Greek tier-3 ticket ids inside a PERSON span
+covering `Περιστατικό INC…`, which the identifier guard passes by design), and the
+deterministic chain destroys nothing at all — which is also the measurement that
+ADR-0027's format-defined exemption costs nothing here.
+
+**The floors in `configs/markup_gates.yaml` are low on purpose and must not be raised
+by editing the corpus.** The remedy this points at — strip markup before detection and
+map offsets back — changes the model's *input*, which Q2 above measured as trading one
+error for another, twice. It needs its own increment and its own measurement.
+
 ### The incident-notes stress corpus (ADR-0022)
 
 `tests/fixtures/incidents/` — 90 documents, 315 entities, **585 protected tokens across
