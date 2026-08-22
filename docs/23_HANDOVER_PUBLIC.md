@@ -12,13 +12,18 @@ Six sections, in the order they should be done:
 | 2 | screenshots of the control panel | **done** — three in `docs/images/`, all three in the README |
 | 3 | description + topics | **done** — set and verified on the public page |
 | 4 | decisions | **done** — all four recorded with reasoning |
-| 5 | **the GitHub profile** — pins, bio, profile README, portfolio hub | github.com/soulipaco |
+| 5 | **the GitHub profile** — pins, bio, profile README, portfolio hub | **done** — all four, verified live |
 | 6 | the core-only check before pushing | **done** — green, and it caught nothing; the *privacy* pass did |
 
-**§5 is the one a reader is most likely to skip and should not.** A LinkedIn post sends
-people to the repository; a good share of them then click the profile, and there are
-currently **no pinned repositories at all**, so the first thing they see is a list
-sorted by last commit.
+**All six are done as of 2026-08-22.** The repository is public, and §5 — the one this
+document warned a reader would skip — landed with it. What follows is the record of
+each, with the original framing kept underneath so a later reader can disagree with the
+reasoning rather than guess at it.
+
+Original framing: **§5 is the one a reader is most likely to skip and should not.** A
+LinkedIn post sends people to the repository; a good share of them then click the
+profile, and there are currently **no pinned repositories at all**, so the first thing
+they see is a list sorted by last commit.
 
 Read `docs/22_EVIDENCE.md` first: it is the executed record, and it is what the
 front-page claims rest on.
@@ -194,7 +199,36 @@ disagree with the reasoning rather than guess at it.
   estate scanner; do not show a workspace URL). It also carries a LinkedIn post skeleton
   that leads with the Greek failure rather than a feature.
 
-## 5. The GitHub **profile**, not just this repository
+## 5. ~~The GitHub **profile**, not just this repository~~ — **DONE**
+
+All four parts landed on 2026-08-22 and each was verified against the live API rather
+than the page that set it:
+
+| | done | verified as |
+|---|---|---|
+| **pins** | six, in maturity order | `pinnedItems` returns `pii-reduction`, `contact-center-new-hire-intelligence`, `structure-aware-rag-databricks`, `prophet-forecasting-mlops`, `databricks-genie-deployment-kit`, `technical-portfolio` |
+| **bio** | *"Business analyst turned data & AI engineer. I build governed Databricks systems and publish the numbers—including the bad ones."* | 127 characters, under the 160 limit; location left in its own field rather than repeated |
+| **website** | the portfolio hub | `blog` field on `GET /users/soulipaco` |
+| **profile README** | rebuilt, not amended | `soulipaco/soulipaco@243a74f` |
+| **portfolio hub** | flagship entry + `Where to start` row + one repository artifact as its visual | `technical-portfolio` PR #1, squash-merged |
+
+**Two things this section got wrong, worth recording.** It said pinning is UI-only —
+correct, and stronger than it knew: the GraphQL schema has `pinIssue` and
+`pinEnvironment` and no mutation for profile pins at all. But the *order* is not
+settable in that dialog: GitHub saves the checkboxes in the alphabetical order they are
+listed, whatever order they are ticked in. The profile's own sortable move-up controls
+fix it, and the server keeps the result. And the bio and website could not be set with
+`gh` either — `PATCH /user` needs the `user` scope, which this token does not carry.
+
+**The profile README was rebuilt rather than given the two edits §5.3 asked for.** The
+old one was accurate but flat: six projects in one list, the analyst half of the story
+missing, and no signal about which repositories are load-bearing. It now leads with the
+positioning as its heading — the name GitHub already shows above it was a wasted line —
+then three flagships with deep links, three supporting repositories at one line each,
+an explicit section on how the work is made checkable, and the learning-stage notebooks
+kept visible but no longer competing.
+
+Original framing:
 
 A LinkedIn post sends people to the repository; a good number of them then click the
 **profile**. That was missing from the first draft of this handover and it is the gap

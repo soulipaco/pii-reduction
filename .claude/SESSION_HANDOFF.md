@@ -7,7 +7,7 @@ Keep it factual: what was verified, how, and what is still unknown.
 Sessions 1–8 are archived verbatim in
 [`docs/archive/SESSION_HANDOFF_S1-S8.md`](../docs/archive/SESSION_HANDOFF_S1-S8.md);
 the index below says what each established. The newest session's block is the live
-"start here" — currently **session 14**, at the end of this file.
+"start here" — currently **session 15**, at the end of this file.
 
 > **The project was finished and tagged `v0.1.0` in session 13.** Session 14 opened a
 > **new line of work on top of it**: making the shipped engine usable — its accuracy
@@ -1276,3 +1276,82 @@ Four surfaces now: `pii-reduction` (CLI), `pii-reduction-databricks`,
   use that template, and a file named after a person puts that name in a listing. It is
   the first **data-derived** entry on `docs/09`'s display-surface allowlist, recorded
   there with what bounds it and what does not.
+
+---
+
+## Session 15 — 2026-08-22 — **the repository is public, and the profile is a hierarchy**
+
+**Start here:** `soulipaco/pii-reduction` is **public**. No engineering happened and
+none was opened; everything in `docs/14` §8's parked register is still parked, with
+`ADDRESS`, the Greek ceiling, the distributed path and the note-history parser
+untouched. `docs/23`'s six sections are now all done.
+
+**The one finding worth carrying forward: a repository can hold a rule, a decision
+record and a purge, and still ship the thing all three forbid.** ADR-0014 exists
+because seventeen routable Berlin numbers reached the corpus before the first commit.
+The purge that followed regenerated the fixtures — and missed
+`tests/test_providers_deterministic.py`, which had two literals from the same
+`+49 30 9018xx` block and predates the ADR. Private, they were inert. Public, they are
+exactly the harm the ADR was written after. The pre-publication privacy pass caught
+them with minutes to spare. **The remedy was applied to the place the mistake was
+found, not to every place it could be**, and that is the general shape of the bug.
+
+### What was published
+
+- **Three control-panel screenshots** in `docs/images/`, all three in the README under
+  *See it work in two minutes*. `docs/23` §2 said this could not be done because the
+  agent browser pane would not composite frames — it still will not. The shots were
+  taken by driving the running service with a headless Chromium at 1360 px, light mode,
+  which also gets the full-page captures a 695 px viewport cannot. The privacy auditor
+  read every rendered string and checked the PNG chunk structure: no `tEXt`, `iTXt`,
+  `eXIf` or `tIME`, so no capture-tool string, source URL or username rides inside the
+  file.
+- **Description and eleven topics**, set with `gh repo edit` and verified anonymously.
+- **GitHub private vulnerability reporting**, enabled at the flip. `SECURITY.md` had
+  been telling reporters not to use the public tracker while naming no alternative.
+
+### What was decided rather than fixed
+
+Two things the audit raised cannot be fixed without rewriting history, which was ruled
+out. Both are recorded as accepted, not resolved:
+
+- **The developer's absolute path is redacted at the tip and remains in history.** A
+  reader of `git blame` still finds the OS username. **Correct the number the fix
+  commit gives:** its message says "86 of the 88 commits", taken from the audit. Counted
+  directly, the string is in the tree of **38 of the 90** commits — the archive file
+  only exists from the commit that created it. The commit message cannot be corrected
+  without rewriting history, so it is corrected here instead.
+- **All 90 commits carry the personal address `onurhuh@hotmail.com` rather than the
+  GitHub `noreply` alias.** This is not a *new* exposure — three of the owner's
+  existing public repositories already carry it — but publishing added a fourth. The
+  local `user.email` for this repository is the cause and is worth changing before the
+  next commit.
+
+### The profile, which `docs/23` §5 argued was the real gap
+
+All of it landed and was verified live: **six pins in maturity order** (pinning has no
+API — done through the UI, then reordered with the profile's own sortable controls
+until the server returned the intended sequence), a bio that says both halves of the
+job, the website field pointed at the portfolio hub, a **rebuilt profile README** that
+leads with positioning rather than the name GitHub already shows, and a flagship entry
+in `technical-portfolio` (PR #1, squash-merged) that states this project's gaps at the
+same volume as its claims.
+
+### State
+
+**1380 default-tier tests, 2 skipped; 97 integration; `ruff format --check`,
+`ruff check` and `mypy src tests` clean.** The default tier was also re-run in a
+genuine core-only environment — `lingua`, `presidio_analyzer`, `spacy` and `pyspark`
+each verified absent first — where it reads **1380 passed, 5 skipped**: the three extra
+skips are the extras-gated tests doing their job. **No published number moved**, and
+the two phone literals that changed are in a unit test, not in a corpus or a gate.
+
+The portfolio manager at `..\github_master` was re-synced afterwards. It scores this
+repository **83/100, `featured_candidate`, attention low** — not flagship, and the
+reasons are worth knowing rather than arguing with: there is **no GitHub Release
+object** (the `v0.1.0` tag is not one), no lockfile and no homepage. Two further
+"missing" flags are the detector's vocabulary rather than this repository's substance
+— it scans the README for the literal phrases *"installation"* / *"quick start"* and
+*"live databricks evidence"*, and this README says *"See it work in two minutes"* and
+describes the hosted App instead. **The README was deliberately not reworded to match
+the matcher.**
