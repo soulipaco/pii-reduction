@@ -12,7 +12,7 @@ from typing import Any
 
 from pii_reduction.databricks.errors import DatabricksError, error_label
 from pii_reduction.observability.logging import get_logger, safe_fields
-from pii_reduction.sources.base import SourceDataset
+from pii_reduction.sources.base import SourceDataset, SourceSchema
 
 __all__ = ["SparkTableSource", "require_table_name"]
 
@@ -56,6 +56,33 @@ class SparkTableSource:
         self._spark = spark
         self._table = require_table_name(table)
         self._name = name or self._table
+
+    def schema(self) -> SourceSchema:
+        """Column names from the metastore. **No rows cross the wire.**
+
+        This is the adapter where the no-read property stops being a nicety.
+        ``load()`` calls ``toPandas()``, which pulls an entire Unity Catalog table to
+        the driver; answering "which columns does it have" that way would make a
+        column picker cost a full table scan, and on a production table that is not a
+        performance note, it is a reason nobody would use the picker.
+
+        ``spark.read.table(...).schema`` is resolved from the catalog. The DataFrame is
+        lazy, so nothing is executed — asserted by a unit test driving a fake session
+        that fails if any action is called.
+        """
+        try:
+            fields = self._spark.read.table(self._table).schema.fieldNames()
+        except Exception as error:
+            raise DatabricksError(
+                f"source {self._name!r}: could not read the schema of {self._table} "
+                f"({error_label(error)})"
+            ) from error
+        return SourceSchema(
+            name=self._name,
+            source_type=self.source_type,
+            source_reference=self._table,
+            columns=tuple(str(field) for field in fields),
+        )
 
     def load(self) -> SourceDataset:
         try:

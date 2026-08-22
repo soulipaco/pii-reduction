@@ -73,9 +73,10 @@ class TemplateSummary(ServiceModel):
     source_type: str
     destination_type: str
     #: The column menu, declared server-side. The service does **not** read the source
-    #: to discover columns: a preview endpoint is forbidden (ADR-0026), and `sources/`
-    #: exposes only `load()`, which materialises the frame. A schema-only path is a
-    #: change to the engine, deliberately not improvised here.
+    #: to discover columns: a preview endpoint is forbidden (ADR-0026). The engine has
+    #: had a schema-only path since ADR-0031, but `service/` may not import `sources/`,
+    #: and an endpoint listing *every* column would disclose the ones this menu
+    #: deliberately withholds.
     columns: tuple[str, ...] = ()
     row_id_columns: tuple[str, ...] = ()
     entities: tuple[str, ...] = ()

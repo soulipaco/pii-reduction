@@ -78,6 +78,8 @@ A source adapter owns source-specific concerns only.
 - authenticate when necessary,
 - load source metadata,
 - enumerate datasets/sheets/tables where supported,
+- **answer what columns it has without reading the rows** (`schema()`, ADR-0031) —
+  a header line, a parquet footer, the metastore; never a scan,
 - load rows or partitions,
 - preserve source column types where practical,
 - attach source lineage metadata,

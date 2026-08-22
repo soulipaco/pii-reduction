@@ -17,7 +17,7 @@ from pathlib import Path
 from pii_reduction import __version__
 from pii_reduction.benchmark import BenchmarkOutcome, run_benchmark, summarise
 from pii_reduction.config import load_resolved_dataset
-from pii_reduction.config.registries import KNOWN_REDUCERS
+from pii_reduction.config.registries import DATABRICKS_SOURCE_TYPES, KNOWN_REDUCERS
 from pii_reduction.contracts.errors import PiiReductionError
 from pii_reduction.contracts.results import ProcessingStatus
 from pii_reduction.evaluation.gates import (
@@ -28,7 +28,7 @@ from pii_reduction.evaluation.gates import (
     load_measured_strategy,
 )
 from pii_reduction.evaluation.report import render_markdown
-from pii_reduction.processing.pipeline import build_pipeline
+from pii_reduction.processing.pipeline import build_pipeline, build_source_from_config
 from pii_reduction.synthetic.corpus import build_corpus, write_corpus
 from pii_reduction.synthetic.fetch import DEFAULT_CACHE_DIR
 from pii_reduction.synthetic.incidents import incident_templates
@@ -53,6 +53,8 @@ DEFAULT_INCIDENTS_DIR = Path("tests/fixtures/incidents")
 #: different one: ADR-0027's guard and check had no corpus at all before it.
 DEFAULT_MARKUP_DIR = Path("tests/fixtures/markup")
 DEFAULT_CONFIGS_DIR = Path("configs")
+#: What `describe` puts between a column name and the marks it carries.
+MARK_SEPARATOR = " · "
 DEFAULT_PACK_DIR = Path("demo/packs")
 #: These two define the committed corpus. `configs/benchmark_gates.yaml` records them
 #: as the provenance of every gate value, and a test asserts the two agree — regenerate
@@ -96,6 +98,13 @@ def _build_parser() -> argparse.ArgumentParser:
     incidents.add_argument(
         "--documents-per-language", type=int, default=DEFAULT_INCIDENTS_PER_LANGUAGE
     )
+
+    describe = subparsers.add_parser(
+        "describe",
+        help="what a configured dataset's source actually has, without reading it",
+    )
+    describe.add_argument("dataset", help="dataset config name, e.g. benchmark_plain")
+    describe.add_argument("--configs", type=Path, default=DEFAULT_CONFIGS_DIR)
 
     markup = subparsers.add_parser(
         "build-markup",
@@ -207,6 +216,9 @@ def _run(argv: Sequence[str] | None) -> int:
     if args.command == "run":
         return _run_dataset(args)
 
+    if args.command == "describe":
+        return _describe_dataset(args)
+
     if args.command in _CORPUS_PROFILES:
         # One dispatch for three profiles rather than three builders: every invariant
         # `build_corpus` enforces — span validation, split assignment, deterministic
@@ -255,6 +267,71 @@ def _run(argv: Sequence[str] | None) -> int:
     print()
     print(report.render())
     return 0 if report.passed else 1
+
+
+def _describe_dataset(args: argparse.Namespace) -> int:
+    """Print the source's columns beside the ones the configuration processes.
+
+    The gap this closes is small and constant: writing a dataset config — or the
+    service template that offers its columns — means knowing what the source has, and
+    until now the only way to find out was to read the source. `docs/18` §2 asks an
+    operator to name their own column and offers no way to check the name.
+
+    **It never reads a row** (`SourceAdapter.schema`), so pointing it at a production
+    Unity Catalog table costs a metastore lookup rather than a table scan. Column
+    *names* are metadata — `docs/09` lists `column` among the fields a log line may
+    carry — and no value, count or sample is printed.
+
+    Exit 1 when a configured column is missing from the source: today that is a run
+    that fails after loading, and it is cheaper to learn here.
+    """
+    config = load_resolved_dataset(args.configs, args.dataset)
+    source = config.source
+    if source.type in DATABRICKS_SOURCE_TYPES:
+        # `SparkTableSource.schema()` exists and would answer this, but no command
+        # reaches it: `pii-reduction-databricks` registers `run` and nothing else
+        # (ADR-0031 records that as not done). Say what is true rather than naming a
+        # subcommand that does not exist.
+        print(
+            f"error: dataset {config.dataset.name!r} names a {source.type} source, which "
+            "needs a Spark session. No command describes one yet; run it with "
+            "pii-reduction-databricks run",
+            file=sys.stderr,
+        )
+        return 2
+
+    schema = build_source_from_config(config).schema()
+    configured = tuple(policy.column for policy in config.columns)
+    row_id = config.dataset.row_id
+    outputs = {policy.output_column for policy in config.columns}
+
+    print(
+        f"dataset={config.dataset.name} source={schema.source_type} columns={len(schema.columns)}"
+    )
+    for column in schema.columns:
+        marks = []
+        if column in configured:
+            marks.append("processed")
+        if column == row_id:
+            marks.append("row_id")
+        if column in outputs:
+            marks.append("output collision")
+        print(f"  {column}{MARK_SEPARATOR + ', '.join(marks) if marks else ''}")
+
+    # All three of `Pipeline._validate_source`'s schema preconditions, moved ahead of
+    # the load. The row id was the one this command promised and did not check: a
+    # config with a typo in it got exit 0 here and died after the table was read,
+    # which is the failure the command exists to move earlier.
+    problems: list[str] = []
+    if missing := schema.missing(configured):
+        problems.append(f"configured column(s) not present in the source: {', '.join(missing)}")
+    if row_id not in schema.columns:
+        problems.append(f"row id column {row_id!r} is not present in the source")
+    if collisions := sorted(outputs & set(schema.columns)):
+        problems.append(f"output column(s) already exist in the source: {', '.join(collisions)}")
+    for problem in problems:
+        print(f"error: {problem}", file=sys.stderr)
+    return 1 if problems else 0
 
 
 def _run_dataset(args: argparse.Namespace) -> int:

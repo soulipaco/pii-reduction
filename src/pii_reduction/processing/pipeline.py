@@ -47,7 +47,7 @@ from pii_reduction.processing.field_processor import FieldProcessor, ProviderCha
 from pii_reduction.providers.base import BaseProvider
 from pii_reduction.providers.registry import build_provider, provider_distributions
 from pii_reduction.reducers.registry import build_reducer
-from pii_reduction.sources.base import SourceDataset
+from pii_reduction.sources.base import SourceAdapter, SourceDataset
 from pii_reduction.sources.registry import build_source
 
 __all__ = ["Pipeline", "ProcessingOutcome", "build_pipeline"]
@@ -72,6 +72,28 @@ class ProcessingOutcome:
     def metrics_payload(self) -> dict[str, Any]:
         """The run-metrics document: run record plus distributions. Metadata only."""
         return {"run": self.run.model_dump(mode="json"), "detail": self.detail}
+
+
+def build_source_from_config(config: ResolvedDataset) -> SourceAdapter:
+    """Turn a validated ``SourceConfig`` into a source adapter.
+
+    ``sources/base.py`` states that adapters are built from primitives and that the
+    pipeline builder owns the translation — so there is one of these, not one per
+    caller. `cli.py`'s `describe` needs the same adapter for the same configuration,
+    and a second copy of this is how a future union member carrying `uri` instead of
+    `path` updates only one of them.
+
+    ``getattr`` rather than attribute access: a table-typed source (ADR-0025) carries
+    `table`, not `path`, and must reach the registry's refusal — which names the
+    Databricks driver path — instead of dying on an ``AttributeError`` here. The
+    registry owns that message so there is exactly one of it.
+    """
+    return build_source(
+        config.source.type,
+        name=config.dataset.name,
+        path=getattr(config.source, "path", None),
+        options=dict(config.source.options),
+    )
 
 
 class Pipeline:
@@ -177,17 +199,7 @@ class Pipeline:
     # -- execution ---------------------------------------------------------------
 
     def load(self) -> SourceDataset:
-        # `getattr` rather than attribute access: a table-typed source (ADR-0025)
-        # carries `table`, not `path`, and must reach the registry's refusal — which
-        # names the Databricks driver path — instead of dying on an AttributeError
-        # here. The registry owns that message so there is exactly one of it.
-        source = build_source(
-            self.config.source.type,
-            name=self.config.dataset.name,
-            path=getattr(self.config.source, "path", None),
-            options=dict(self.config.source.options),
-        )
-        return source.load()
+        return build_source_from_config(self.config).load()
 
     def run(self) -> ProcessingOutcome:
         """Load from the configured source, process, and write the configured outputs."""

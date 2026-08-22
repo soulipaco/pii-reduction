@@ -69,9 +69,11 @@ runs. A Unity Catalog template is included commented out, because a real catalog
 schema and table are workspace values and this repository holds none.
 
 **Column discovery is declared, not read.** The service never opens a source to find
-out what columns it has: a preview endpoint is forbidden, and `sources/` exposes only
-`load()`, which materialises the whole frame. A schema-only path would be a change to
-the engine, and is deliberately not improvised in the service.
+out what columns it has. A preview endpoint is forbidden (ADR-0026), and although the
+**engine can now answer the question** — `SourceAdapter.schema()` reads column names
+without reading a row (ADR-0031) — `service/` may not import `sources/`. Consuming it
+needs a sanctioned relay, and there is a second reason to take that slowly; see *Why
+the column menu is hand-written* below.
 
 ## Running it
 
@@ -176,6 +178,24 @@ message; the field path of an unexpected key is still echoed, which is a key nam
 not a value. Debug mode is off, always
 — a debug traceback in a response body is a display surface carrying whatever the
 exception held.
+
+### Why the column menu is hand-written
+
+A template lists the columns a caller may choose from, and an operator writes that list
+by hand. The engine can now answer the same question — `SourceAdapter.schema()`
+(ADR-0031) reads a source's column names without reading a row, and
+`pii-reduction describe <dataset>` prints them — but **the service does not consume
+it**, and that is a boundary rather than an omission.
+
+`service/` may not import `sources/`: one of the four static guards that make ADR-0026's
+rung rule code rather than prose. Routing schema through a relay is a design decision,
+not a wiring change, and there is a second reason to take it slowly: an endpoint that
+returned *every* column of a configured source would let a caller enumerate the columns
+a template deliberately withheld, which is the disclosure the server-side-template
+design exists to prevent. The useful shape is probably an **intersection** — "of the
+columns this template offers, here are the ones the source actually has" — which
+validates a template without enumerating a schema. Until then, `describe` is the
+operator's tool and the template is still written by hand.
 
 ## Two limits, stated rather than discovered
 

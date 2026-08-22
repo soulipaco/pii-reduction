@@ -176,6 +176,18 @@ history and job JSON. Credentials are read from the environment or not at all.
 
 Copy `configs/datasets/databricks_table_example.yaml` and edit it. The whole contract:
 
+> **Check the column names before you run — if your source is a file.**
+> `pii-reduction describe <dataset>` prints what the source has, marks the processed
+> columns and the row id, and exits 1 when a configured column is missing, the row id
+> is absent, or an output column already exists — three failures you otherwise meet
+> after the load. It reads **no rows** (ADR-0031).
+>
+> **It does not yet work on the `spark_table` source this section configures.**
+> `SparkTableSource.schema()` exists and would answer from the metastore rather than
+> by scanning, but no command reaches it — `pii-reduction-databricks` registers `run`
+> and nothing else. The command says so and points at `run`. Use it on the volume-file
+> path in §6, and check a table's columns by hand for now (§9).
+
 > **Column names with spaces are fine.** `Comments and Work notes` is a legal column
 > name here and is written back as `Comments and Work notes_pii_redacted`; the Delta
 > writer turns on column mapping when a name needs it (`docs/07`). Quote such a name
@@ -459,6 +471,12 @@ value.
 | a reduction that succeeded but "lost" an HTML tag | a detected span ran into markup inside the eligible text | the guard clips such spans (ADR-0027) and `validation.require_markup_preserved` stops the run if any survives; see the error's counts and `docs/06` |
 
 ## 9. What this runbook does not cover
+
+- **Describing a Unity Catalog table before you run it.**
+  `SparkTableSource.schema()` reads column names from the metastore without scanning
+  (ADR-0031) and is unit-tested against a fake session, but no console command reaches
+  it: `pii-reduction describe` refuses a `spark_table` source, and
+  `pii-reduction-databricks` has only `run`. Wiring it there is a small, named gap.
 
 - **Scheduling.** `databricks.yml` and `resources/` hold an Asset Bundle and job
   skeleton, with a CLI-free path (UI or Jobs API) for workspaces where policy blocks

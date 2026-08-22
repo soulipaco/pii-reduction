@@ -37,3 +37,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0028](0028-reachability-decomposition-of-recall.md) | The benchmark reports how much ground truth the parser ever offered a provider, beside recall over it — a miss nothing could have caught is not a detection result |
 | [0029](0029-a-corpus-for-the-markup-guard.md) | A committed markup corpus, because ADR-0027 shipped without one — and its first run found that markup **destroys PERSON recall**, not just structure |
 | [0030](0030-the-service-journals-what-it-was-asked.md) | The service journals **what it was asked**; `<dataset>_run_metrics` records **what a run did**. Two records, joinable, deliberately not merged |
+| [0031](0031-a-source-can-be-asked-what-it-has.md) | `SourceAdapter.schema()` — column names **without reading the rows**, so a picker or a config check costs a metastore lookup rather than a table scan |

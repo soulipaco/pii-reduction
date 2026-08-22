@@ -816,3 +816,61 @@ growth with rotation as the operator's job.
 volume path. Still blocked on the Databricks CLI unless the App is created through the
 workspace UI, which is untried, or over the REST Workspace Import route the reference
 implementation used (`docs/20` §6), which is also untried.
+
+### Session 12 addendum — pickup item 5: schema introspection (ADR-0031)
+
+`SourceAdapter.schema()` returns a source's column names **without reading a row** —
+header line for CSV, footer for parquet (a partitioned directory included, because
+`load()` accepts one), the metastore for a Delta table where `load()` would have pulled
+the whole thing to the driver. `pii-reduction describe <dataset>` is the front door,
+and it checks **all three** of `Pipeline._validate_source`'s schema preconditions ahead
+of the load: configured columns present, row id present, output column not already
+taken.
+
+**The tested property is the negative one.** Any adapter can return column names by
+loading everything; the value is entirely in not doing that. Each is pinned by a reader
+that fails if data is touched — an unparseable second line and an ignored `nrows` for
+CSV, `read_table`/`read_row_group`/`pd.read_parquet` all patched to raise for parquet,
+and a fake session whose frame raises on any attribute but `schema` for Spark, with a
+companion test proving `load()` *does* trip it.
+
+**The service still does not consume it, deliberately.** `pii_reduction.sources` is one
+of the nine names in `ENGINE_INTERNALS_CLOSED_TO_THE_SERVICE`. ADR-0031 names two shapes
+for whoever picks it up and says the second is better: an intersection endpoint (which
+still leaks one bit per offered column), or **validating every template against
+`schema()` at `create_app` startup** and exposing no endpoint at all — same typo caught,
+earlier, nothing crossing HTTP.
+
+**Both reviewers found real defects again, and one was a claim outrunning the code:**
+
+1. **`describe` did not check `row_id`** while ADR-0031, `docs/14` and `docs/18` all
+   said it caught that failure class. A typo in `row_id` got exit 0 and died after the
+   table was read. Now checked, with the output-column collision alongside.
+2. **The refusal named a subcommand that does not exist** — `pii-reduction-databricks`
+   registers `run` and nothing else — and my own test pinned the inaccuracy by asserting
+   only the console-script name.
+3. **`ParquetSource.schema()` refused a partitioned directory that `load()` reads
+   happily.** A pre-flight check that reports a broken dataset which works is worse
+   than no check. `pyarrow.dataset` instead of `parquet.read_schema`.
+4. **A test passed while proving nothing** — it asserted four substrings were absent and
+   never checked the exit code, so any failure path (wrong cwd) produced empty output
+   and a green test. Replaced with a positive assertion about the output's shape.
+5. **Two translators of `SourceConfig` → adapter**, where `sources/base.py` says there is
+   one owner. Factored into `build_source_from_config`.
+6. **`CsvSource.schema()` duplicated `load()`'s option handling**, so adding to
+   `CSV_OPTIONS` could make the two disagree about the column set silently. One `_read`
+   now serves both — and it closes a pre-existing hole where `EmptyDataError`
+   (a `ValueError`, not a `ParserError`) escaped `SourceError` as a pandas traceback.
+7. `docs/19` contradicted itself and two service comments asserted the engine had no
+   schema path. Fixed in the same change.
+
+Also recorded, from the privacy audit: **a parquet footer carries per-column min/max
+statistics — real values.** Only `.names` is taken, and ADR-0031 now states that as a
+rule, so a later "add types for the adapters that can answer honestly" increment meets
+it rather than rediscovering it.
+
+**State:** 1226 default-tier tests, 56 gates unchanged, ruff and `mypy src tests` clean.
+
+**Not verified against a real Unity Catalog table** — the Spark path is fake-session
+tested only, and the metastore-cost claim is Spark's contract rather than our
+measurement.

@@ -69,8 +69,9 @@ class DatasetTemplate(BaseModel):
     source: SourceConfig
     destination: DestinationConfig
     #: The column menu. Declared rather than discovered: the service does not read
-    #: the source to find out (ADR-0026 forbids a preview endpoint, and `sources/`
-    #: has no schema-only path).
+    #: the source to find out. ADR-0026 forbids a preview endpoint; `sources/` *does*
+    #: have a schema-only path since ADR-0031, but `service/` may not import it, and
+    #: listing every column would disclose the ones this menu withholds.
     columns: tuple[str, ...] = Field(min_length=1)
     #: Which of those columns may serve as the row identifier. Empty means any of
     #: them, which is the common case for a single-key table.

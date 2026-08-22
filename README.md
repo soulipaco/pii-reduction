@@ -106,6 +106,18 @@ metadata-only summary, and exits 1 if any field failed — partial output must
 look like a failure to a scripted caller (ADR-0023's fail-closed default writes
 no reduced value for failed fields).
 
+Before that, check the configuration against what the source actually has — **without
+reading a row** (ADR-0031):
+
+```bash
+pii-reduction describe <dataset-name> --configs configs
+```
+
+It prints the source's columns, marks the ones your configuration processes and the one
+it uses as the row id, and exits 1 when a configured column is missing, the row id is
+absent, or an output column already exists. All three are otherwise failures you meet
+after the load.
+
 On the deployment target, the same reduction runs from a dataset config that names
 a Unity Catalog table (session 10, ADR-0025):
 

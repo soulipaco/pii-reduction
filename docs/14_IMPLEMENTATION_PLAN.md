@@ -1278,11 +1278,21 @@ and after on the 10k pack, published beside the existing numbers.
    run in.
 4. **Batching (P5).** `detect_batch` still has no caller; the platform direction that
    `docs/17` D10 named as its reopening condition has now arrived twice over.
-5. **Schema introspection in the engine.** The service declares its column menus in a
-   template because `sources/` exposes only `load()`, which materialises the frame. A
-   schema-only path would let a column picker read the source's columns without
-   reading the source — an engine change, deliberately not improvised in the service,
-   and last because the workaround is documented and works.
+5. ~~**Schema introspection in the engine.**~~ **Done (session 12), as the engine
+   change it was scoped to be** (ADR-0031). `SourceAdapter.schema()` returns a source's
+   column names **without reading a row** — a header line for CSV, the footer for
+   parquet, the metastore for a Delta table where `load()` would have pulled the whole
+   table to the driver. `pii-reduction describe <dataset>` is the front door: it marks
+   the configured columns and the row id, and exits 1 when a configured column is
+   absent, which is otherwise a failure met after the load. The no-read property is
+   pinned by tests that fail if data is touched, not by a docstring.
+
+   **The service still does not consume it**, deliberately: `service/` may not import
+   `sources/`, and an endpoint returning every column would let a caller enumerate what
+   a template withheld. The shape that fits is an *intersection* against the template's
+   own menu — recorded in ADR-0031 and `docs/19`, not built. Also not built: wiring
+   `describe` into `pii-reduction-databricks`, which is where a `spark_table` source
+   can actually be described.
 
 Unchanged and unsequenced: the speaker-prefix ADR (still the most serious open design
 item), the Phase-7 Greek model, the distributed path, and the deferred items in
