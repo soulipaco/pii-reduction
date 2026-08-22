@@ -50,6 +50,15 @@ all 56 gates hold at the same floors.
   and `nosniff`. Without them a hostile page could frame it and turn one tricked click
   from an authenticated operator into a run under the service's own credentials.
 
+### Licensing
+
+- **`NOTICE` now exists**, ahead of the repository being made public. Bitext under
+  CDLA-Sharing-1.0 (share-alike) and MASSIVE under CC BY 4.0 (attribution, and an
+  indication that changes were made — synthetic PII is injected into both), plus the
+  datasets that were assessed and **rejected** with the reason, and the `el_core_news_*`
+  non-commercial exclusion. `0.1.0`'s note below — "nothing is published, so no
+  attribution is owed" — was accurate at the tag and is superseded here.
+
 ### Known limitations added in this line of work
 
 - **Whether a Databricks App can see `/Volumes` is unverified.** The proven route for

@@ -4,6 +4,28 @@
 
 The portfolio demo should make the accelerator's value obvious in a few minutes. It should not require a reviewer to understand the full source code first.
 
+## Which of these actually run today
+
+This document was written in session 2, before any code existed, as the target. Nine of
+the ten are real; **one is not, and a reviewer following it would find nothing there**,
+so the status is here rather than discovered:
+
+| demo | status |
+|---|---|
+| 1 — Customer support ticket | **runs** — `pii-reduction benchmark`, or the control panel |
+| 2 — Transcript-aware reduction | **runs**, and the byte-exact round trip is pinned by test |
+| **3 — Note history** | **DOES NOT RUN.** No `note_history` parser exists (charter UC-03, deferred as `docs/17` D13). A note column parsed as `transcript` gets most of the way, and ADR-0032 puts the note author in scope for it, but the header semantics this demo describes are not implemented. |
+| 4 — Multilingual routing | **runs** — en/de/el, per-language provider chains |
+| 5 — Provider benchmark | **runs** — `--chain deterministic_only` vs `deterministic_presidio`, and the comparison is 56 gates |
+| 6 — False-positive protection | **runs** — the identifier guard; the incident corpus exists to price it (ADR-0022) |
+| 7 — Ground-truth injection | **runs** — seeded, manifest-based, byte-reproducible (ADR-0011) |
+| 8 — Local to Databricks parity | **runs**, and was executed on a real workspace (`docs/22` §6) — the *driver* path; the distributed path is infra-blocked |
+| 9 — Scalability | **partly** — a 10k-document two-chain comparison exists (`docs/16`); the distributed path that would make this a scale demo has never executed |
+| 10 — Privacy-safe audit | **runs** — the audit table is metadata-only by construction, asserted by test |
+
+`docs/22_EVIDENCE.md` is the executed record. What follows is the original scenario
+text, kept as written.
+
 ## Demo 1 — Customer support ticket
 
 ### Input

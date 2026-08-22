@@ -165,6 +165,19 @@ left for a reader to reconcile:
   can tell. The operator who sets `select_file` owns that: an inbox is a shared
   surface, and `docs/19` says so where they will meet it.
 
+> **Class follows provenance, not processing stage.** Reduced output of a **Class A**
+> document is itself Class A: nothing in it came from anywhere else, so redacting a
+> synthetic sentence cannot produce something more sensitive than the sentence. Reduced
+> output of Class B data is Class C and is never displayed.
+>
+> Stated because without it the rule reads as forbidding what this repository's own
+> README and `docs/22_EVIDENCE.md` do — quoting reduced output of the committed
+> synthetic corpus, including a sentence where redaction visibly *failed*. That
+> quotation is deliberate and it is within the carve-out: the residual name is a seeded
+> generator value already committed in `corpus.csv`. Showing a leak on Class A text is
+> how the project's honesty is demonstrated; showing one on Class B text would be the
+> disclosure this document exists to prevent.
+
 ### Unsafe by default on a display surface
 
 - source text, in whole or in fragment,

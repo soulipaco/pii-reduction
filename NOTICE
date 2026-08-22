@@ -1,0 +1,71 @@
+NOTICE
+======
+
+This product includes software developed as the Databricks PII Reduction Accelerator,
+licensed under the MIT License (see LICENSE).
+
+Third-party dataset attributions
+--------------------------------
+
+This repository redistributes **no dataset**. The demo packs under `demo/packs/` are
+git-ignored and are rebuilt on demand from a pinned upstream revision with a recorded
+checksum (ADR-0017); `demo/registry.yaml` holds the source URL, revision, licence and
+transformation for each, and every built pack writes the same fields into its own
+`meta.json`.
+
+The attributions below are given because the repository's tooling and documentation
+reference these sources, and because anyone who builds a pack receives data under the
+terms named here.
+
+### Bitext Customer Support LLM Chatbot Training Dataset
+
+- Source: https://huggingface.co/datasets/bitext/Bitext-customer-support-llm-chatbot-training-dataset
+- Licence: **Community Data License Agreement – Sharing, Version 1.0 (CDLA-Sharing-1.0)**
+- Licence text: https://cdla.dev/sharing-1-0/
+- Used by: the `support_tickets` and `support_conversations` demo packs.
+- Changes made: rows are selected and reshaped into this project's corpus schema, and
+  **synthetic PII is injected** from a seeded generator so that ground truth is derived
+  from an injection manifest rather than reverse-engineered (ADR-0011, ADR-0018). No
+  upstream text is redistributed by this repository.
+
+CDLA-Sharing-1.0 is a share-alike licence: data obtained under it, and derivative data,
+carry the same terms when published.
+
+### MASSIVE (Amazon Science)
+
+- Source: https://huggingface.co/datasets/AmazonScience/massive
+- Licence: **Creative Commons Attribution 4.0 International (CC BY 4.0)**
+- Licence text: https://creativecommons.org/licenses/by/4.0/
+- Used by: the `multilingual_utterances` demo pack (German and Greek slices).
+- Changes made: utterances are selected by locale and reshaped into this project's
+  corpus schema, with **synthetic PII injected** from a seeded generator. No upstream
+  text is redistributed by this repository.
+
+CC BY 4.0 requires attribution and an indication that changes were made. Both are given
+above.
+
+### Datasets evaluated and rejected
+
+`demo/registry.yaml` also records datasets that were assessed and **not used**, with the
+reason. MultiWOZ 2.2 was rejected because its published utterances contain real
+telephone numbers and postcodes scraped from live venue listings (ADR-0018); a Kaggle
+customer-support corpus was rejected for a non-commercial licence and real personal
+data. Neither is used, referenced as a source, or redistributed.
+
+Software dependencies
+---------------------
+
+Runtime dependencies are MIT, Apache-2.0, BSD-3-Clause or PSF licensed. The spaCy models
+this project documents — `en_core_web_md`/`lg`, `de_core_news_md`/`lg` and
+`xx_ent_wiki_sm` — are MIT licensed and are installed by the operator rather than
+declared as dependencies (ADR-0008).
+
+**`el_core_news_*` is deliberately excluded.** Those models are CC BY-NC-SA
+(non-commercial) and incompatible with this project's MIT licence, so Greek routes
+through the multilingual `xx_ent_wiki_sm` instead. The provider refuses to be configured
+with them, and a test asserts both the exclusion and the licence file together
+(ADR-0007). The measured cost of that choice is published rather than hidden: Greek
+PERSON recall is 0.500.
+
+`databricks-connect`, used only by the optional `databricks` extra, is distributed by
+Databricks under its own licence and is not redistributed here.

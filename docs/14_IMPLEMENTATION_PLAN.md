@@ -1576,12 +1576,13 @@ it up. Nothing here is a queue.
   (ADR-0031): validate every template against `schema()` at `create_app` startup and
   expose no endpoint — the same typo caught, earlier, with nothing crossing HTTP. Also
   not built: wiring `describe` into `pii-reduction-databricks`.
-- **Licence obligations are recorded but not emitted.** MASSIVE is CC BY 4.0 and Bitext
-  is share-alike; both facts reach a pack's `meta.json` (`license`, `share_alike`,
-  `attribution_required`, `source_url`, `transformation`), but no `NOTICE` is written.
-  **PARKED because nothing is owed: nothing is published.** **Reopens the moment a pack
-  is distributed or this repository is made public**, and then it must land in the same
-  change (`docs/17` D14).
+- ~~**Licence obligations are recorded but not emitted.**~~ **CLOSED (session 14): the
+  reopening condition arrived.** The owner decided to make the repository public, so
+  `NOTICE` was written — Bitext under CDLA-Sharing-1.0 (share-alike), MASSIVE under
+  CC BY 4.0 (attribution plus an indication that changes were made), the rejected
+  datasets and their reasons, and the `el_core_news_*` exclusion. It landed **before**
+  the visibility change rather than with it, which satisfies `docs/17` D14 more strictly
+  than the rule required.
 
 #### Everything else
 

@@ -1,5 +1,20 @@
 # Portfolio Story and Positioning
 
+> **Written in session 2 as a plan; the README now exists and largely follows it.**
+> Where the two differ, the README is what shipped and this document is the intent.
+> Two things this plan asked for that were done differently, both deliberately:
+>
+> - **The architecture diagram** is a mermaid block in the README rather than an image
+>   file, so it stays in the same diff as the text it describes and needs no asset
+>   pipeline.
+> - **The "before/after example"** leads with a *failure* as well as a success — the
+>   Greek sentence where "please" was taken for a name and the real name survived. A
+>   portfolio that only shows its wins is a portfolio a reviewer discounts; this
+>   project's strongest claim is that it publishes what it gets wrong, and the README
+>   opens with the evidence for that.
+>
+> `docs/22_EVIDENCE.md` is the executed record this document's *Proof* section calls for.
+
 ## Recommended positioning
 
 Do not present the repository as:

@@ -1,11 +1,116 @@
 # Databricks PII Reduction Accelerator
 
+[![CI](https://github.com/soulipaco/pii-reduction/actions/workflows/ci.yml/badge.svg)](https://github.com/soulipaco/pii-reduction/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-informational.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](pyproject.toml)
+[![Decision records](https://img.shields.io/badge/ADRs-36-success.svg)](docs/adr/README.md)
+
 > An open-source, multilingual, provider-agnostic accelerator for detecting, redacting, pseudonymizing, and benchmarking personally identifiable information (PII) in known free-text columns, locally and on Databricks.
 
 <!-- "discovering" was deliberately removed from this line (session 9): the system
      detects entities inside columns the operator names — it has no estate or
      column discovery, and both external reviews independently flagged the word
      as the one misleading claim in this README (docs/17 §1.8). -->
+
+**Structure-aware, not a regex sweep.** A ticket id survives; a timestamp and a speaker
+label survive; the name and the email do not:
+
+```diff
+- Please email James Whitfield at maria.rossi@example.net about ticket INC00100000.
++ Please email <PERSON> at <EMAIL> about ticket INC00100000.
+
+- 2026-04-03 09:15:13 - Guest: Hi, I'm Aisha Bello. Please call me on +1 202 555 0142.
++ 2026-04-03 09:15:13 - Guest: Hi, I'm <PERSON>. Please call me on <PHONE>.
+```
+
+*All examples above and below are from the committed synthetic corpus
+(`tests/fixtures/corpus`, seed 42), reduced by the hybrid chain: generated names,
+RFC-reserved email domains (ADR-0003), and phone numbers from published
+permanently-unassigned ranges (ADR-0014). No real text appears anywhere in this
+repository.*
+
+**And it publishes what it gets wrong.** Greek, same run — `Παρακαλώ` ("please") taken
+for a name while the actual name survived:
+
+```diff
+- Παρακαλώ στείλτε email στον/στην Μαρία Παπαδοπούλου στο maria.papadopoulou@example.net …
++ <PERSON> στείλτε email στον/στην Μαρία Παπαδοπούλου στο <EMAIL> …
+```
+
+That is not a bug awaiting a fix — it is a licence constraint with a measured cost. The
+good Greek spaCy models are CC BY-NC-SA and cannot enter an MIT project (ADR-0007), so
+Greek routes through a weaker multilingual model, the gap is diagnosed to three
+mechanisms (ADR-0019), two are addressed (ADR-0020, ADR-0021), and Greek PERSON recall
+is published as **0.500** rather than rounded up.
+
+**Every number below is a regression gate**, not a claim: 56 of them, across three
+corpora and both provider chains. **23 run on every push** — the model-free ones, which
+is what lets them — and the 33 that need NLP models run nightly (ADR-0009). See
+**[docs/22_EVIDENCE.md](docs/22_EVIDENCE.md)** for what has actually been executed —
+including what has *not*.
+
+## See it work in two minutes
+
+```bash
+pip install -e ".[dev,service]"   # no NLP model and no provider extra yet
+pytest -q                         # 1380 tests, model-free and Spark-free
+pii-reduction benchmark           # the measured baseline over the committed corpus
+```
+
+**That baseline is the deterministic chain, and it finds no names at all** — PERSON
+precision and recall are `0.000`. That row is not a disappointment, it is the control:
+it is why the NER chain's numbers mean something. To reproduce the `<PERSON>` examples
+above you need the provider extras and the documented spaCy models
+(`docs/15_PROVIDERS.md`):
+
+```bash
+pip install -e ".[presidio,language]"
+python -m spacy download en_core_web_md   # + de_core_news_md, xx_ent_wiki_sm
+pii-reduction benchmark --chain deterministic_presidio
+```
+
+Then drive it from a browser — pick a template, configure the columns, preview the
+generated YAML, save it, run it, watch it finish:
+
+```bash
+pii-reduction-service --configs configs   # http://127.0.0.1:8000/
+```
+
+That control panel is one static file inside the wheel — no build step, no CDN, nothing
+to deploy separately (ADR-0035) — so an App deploying this wheel serves exactly this
+page. **To be precise about what has been executed: the service has been hosted as a
+Databricks App and driven over HTTPS, but that deployment predates the panel and the App
+is currently stopped**, so the panel itself is proven locally and not yet on the App
+(`docs/22_EVIDENCE.md` §6). It shows configuration and run metadata and **never text**,
+because no endpoint returns any (ADR-0026).
+
+## How it fits together
+
+```mermaid
+flowchart TD
+  SRC["CSV · Parquet · Unity Catalog table or volume"] --> PARSE
+
+  PARSE["parser<br/>splits the cell into structure and content"]
+  PARSE -->|"structure: timestamps, speaker labels, headers"| KEEP["preserved untouched"]
+  PARSE -->|"content: only this is eligible"| LANG
+
+  LANG["language resolved from eligible text only"] --> DETECT
+  DETECT["providers: deterministic + NER, routed per language"] --> REC
+  REC["reconcile: overlaps, per-entity thresholds, identifier guard"] --> RED
+  RED["reduce: redact · mask · pseudonymize"] --> RECON
+
+  KEEP --> RECON["reconstruct<br/>byte-exact outside reduced spans"]
+
+  RECON --> OUT["reduced column, beside the original"]
+  RECON --> AUD["audit table + run metrics<br/>metadata only, never text"]
+  OUT --> EVAL["evaluation: 56 gates over three corpora"]
+```
+
+**The parser boundary is the load-bearing part.** A provider is only ever handed the
+segments the parser marked processable, so a timestamp cannot be damaged and a speaker
+label cannot be redacted by accident — and the benchmark reports how much ground truth
+the parser *never offered* (ADR-0028), because a miss nothing could have caught is not a
+detection result.
 
 ## Deployment target
 
@@ -80,8 +185,9 @@ the register of everything parked, each with the condition that would reopen it 
 **there is no queue.** The charter's definition of done is met in all nine items, and
 what is unbuilt is roadmap rather than debt.
 
-As of the release: **1240 default-tier tests**, 97 integration, **56 regression gates
-across three corpora** and both provider chains, **33 ADRs**, CI green on Linux and
+As of the release (`v0.1.0`): **1240 default-tier tests**, 97 integration, **56
+regression gates across three corpora** and both provider chains, **33 ADRs at the
+tag** — the badge at the top of this file counts the current 36 — CI green on Linux and
 Windows. No published benchmark number has ever moved without being re-measured.
 
 **Since the release**, a line of work on top of it has made the shipped engine usable
@@ -91,7 +197,9 @@ service the file (ADR-0036). No detection capability changed and no published nu
 moved; see `CHANGELOG.md`'s *Unreleased*. Current: **1380 default-tier tests**, 97
 integration, 1 packaging, 56/56 gates unchanged, **36 ADRs**.
 
-### Quickstart
+### Every way to run it
+
+The two-minute version is at the top of this file. In full:
 
 ```bash
 pip install -e ".[dev]"
@@ -514,6 +622,9 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 - **A second implementation of the same problem, compared item by item — what was
   adopted, what was refused, and why:** `docs/20_ALTERNATIVE_RECONCILIATION.md`
 - **What "finished" meant, and the course that reached it:** `docs/21_FINALIZATION.md`
+- **What has actually been executed — including what has not:** `docs/22_EVIDENCE.md`
+- **Taking it public: what is owed, and what is left to decide:** `docs/23_HANDOVER_PUBLIC.md`
+- **A four-minute walkthrough script, with what not to claim:** `docs/24_WALKTHROUGH_SCRIPT.md`
 - **What shipped, in one page, for someone arriving cold:** `CHANGELOG.md`
 - **Decision records:** `docs/adr/`
 
@@ -528,6 +639,10 @@ file and that exclusion together.
 Dataset licences are tracked separately from the code licence, as they must be. No
 public dataset is redistributed here — packs are rebuilt on demand from a pinned
 revision with a recorded checksum (ADR-0017), and each pack's `meta.json` carries its
-source licence, attribution requirement and share-alike flag. Nothing is published
-today, so no attribution is owed yet; that becomes real the moment a built pack is
-distributed.
+source licence, attribution requirement and share-alike flag.
+
+**Attributions are in [`NOTICE`](NOTICE)** — Bitext under CDLA-Sharing-1.0 (share-alike)
+and MASSIVE under CC BY 4.0 (attribution, and an indication that changes were made;
+synthetic PII is injected into both). That file also records the datasets that were
+assessed and **rejected**, with the reason — MultiWOZ 2.2 because its published
+utterances carry real telephone numbers and postcodes (ADR-0018).
