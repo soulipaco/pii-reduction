@@ -113,6 +113,54 @@ can actually detect it**:
 regex route is refused by `AGENTS.md` rule 6 and by ADR-0002 on probe evidence, so the
 label stays visible and unfulfilled until a capable provider exists.
 
+## Installation
+
+Python **3.11+**. Everything above the NER chain installs with no model and no
+provider dependency, which is deliberate: the core library must stay importable
+without spaCy, Presidio or Spark, and CI asserts it on every push.
+
+```bash
+pip install -e ".[dev]"        # core + test/lint tooling. This is what CI installs.
+```
+
+Optional extras, each additive and each independently skippable:
+
+| extra | brings | needed for |
+|---|---|---|
+| `presidio` | `presidio-analyzer`, `spacy` | the NER chain — `PERSON` detection |
+| `language` | `lingua-language-detector` | automatic per-row language detection |
+| `service` | `fastapi`, `uvicorn` | the HTTP API and the control panel |
+| `parquet` | `pyarrow` | Parquet sources and destinations |
+| `databricks` | `databricks-connect` | driver-path execution against a workspace |
+
+The spaCy models are **not** declared as dependencies — they are not on PyPI, and
+pinning wheel URLs in package metadata breaks resolvers (ADR-0008). Install them by
+the documented command (`docs/15_PROVIDERS.md`):
+
+```bash
+pip install -e ".[presidio,language]"
+python -m spacy download en_core_web_md
+python -m spacy download de_core_news_md
+python -m spacy download xx_ent_wiki_sm
+```
+
+`el_core_news_*` is deliberately absent and the provider refuses to be configured with
+it: those models are CC BY-NC-SA and incompatible with this project's MIT licence
+(ADR-0007). Greek routes through `xx_ent_wiki_sm` instead, and the measured cost of
+that choice is published rather than hidden.
+
+**Verify the install** — the same two commands CI runs first:
+
+```bash
+pytest -q                 # 1380 tests, no model and no Spark
+pii-reduction benchmark   # the measured baseline over the committed corpus
+```
+
+`uv.lock` records a complete resolution of the core, all extras and the dev tooling.
+It is not what CI installs — CI installs from `pyproject.toml`, so the published
+numbers are produced against ordinary resolution rather than a frozen one — but CI
+does check the lock is current, so it cannot quietly go stale.
+
 ## How it fits together
 
 ```mermaid
