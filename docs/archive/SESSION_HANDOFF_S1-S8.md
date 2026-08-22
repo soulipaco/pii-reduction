@@ -9,7 +9,7 @@ the evidence itself. Session 9 onward stays in `.claude/SESSION_HANDOFF.md`.
 
 ## Session 1 — 2026-08-17 — Environment and development harness
 
-**Repository root:** `C:\Users\onurh\Desktop\porfolios\pii_reduction`. The project
+**Repository root:** the `pii_reduction` working copy. The project
 originally sat one level deeper, in a `databricks-pii-reduction-starter/` subfolder;
 its contents were moved up so the repository root and the usual working directory are
 the same path.

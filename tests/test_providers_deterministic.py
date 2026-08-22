@@ -139,7 +139,7 @@ class TestPhoneDetection:
         "text",
         [
             "Call +30 210 000 0000 today",
-            "Call +49 30 901820 today",
+            "Call +49 30 23125 020 today",
             "Call 0030 210 000 0000 today",
             "Call +1 (202) 555-0143 today",
             "Call +30 210 000 0000 ext. 12 today",
@@ -167,7 +167,7 @@ class TestPhoneDetection:
         assert lenient[0].score == SCORE_PHONE_POSSIBLE
 
     def test_national_format_needs_a_configured_region(self) -> None:
-        text = "Rufen Sie 030 901820 an"
+        text = "Rufen Sie 030 23125 020 an"
         assert provider(regions=["DE"]).detect(text, entities={PHONE})
         assert provider(regions=["GR"]).detect(text, entities={PHONE}) == []
 
