@@ -104,6 +104,14 @@ class DatasetTemplate(BaseModel):
     #: a delimiter, a length or a policy name stays template-side, so no free-form
     #: string ever reaches a parser through a request.
     parser_options: tuple[str, ...] = ()
+    #: When true, `source.path` is a **directory** and the caller names one file
+    #: inside it (ADR-0036). The caller still cannot name a *source*: the operator
+    #: chose the place, and the caller picks from what that place contains — the same
+    #: shape as picking a column from a declared menu.
+    #:
+    #: Only a path-based source can offer this; a `spark_table` has no directory, and
+    #: a template asking for both is refused at load rather than at the first request.
+    select_file: bool = False
     #: Server-side privacy switches. A caller cannot reach these.
     processing: ProcessingOverrides | None = None
     language: LanguageOverrides | None = None
@@ -127,6 +135,20 @@ class DatasetTemplate(BaseModel):
     @classmethod
     def _offerable_parser_options(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return _all_known(value, OFFERABLE_OPTION_NAMES, what="offerable parser option")
+
+    @model_validator(mode="after")
+    def _select_file_needs_a_directory_source(self) -> DatasetTemplate:
+        """`select_file` is meaningless without a path to put a file name onto.
+
+        Refused at load, so an operator learns from their own configuration rather
+        than from a caller's failed request.
+        """
+        if self.select_file and not hasattr(self.source, "path"):
+            raise ValueError(
+                f"select_file is set but source type {self.source.type!r} has no path "
+                "to select a file within; it applies to file-based sources only"
+            )
+        return self
 
     @model_validator(mode="after")
     def _options_match_the_offered_parsers(self) -> DatasetTemplate:
@@ -165,6 +187,28 @@ class DatasetTemplate(BaseModel):
 
     def offered_parser_options(self) -> tuple[str, ...]:
         return tuple(sorted(self.parser_options))
+
+    def offered_directory(self) -> Path | None:
+        """The directory this template offers files from, or ``None``.
+
+        ``None`` is the answer for every template that does not set ``select_file``,
+        which keeps the caller-picks-a-file path off by default.
+        """
+        if not self.select_file:
+            return None
+        # `SourceConfig` is a union and `SparkTableSource` has no `path`. The
+        # validator above already refuses that combination at load, so this is
+        # unreachable — raised rather than asserted, because `python -O` strips an
+        # assert and this branch's whole purpose is to refuse rather than to degrade:
+        # a silent `getattr` would turn a future source type with no path into
+        # `Path("None")` and an empty listing instead of an error.
+        path = getattr(self.source, "path", None)
+        if path is None:  # pragma: no cover - the model validator makes this unreachable
+            raise ConfigurationError(
+                f"template {self.name!r}: select_file is set but source type "
+                f"{self.source.type!r} has no path"
+            )
+        return Path(str(path))
 
 
 def check_template_chains(

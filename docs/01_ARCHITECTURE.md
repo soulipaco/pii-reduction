@@ -459,9 +459,17 @@ protocol it satisfies; conformance is structural, and asserted by
 silently.
 
 `service/` sits **above** every one of them — rung 4 of ADR-0025's ladder, a thin
-HTTP API (ADR-0026). It builds and validates dataset configurations, triggers runs
-through the same two entry points a human uses (`build_pipeline(config).run()` and
-`run_driver`), and answers with metadata. Like `synthetic/` it is a package nothing
+HTTP API (ADR-0026) that since ADR-0035 also serves a static control panel. It builds
+and validates dataset configurations, triggers runs through the same two entry points a
+human uses (`build_pipeline(config).run()` and `run_driver`), and answers with metadata.
+
+It reads the **configuration** directory, and — for a template that opts in with
+`select_file` — lists **names** in the data directory that template declares
+(ADR-0036). That is a widening of what this package touches and is stated rather than
+left to be discovered: it never opens a data file, and going through `sources/` was not
+the alternative, because listing names needs no adapter and inventing a
+`SourceAdapter.list()` for one consumer would put a capability in the engine that no
+engine consumer wants. Like `synthetic/` it is a package nothing
 on the runtime path may depend on and whose removal removes a capability rather than
 a behaviour — but it is *narrower* than `synthetic/`, which may import `parsers/` and
 `entities/` and is imported by `cli.py`. `service/` may do neither.

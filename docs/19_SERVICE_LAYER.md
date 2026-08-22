@@ -204,6 +204,57 @@ Five properties, each pinned by a test in `tests/test_service_ui.py`:
 | `textContent`, never `innerHTML` | a configuration value is not markup |
 | no client-side storage | a shared browser cannot leak one operator's dataset names to the next person at it |
 
+### A template may offer a directory, so an uploaded file becomes a run (ADR-0036)
+
+Setting `select_file: true` makes a template's `source.path` a **directory**, and the
+caller names one file inside it:
+
+```yaml
+uc_volume_inbox:
+  source:
+    type: csv
+    path: /Volumes/<catalog>/<schema>/<volume>/inbox/
+  select_file: true
+```
+
+`GET /templates/{name}/files` lists what is currently there — **names only, one level
+deep, filtered to what the source type can read**, and it never opens a file.
+`POST /configs` takes `source_file`, and the built configuration records the resolved
+absolute path, so `pii-reduction run` reads it later with no memory of the template.
+
+**The caller still cannot name a source, and the service still never receives the
+file.** The operator chose the directory; the caller chose among its contents — the
+same shape as picking a column from a declared menu. There is no multipart endpoint and
+no upload buffer: `source_file` is a *name*, so the reflection test proving no request
+model can carry content is untouched.
+
+Two defences on that name, because it is the only caller string in this service that
+becomes part of a filesystem path:
+
+1. **it is a name** — no separator, no `..`, no leading dot, bounded and
+   pattern-checked, so a traversal attempt is a 422 that does not echo it;
+2. **the joined path is resolved and must land inside the declared directory** — which
+   is what catches a *symlink*, the one route a pattern cannot see.
+
+**Filenames become visible to everyone who may use that template.** That is the
+disclosure this adds, it is `select_file`-gated per template so it is the operator's
+decision, and it is worth saying plainly: an inbox is a shared surface, so do not name
+files after individuals.
+
+**When staging for an App, remove or repoint the shipped `corpus_inbox` template.**
+The staging step copies the whole `configs/` tree, and that template points at
+`data/inbox/` and `data/output/` — *relative to the container's working directory*. If
+anyone got a file where the picker could see it, the run would write source and reduced
+text to ephemeral container-local disk, outside Unity Catalog. That is exactly the
+objection ADR-0036 uses to refuse multipart upload, so shipping it unremarked would be
+arguing both sides. The template says so in place, and it is marked local-development
+only.
+
+**Unverified: whether a Databricks App can see `/Volumes`.** The runbook's verified
+route for volume ingestion is a serverless job (`docs/18` §6), and the App's runtime is
+`local`. The mechanism is path-based, so it works wherever the process can see the
+path — check with `ls /Volumes/...` from the App before relying on it.
+
 ### What a hosted panel shows every principal the platform admits
 
 Worth stating before you host it, because the *audience* changes even though the
@@ -224,6 +275,8 @@ Two consequences for an operator:
   objects do **not** filter this list.
 - **The history is process-wide, not per-user**, and with `--run-journal` it spans
   restarts. Everyone admitted sees every run anyone triggered.
+- **The same applies to an inbox listing** (ADR-0036): a `select_file` template shows
+  its directory's filenames to everyone who may use it.
 
 **Turn it off with `--no-ui`.** The API is unchanged in that mode; an HTML surface is a
 decision an operator may decline, and this is one of the reasons they might.
@@ -258,6 +311,7 @@ visit rather than a service that refuses to start.
 |---|---|---|
 | `GET` | `/health` | version and the runtimes this process offers |
 | `GET` | `/entities` | the entity labels a configuration may name, each with its taxonomy-default replacement and `detected_at_baseline` — `ADDRESS` is in the taxonomy and nothing detects it (ADR-0002). A project's `entities.yaml` may override a replacement; the run uses the override, this endpoint reports the default |
+| `GET` | `/templates/{name}/files` | file **names** a `select_file` template currently offers (ADR-0036) — one level, filtered to the source type, never opened |
 | `GET` | `/templates` | the menus — columns, row ids, entities, parsers, chains, reducers, and which parser accepts each offered parser option (ADR-0034) — plus whether the template needs Databricks |
 | `GET` | `/datasets` | configured dataset names |
 | `GET` | `/datasets/{name}` | row id, types, columns, entities, chain, reducer, projection, per-column failure mode, preservation flag and resolved parser options, config hash |
@@ -500,7 +554,7 @@ credential resolution:
 |---|---|
 | `GET /health` | 200, version, `runtimes: ['local']` |
 | `GET /entities` | 200, the four taxonomy labels |
-| `GET /templates` | 200, the shipped Class A template |
+| `GET /templates` | 200, the shipped Class A template *(one, as of session 12 — `corpus_inbox` was added in session 14; this row records what that run saw)* |
 | `GET /datasets` | 200, the three configured datasets |
 | `GET /runs` | 200, empty history |
 | `POST /runs` carrying a `source` field | **422 `invalid_body`** — the guard is live |

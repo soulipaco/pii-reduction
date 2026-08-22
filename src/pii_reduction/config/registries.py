@@ -22,6 +22,7 @@ __all__ = [
     "KNOWN_PROVIDER_TYPES",
     "KNOWN_REDUCERS",
     "KNOWN_SOURCE_TYPES",
+    "PATH_SOURCE_SUFFIXES",
 ]
 
 #: Increment A2; ``key_value`` added in session 5 (ADR-0016). ``note_history``
@@ -79,6 +80,30 @@ DATABRICKS_DESTINATION_TYPES = frozenset({"delta_table"})
 #: Increment A5, extended in session 10. Excel is still deferred with the
 #: note-history parser.
 KNOWN_SOURCE_TYPES = frozenset({"csv", "parquet"}) | DATABRICKS_SOURCE_TYPES
+
+#: File suffixes a path-based source is **offered** for, when a service template lets
+#: a caller pick a file from a directory (ADR-0036).
+#:
+#: Restated here rather than in ``service/`` for the reason ``docs/01`` gives: a
+#: capability the service needs that the engine lacks becomes a change to the engine,
+#: through this module, rather than the service growing engine knowledge one
+#: convenience at a time. Pinned by ``tests/test_service_inbox.py`` against
+#: ``KNOWN_SOURCE_TYPES`` in both directions.
+#:
+#: **Deliberately narrower than what the adapters can read**, and that asymmetry is
+#: the decision rather than an oversight: ``CsvSource`` passes any path to
+#: ``pd.read_csv`` and accepts a ``delimiter`` option, so it reads ``.tsv`` and
+#: ``.txt`` perfectly well. An *inbox* is a shared directory whose contents nobody
+#: reviewed, so it offers the unambiguous case only. Widening it is a decision about
+#: what an operator is promising, not a bug fix.
+#:
+#: A Databricks source type has no directory to offer files from, so it has no entry —
+#: which is what the paired test asserts, rather than leaving the absence to be read
+#: as an omission.
+PATH_SOURCE_SUFFIXES: dict[str, tuple[str, ...]] = {
+    "csv": (".csv",),
+    "parquet": (".parquet",),
+}
 KNOWN_DESTINATION_TYPES = frozenset({"csv", "parquet"}) | DATABRICKS_DESTINATION_TYPES
 
 #: The reconciler policy of ``docs/04_PII_ENGINE.md`` (Increment A4).

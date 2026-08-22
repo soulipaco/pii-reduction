@@ -285,10 +285,14 @@ class TestTheHttpSurface:
         assert by_label["EMAIL"]["detected_at_baseline"] is True
 
     def test_templates_describe_the_menu_and_not_the_data(self, client: TestClient) -> None:
-        [template] = client.get("/templates").json()
-        assert template["name"] == TEMPLATE
+        offered = {template["name"]: template for template in client.get("/templates").json()}
+        template = offered[TEMPLATE]
         assert template["columns"] == ["text"]
         assert template["requires_databricks"] is False
+        # A fixed-source template, so no file picker (ADR-0036).
+        assert template["select_file"] is False
+        # And the shipped inbox template is the other shape.
+        assert offered["corpus_inbox"]["select_file"] is True
 
     def test_a_configured_dataset_is_described_by_metadata_only(self, client: TestClient) -> None:
         body = client.get("/datasets/benchmark_plain").json()

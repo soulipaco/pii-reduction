@@ -55,9 +55,16 @@ merge, so `config/loader.py` never sees them:
   contract's model surface: a template embeds a `SourceConfig`, a
   `DestinationConfig`, and `ProcessingOverrides`/`LanguageOverrides` from
   `config/models.py`, so the fields below govern it and it cannot drift from them.
-  What it adds is service policy — which columns, entity labels, parsers, chains and
-  reducers a caller may choose — and the rule that a caller may choose *nothing*
-  else. `docs/19` is the operator-facing description.
+  What it adds is service policy — which columns, entity labels, parsers, chains,
+  reducers and parser options a caller may choose (ADR-0034) — and the rule that a
+  caller may choose *nothing* else. `docs/19` is the operator-facing description.
+
+  One template key **reinterprets a governed field** rather than adding beside it, so
+  it is called out here: `select_file: true` makes `source.path` a **directory**
+  instead of a file, and the caller names one file inside it (ADR-0036). Every
+  `path:` example in this document is a file, and that stays the meaning everywhere
+  except in a template that sets this key. It applies to path-based sources only; a
+  template setting it on a `spark_table` is refused at load.
 
 ## `project.yaml`
 

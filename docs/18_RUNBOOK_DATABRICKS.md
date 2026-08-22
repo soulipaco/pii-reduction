@@ -360,7 +360,35 @@ column set, `run_rows_read=25`. `run_source_version` is null, correctly — a fi
 no Delta version. Everything created was dropped.
 
 So the claim holds exactly as written: **no volume-aware code anywhere**, and the
-configs directory was read from the volume too. The local `databricks`-marked test
+configs directory was read from the volume too.
+
+### Naming the file per run, instead of editing YAML (ADR-0036)
+
+The config above fixes one exact file, so each newly-uploaded file needs an edit. A
+**service template** can instead offer the directory:
+
+```yaml
+uc_volume_inbox:
+  source:
+    type: csv
+    path: /Volumes/my_catalog/my_schema/my_volume/inbox/
+  select_file: true
+```
+
+Then `GET /templates/uc_volume_inbox/files` lists what is in it, `POST /configs` takes
+a `source_file`, and the generated dataset config records the resolved absolute path —
+which is an ordinary config the CLI runs, exactly as above. The control panel renders
+this as a file picker, so "somebody uploaded a file" becomes a run without anyone
+editing YAML and **without the service ever receiving the file**.
+
+Two caveats, both stated rather than assumed:
+
+- **Whether a Databricks App can see `/Volumes` is unverified.** The route verified
+  above is a serverless job. The mechanism is path-based, so it works wherever the
+  process can see the path — check with `ls /Volumes/...` from wherever you intend to
+  run it.
+- **An inbox is a shared surface**: its filenames are visible to everyone who may use
+  that template. Do not name files after individuals. The local `databricks`-marked test
 still skips on a laptop — the guard is a local `Path("/Volumes").exists()` check,
 which proves nothing about the workspace either way. To run that test where it can
 assert,

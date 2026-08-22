@@ -149,6 +149,21 @@ left for a reader to reconcile:
   fallbacks,
 - destination — the one key under which a configuration-derived table or file name
   may appear.
+- **source file *name*, and only for a `select_file` template** (ADR-0036). This is
+  the one entry on this list that is **data-derived rather than configuration-derived**
+  — the name of a file somebody dropped in a directory — so it is called out rather
+  than folded into the bullet above.
+
+  Three things bound it. It is **opt-in per template**, so an operator decides whether
+  their directory is offered at all. It is a **name, never a path**: the joined path is
+  the operator's directory plus the caller's name, and `POST /configs` returns the
+  directory as a placeholder for the same reason `saved_path` is relativized. And the
+  listing is **one level, filtered to the source type, and never opens a file**.
+
+  **What it does not bound is the name itself.** A file called after a person puts that
+  person's name in a listing every principal the platform admits can read, and no code
+  can tell. The operator who sets `select_file` owns that: an inbox is a shared
+  surface, and `docs/19` says so where they will meet it.
 
 ### Unsafe by default on a display surface
 

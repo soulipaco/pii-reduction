@@ -42,7 +42,8 @@ from pii_reduction.service.catalog import (
     list_dataset_names,
     load_dataset,
 )
-from pii_reduction.service.errors import ServiceError
+from pii_reduction.service.errors import ServiceError, UnknownTemplateError
+from pii_reduction.service.inbox import list_offered_files
 from pii_reduction.service.knobs import (
     OFFERABLE_PARSER_OPTIONS,
     OFFERED_OPTION_CAPTIONS,
@@ -51,6 +52,7 @@ from pii_reduction.service.knobs import (
 from pii_reduction.service.models import (
     DATASET_NAME_PATTERN,
     RUN_ID_PATTERN,
+    TEMPLATE_NAME_PATTERN,
     BuildConfigRequest,
     BuiltConfigResponse,
     DatasetSummary,
@@ -185,6 +187,7 @@ def _template_summary(
             )
             for option in template.offered_parser_options()
         },
+        select_file=template.select_file,
         requires_databricks=template.requires_databricks,
     )
 
@@ -355,6 +358,30 @@ def create_app(configs_dir: Path, *, store: RunStore, ui: bool = True) -> FastAP
             for _, template in sorted(templates.items())
         )
 
+    @app.get("/templates/{name}/files", response_model=tuple[str, ...])
+    def template_files(
+        name: Annotated[str, PathParam(pattern=TEMPLATE_NAME_PATTERN)],
+    ) -> tuple[str, ...]:
+        """File **names** a `select_file` template currently offers (ADR-0036).
+
+        Names, one level deep, filtered to what the template's source type can read.
+        It never opens a file — a preview endpoint is forbidden (ADR-0026) and this
+        must not become one by accident.
+
+        A template with a fixed source answers an empty tuple rather than a 4xx: the
+        question "which files do you offer" has a correct answer for it, and that
+        answer is none.
+        """
+        template = templates.get(name)
+        if template is None:
+            raise UnknownTemplateError(
+                f"unknown template {name!r}; available: {', '.join(sorted(templates)) or '(none)'}"
+            )
+        directory = template.offered_directory()
+        if directory is None:
+            return ()
+        return list_offered_files(directory, template.source.type)
+
     @app.get("/datasets", response_model=tuple[str, ...])
     def datasets_index() -> tuple[str, ...]:
         return list_dataset_names(configs_dir)
@@ -384,7 +411,10 @@ def create_app(configs_dir: Path, *, store: RunStore, ui: bool = True) -> FastAP
             saved = write_dataset_config(built, configs_dir).relative_to(configs_dir).as_posix()
         return BuiltConfigResponse(
             dataset=describe_dataset(built.resolved),
-            config_yaml=built.to_yaml(),
+            # `to_response_yaml`, not `to_yaml`: for a `select_file` template the two
+            # differ, and the difference is the operator's directory root — the same
+            # reason `saved_path` is relativized above.
+            config_yaml=built.to_response_yaml(),
             saved_path=saved,
         )
 

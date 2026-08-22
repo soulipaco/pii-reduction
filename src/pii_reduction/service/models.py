@@ -21,6 +21,8 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "SOURCE_FILE_PATTERN",
+    "TEMPLATE_NAME_PATTERN",
     "BuildConfigRequest",
     "BuiltConfigResponse",
     "ColumnRequest",
@@ -52,6 +54,19 @@ _COLUMN_PATTERN = r"^[A-Za-z_][A-Za-z0-9_ .-]{0,63}$"
 #: caller, but an unbounded string in an error body is still an unbounded string in
 #: an error body — and for a path parameter it is in the access log as well.
 _NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$"
+#: A file **name** inside a directory a template offers (ADR-0036): no separator,
+#: no parent reference, no leading dot, bounded. Lives here with the other request
+#: patterns rather than beside the listing code, so the contract module stays the
+#: place a reader looks for what a request may contain.
+#:
+#: Pydantic compiles it with the **Rust** engine, where ``$`` means end of haystack.
+#: Python's ``re`` lets ``$`` match before a final newline, so `service/inbox.py`
+#: uses ``fullmatch`` — the two must not disagree about what is acceptable.
+SOURCE_FILE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+#: The same pattern, exported for a **path** parameter. A template name in a URL
+#: is bounded for the reason above and one more: a path segment reaches the access
+#: log, where an unbounded string would sit permanently.
+TEMPLATE_NAME_PATTERN = _NAME_PATTERN
 
 
 class ServiceModel(BaseModel):
@@ -82,6 +97,9 @@ class TemplateSummary(ServiceModel):
     row_id_columns: tuple[str, ...] = ()
     entities: tuple[str, ...] = ()
     parsers: tuple[str, ...] = ()
+    #: True when this template offers a directory and the caller picks a file in it
+    #: (ADR-0036). `GET /templates/{name}/files` lists what is currently there.
+    select_file: bool = False
     provider_chains: tuple[str, ...] = ()
     reducers: tuple[str, ...] = ()
     #: Parser options this template lets a caller set (ADR-0034), each with the
@@ -161,6 +179,14 @@ class BuildConfigRequest(ServiceModel):
     template: str = Field(pattern=_NAME_PATTERN)
     dataset_name: str = Field(pattern=DATASET_NAME_PATTERN)
     row_id: str = Field(pattern=_COLUMN_PATTERN)
+    #: One file **name** inside the directory a `select_file` template declares
+    #: (ADR-0036). Required for such a template and refused for any other.
+    #:
+    #: A name, never a path: the pattern admits no separator, no `..` and no leading
+    #: dot, and the builder additionally resolves the joined path and refuses one that
+    #: lands outside the declared directory. The caller still cannot name a source —
+    #: the operator chose the directory.
+    source_file: str | None = Field(default=None, pattern=SOURCE_FILE_PATTERN)
     columns: tuple[ColumnRequest, ...] = Field(min_length=1)
     #: Write the result to ``<configs>/datasets/<dataset_name>.yaml``. Refused when
     #: the file exists: a builder that silently replaces a configuration somebody is

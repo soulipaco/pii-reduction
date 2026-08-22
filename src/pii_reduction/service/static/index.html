@@ -132,6 +132,8 @@
     <select id="template"></select>
     <div id="template-info"></div>
 
+    <div id="file-pick"></div>
+
     <h2>2. Name the dataset and its row id</h2>
     <div class="row">
       <div>
@@ -345,6 +347,7 @@ function renderTemplate() {
     ["parsers offered", template.parsers.join(", ")],
     ["chains offered", template.provider_chains.join(", ")],
     ["reducers offered", template.reducers.join(", ")],
+    ["source shape", template.select_file ? "a directory — pick a file below" : "fixed"],
     ["parser options offered", Object.entries(template.parser_options)
       .map(([name, spec]) => name + " (default " + spec.default + ")").join(", ") || "(none)"]
   ];
@@ -362,7 +365,42 @@ function renderTemplate() {
   clear(rowId);
   for (const column of template.row_id_columns) rowId.appendChild(el("option", { value: column, text: column }));
 
+  renderFilePicker(template);
   renderColumns();
+}
+
+/* A template that offers a directory (ADR-0036) lets the caller pick one file inside
+   it. The caller still cannot name a source: the operator chose the directory, and
+   this only asks which of its contents to reduce. */
+async function renderFilePicker(template) {
+  const host = $("file-pick");
+  clear(host);
+  if (!template.select_file) return;
+
+  host.appendChild(el("h2", { text: "1b. Pick a file" }));
+  host.appendChild(el("p", { class: "hint" },
+    "This template reads from a directory the operator configured. Drop a file there — " +
+    "a Unity Catalog volume, or any path this process can see — and it appears here. " +
+    "The service never receives the file itself; it is told which one to read."));
+
+  const select = el("select", { id: "source-file" });
+  host.appendChild(el("div", { class: "row" }, select,
+    el("button", { class: "action secondary", id: "file-refresh" }, "Refresh")));
+
+  const load = async () => {
+    clear(select);
+    let files;
+    try {
+      files = await api("/templates/" + encodeURIComponent(template.name) + "/files");
+    } catch (error) { showError(error.message); return; }
+    if (!files.length) {
+      select.appendChild(el("option", { value: "", text: "(the directory is empty)" }));
+      return;
+    }
+    for (const name of files) select.appendChild(el("option", { value: name, text: name }));
+  };
+  $("file-refresh").addEventListener("click", load);
+  await load();
 }
 
 function renderColumns() {
@@ -476,13 +514,19 @@ function buildBody(save) {
     columns.push(column);
   }
   if (!columns.length) throw new Error("Select at least one column to reduce.");
-  return {
+  const body = {
     template: template.name,
     dataset_name: $("dataset-name").value.trim(),
     row_id: $("row-id").value,
     columns: columns,
     save: Boolean(save)
   };
+  if (template.select_file) {
+    const chosen = $("source-file") ? $("source-file").value : "";
+    if (!chosen) throw new Error("This template reads from a directory — pick a file.");
+    body.source_file = chosen;
+  }
+  return body;
 }
 
 async function build(save) {

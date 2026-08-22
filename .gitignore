@@ -37,6 +37,16 @@ data/interim/
 data/external/
 data/downloads/
 data/output/
+# The service inbox (ADR-0036). Everything in it is somebody's upload, and this
+# directory lives inside the repository tree — so it is excluded **whole**, with no
+# negation. `AGENTS.md` rule 2 forbids private production data anywhere here; this is
+# the mechanism, not the reminder.
+#
+# There is deliberately no `!data/inbox/README.md` escape. `core.ignorecase` is true on
+# Windows and macOS, so a negation for `README.md` also un-ignores `readme.md` — and an
+# upload bundle that happened to contain one would be staged by `git add -A`. The
+# explanation lives at `data/INBOX.md` instead, outside the target it describes.
+data/inbox/
 # Demo packs are derived from public corpora and rebuilt from source, never
 # committed (ADR-0017). `*.csv` below already covers the tables; this covers
 # meta.json too, so a pack directory is excluded whole.
