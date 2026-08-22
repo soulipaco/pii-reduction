@@ -13,9 +13,9 @@ If a security report requires sharing:
 - unredacted personal data,
 - exploit details that would create immediate risk,
 
-use the repository owner's private security-reporting mechanism rather than a public issue.
+use **[GitHub private vulnerability reporting](https://github.com/soulipaco/pii-reduction/security/advisories/new)** rather than a public issue. It is enabled on this repository, so the *Report a vulnerability* button under **Security** opens a draft advisory visible only to you and the maintainer.
 
-The final repository should enable GitHub private vulnerability reporting or document another private contact method before public release.
+This was enabled at the moment the repository became public (2026-08-22). Until then the paragraph above forbade the public tracker without offering anywhere else to go, which is a worse failure than no policy at all.
 
 ## Examples of security/privacy issues
 
