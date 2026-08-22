@@ -9,6 +9,58 @@ Every non-obvious choice below has a decision record under
 
 ---
 
+## [Unreleased]
+
+Work on top of `0.1.0`, all of it about making the shipped engine **usable**. No
+detection capability changed, no published number moved, no shipped default changed;
+all 56 gates hold at the same floors.
+
+### Added
+
+- **The accuracy knobs are reachable through the API** (ADR-0034). `split_lines`
+  (ADR-0016) and `preserve_prefix` (ADR-0032) — the two settings most likely to change
+  a result on a real column — are settable per column, from a template menu the
+  operator opts into per option. The rule: *a caller may choose anything whose worst
+  outcome is a measurable quality result, and never anything whose worst outcome is
+  data in a place, or raw text in a column, the operator did not sanction.* Thresholds
+  stay closed; they were calibrated on a held-out split and locked.
+- **A control panel** (ADR-0035), served by the same process at `/` and `/ui`, on by
+  default and off with `--no-ui`. Pick a template, configure the columns, preview the
+  generated YAML, save it, run it, watch it finish. One static file inside the wheel —
+  no build step, no CDN — so it is the same page locally and on a Databricks App.
+- **A template may offer a directory** (ADR-0036). `select_file: true` makes
+  `source.path` a directory and the caller names one file inside it, so a file dropped
+  into a Unity Catalog volume becomes a run **without the service ever receiving the
+  file**. The caller still cannot name a source: the operator chose the directory.
+
+### Fixed
+
+- **A `parser_options` typo in a hand-written dataset YAML** used to survive
+  configuration validation and fail when the pipeline built the parser — after the
+  source was resolved and, on Databricks, after a Spark session existed. Now refused at
+  configuration time, on all four entry points (ADR-0034).
+- **The 422 handler echoed caller-supplied mapping keys.** Pydantic puts a rejected
+  dict key into the error location *before* the pattern that rejects it, so an
+  unbounded string came back verbatim in a response body. Both routes closed, including
+  the pre-existing `extra="forbid"` one.
+
+### Security
+
+- The control panel is served with a Content-Security-Policy, `X-Frame-Options: DENY`
+  and `nosniff`. Without them a hostile page could frame it and turn one tricked click
+  from an authenticated operator into a run under the service's own credentials.
+
+### Known limitations added in this line of work
+
+- **Whether a Databricks App can see `/Volumes` is unverified.** The proven route for
+  volume ingestion is a serverless job (`docs/18` §6); the App's runtime is `local`.
+- **An inbox listing is a shared surface.** Filenames are visible to everyone who may
+  use that template, and a filename can itself be personal data. It is the first
+  data-derived entry on `docs/09`'s display-surface allowlist; the operator who opts a
+  directory in owns that.
+
+---
+
 ## [0.1.0] — 2026-08-22
 
 The first release. Built over thirteen working sessions, and complete against the nine
@@ -185,4 +237,5 @@ is parked with the condition that would reopen it, in `docs/14` §8.
   numbers from published permanently-unassigned ranges (ADR-0014) and reserved example
   domains (ADR-0003).
 
+[Unreleased]: https://github.com/soulipaco/pii-reduction/compare/v0.1.0...main
 [0.1.0]: https://github.com/soulipaco/pii-reduction/releases/tag/v0.1.0

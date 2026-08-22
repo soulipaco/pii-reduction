@@ -84,6 +84,13 @@ As of the release: **1240 default-tier tests**, 97 integration, **56 regression 
 across three corpora** and both provider chains, **33 ADRs**, CI green on Linux and
 Windows. No published benchmark number has ever moved without being re-measured.
 
+**Since the release**, a line of work on top of it has made the shipped engine usable
+rather than more capable — the accuracy knobs reachable through the API (ADR-0034), a
+control panel that renders them (ADR-0035), and an upload path that never gives the
+service the file (ADR-0036). No detection capability changed and no published number
+moved; see `CHANGELOG.md`'s *Unreleased*. Current: **1380 default-tier tests**, 97
+integration, 1 packaging, 56/56 gates unchanged, **36 ADRs**.
+
 ### Quickstart
 
 ```bash

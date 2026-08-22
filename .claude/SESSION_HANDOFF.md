@@ -7,13 +7,15 @@ Keep it factual: what was verified, how, and what is still unknown.
 Sessions 1–8 are archived verbatim in
 [`docs/archive/SESSION_HANDOFF_S1-S8.md`](../docs/archive/SESSION_HANDOFF_S1-S8.md);
 the index below says what each established. The newest session's block is the live
-"start here" — currently **session 13**, at the end of this file.
+"start here" — currently **session 14**, at the end of this file.
 
-> **The project is finished and tagged `v0.1.0` (session 13, 2026-08-22).** There is no
-> queue. `CHANGELOG.md` is the entry point for someone arriving cold, and
-> `docs/14_IMPLEMENTATION_PLAN.md` §8's *Parked, with the condition that would reopen it*
-> is the complete register of everything unbuilt. Read session 13's block below before
-> assuming anything here is pending.
+> **The project was finished and tagged `v0.1.0` in session 13.** Session 14 opened a
+> **new line of work on top of it**: making the shipped engine usable — its accuracy
+> knobs reachable through the API, a control panel that renders them, and an upload
+> path. That is additive; `v0.1.0` remains a complete release and everything parked
+> stays parked. `CHANGELOG.md` is still the entry point for someone arriving cold, and
+> `docs/14` §8's *Parked, with the condition that would reopen it* is still the
+> complete register of what is unbuilt.
 
 ---
 
@@ -1137,3 +1139,140 @@ could fix it — the configuration had shipped in Increment A2. Batching waited 
 sessions behind a reading of `BatchAnalyzerEngine` as a loop — it is not one. Both were
 resolved by an hour of measurement. **When an item has been open for several sessions,
 check the claim that is holding it before doing the work it seems to need.**
+
+---
+
+## Session 14 — 2026-08-22 — **the engine became usable: knobs, a panel, an upload path**
+
+**Start here:** the project is still finished at `v0.1.0`. This session built *on* it,
+at the owner's direction, in three increments — ADR-0034, ADR-0035, ADR-0036. **No
+published number moved and no shipped default changed in any of them.** Everything
+parked in §8 is still parked.
+
+The owner's brief, in their words: they had never worked on a front end or with
+FastAPI, wanted to be guided while it was built, and wanted the configuration surface
+exposed because *"those features could be quite a big advantage for the accuracy."*
+They also said their private data comes **after** this and they did not want the app
+built around it — so nothing here assumes their dataset.
+
+### 1. ADR-0034 — what a caller may choose
+
+`split_lines` (ADR-0016) and `preserve_prefix` (ADR-0032) — the two settings most
+likely to change a result on a real column — were unreachable through the API. They are
+now settable per column, from a template menu the operator opts into per option.
+
+**A rule proposed in conversation did not survive the measurements, and the ADR says
+so.** "Safe when moving it can only redact more" is wrong three ways: `split_lines` can
+lose a name that wraps mid-sentence, `preserve_prefix` was measured trading one error
+for another, and `entities` — caller-choosable since ADR-0026 — is not monotone either.
+What holds: *a caller may choose anything whose worst outcome is a measurable quality
+result, and never anything whose worst outcome is data in a place, or raw text in a
+column, the operator did not sanction.*
+
+**Validity and policy went to different layers after review.** `config/registries.py`
+holds `KNOWN_PARSER_OPTIONS` (what a parser accepts); `service/knobs.py` holds what may
+cross HTTP. The first draft put both in `service/` and justified it with a
+non-sequitur. Moving it **fixed a pre-existing bug for all four entry points**: a
+`parser_options` typo in a hand-written YAML used to survive config validation and die
+when the pipeline built the parser — after the source was resolved and, on Databricks,
+after a session existed.
+
+### 2. ADR-0035 — the control panel
+
+One static HTML file at `/` and `/ui`, served by the same FastAPI process, on by
+default, `--no-ui` off. No build step, no CDN, no npm — a Databricks App runs a Python
+process. Six properties, each pinned: in the wheel, no external request, byte-identical
+per caller, `textContent` never `innerHTML`, no client storage, **and it remembers
+nothing the server knows**.
+
+**Two rendering defects surfaced only by driving it in a browser** — a nested `outputs`
+object printing as `[object Object]`, and a history column reading a timestamp field
+that does not exist. Neither was visible in review. That ratio is the lesson: front-end
+work has far more "looks right, isn't" than backend work does.
+
+### 3. ADR-0036 — a template may offer a directory
+
+`select_file: true` makes `source.path` a directory; the caller names one file in it.
+So an uploaded volume file becomes a run **without the service ever receiving the
+file** — it is told which one to read, from a directory the operator chose. No
+multipart, no upload buffer, and the caller still cannot name a source.
+
+The confused-deputy argument genuinely does not apply to an upload (the caller pushes
+data they already hold); what survives is operational, and the volume route avoids it
+entirely. `docs/18` §6 already had the fact that makes it work: a volume path is a
+filesystem path.
+
+### What the auditors found this session — six real defects, three of them live
+
+Both ran on all three increments. In severity order:
+
+1. **A clickjacking hole** (ADR-0035). The panel has two state-changing buttons and no
+   framing headers; a hostile frame plus one tricked click from an authenticated
+   operator triggers a run under the service's credentials. Now CSP +
+   `X-Frame-Options: DENY`, with `connect-src 'self'` making the no-egress property
+   browser-enforced rather than only grep-asserted.
+2. **A live 422 echo** (ADR-0034). `parser_options` is the first `dict` in a request
+   model, and pydantic puts a rejected *key* into the error location **before** the
+   pattern that rejects it — so an unbounded caller string came back verbatim. The test
+   meant to catch it passed throughout, because it exercised the *value* path only.
+3. **The offer and the acceptance were different sets** (ADR-0036). The listing
+   filtered by suffix; the builder did not. ADR-0036's whole argument is "the caller
+   chose from what the place contains", which is only true if both directions agree.
+4. **The response echoed the joined absolute path** — three lines from where
+   `saved_path` is deliberately relativized for that reason. On a workspace it names a
+   catalog and a schema.
+5. **`.gitignore` negations are case-insensitive** on Windows and macOS, so
+   `!data/inbox/README.md` also un-ignored `readme.md` — committable, into a directory
+   inside the repo tree.
+6. **The shipped `corpus_inbox` template gets staged to the App** (`docs/19` copies the
+   whole `configs/` tree), pointing at container-local disk — *verbatim* the objection
+   ADR-0036 uses to refuse multipart. Shipping it unremarked would have been arguing
+   both sides. Now marked local-development-only, in the template and the staging step.
+
+Also: a "ships in the wheel" test that compared a file to itself under an editable
+install, with packaging relying on hatchling's `.gitignore`-honouring default; and the
+panel keeping its own copies of `preserve_prefix: true` and "ADDRESS is undetected",
+which it *transmitted* as explicit settings.
+
+### Two found by probing rather than reasoning
+
+**Windows reserved device names** (`NUL`, `COM1`) pass the filename pattern *and* the
+resolve-and-contain check, because they resolve inside the directory — but opening one
+reaches a device. **Trailing dots** are stripped by Windows, so `report.csv.` opens
+`report.csv`: two names, one file. Both refused on every platform, so a config built on
+Linux and run on Windows cannot mean two things.
+
+### The mistake worth carrying, because it is the second time
+
+**CI failed on both platforms, and the dev venv could not have caught it.** The
+`corpus_inbox` template uses `language: mode: detect`, which needs the `language`
+extra; the push tier installs core + dev only, so every row failed with
+`LanguageNotAvailableError`.
+
+§8's Q1 already records this, in as many words: *"A green local run does not prove the
+push tier is green — check a clean core-only environment when touching anything the
+extras reach."* It was read at the start of this session and not applied. The fix was
+verified in a real core-only venv (`uv venv`, `uv pip install -e ".[dev]"`, extras
+genuinely absent) across every CI step, and CI is green.
+
+**Do this before pushing anything that touches an optional dependency.** It has now
+cost two CI failures on this repository.
+
+### State
+
+**1380 default-tier tests, 97 integration, 1 packaging, 56/56 gates unchanged across
+three corpora and both chains, 36 ADRs.** `ruff format --check`, `ruff check`,
+`mypy src tests` clean — re-verified in the core-only tier, not just the dev one.
+
+Four surfaces now: `pii-reduction` (CLI), `pii-reduction-databricks`,
+`pii-reduction-service` (HTTP API), and the control panel.
+
+### Two things left unverified, stated rather than implied
+
+- **Whether a Databricks App can see `/Volumes`.** The runbook's proven route for
+  volume ingestion is a serverless job; the App's runtime is `local`. One
+  `ls /Volumes/...` from the App settles it.
+- **The inbox listing is a shared surface.** Filenames are visible to everyone who may
+  use that template, and a file named after a person puts that name in a listing. It is
+  the first **data-derived** entry on `docs/09`'s display-surface allowlist, recorded
+  there with what bounds it and what does not.
