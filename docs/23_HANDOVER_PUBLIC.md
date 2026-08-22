@@ -9,11 +9,11 @@ Six sections, in the order they should be done:
 | | task | where |
 |---|---|---|
 | 1 | `NOTICE` | **done** — landed ahead of the visibility change |
-| 2 | screenshots of the control panel | this repository |
-| 3 | description + topics | this repository, GitHub-side |
+| 2 | screenshots of the control panel | **done** — three in `docs/images/`, all three in the README |
+| 3 | description + topics | **done** — set and verified on the public page |
 | 4 | decisions | **done** — all four recorded with reasoning |
 | 5 | **the GitHub profile** — pins, bio, profile README, portfolio hub | github.com/soulipaco |
-| 6 | the core-only check before pushing | local |
+| 6 | the core-only check before pushing | **done** — green, and it caught nothing; the *privacy* pass did |
 
 **§5 is the one a reader is most likely to skip and should not.** A LinkedIn post sends
 people to the repository; a good share of them then click the profile, and there are
@@ -55,7 +55,27 @@ URLs and the transformation this project applies, referenced from `README.md`'s
 afterwards that the *License* section's current sentence ("Nothing is published today,
 so no attribution is owed yet") is replaced rather than left contradicting the new file.
 
-## 2. Screenshots — the one gap in the front page
+## 2. ~~Screenshots — the one gap in the front page~~ — **DONE**
+
+**Three shots were captured on 2026-08-22 and all three are in the README**, under
+*See it work in two minutes*:
+
+| file | what it shows |
+|---|---|
+| `docs/images/control-panel-build-a-configuration.png` | the `synthetic_corpus` template, the column card with entities, parser, chain and reducer, the parser-option caption, and the generated YAML preview |
+| `docs/images/control-panel-run-succeeded.png` | a `succeeded` run — 102 rows read and written, 295 entities detected, 188 reduced, and no text anywhere on the screen |
+| `docs/images/control-panel-entities-reference.png` | the entity table with `ADDRESS` marked **no** under *detected by a shipped chain* |
+
+Two notes for whoever repeats this. **The agent browser pane still would not composite
+frames** — the failure this section records was not fixed by time; the shots were taken
+by driving the running service with a headless Chromium at 1360 px, light mode, 2×
+scale, which also gets full-page captures the viewport cannot. And **the screenshots
+were reviewed by the privacy auditor before they were committed**, which is the step
+that matters: it read every rendered string and confirmed the PNGs carry no `tEXt`,
+`iTXt`, `eXIf` or `tIME` chunk, so no capture-tool string, source URL or username is
+embedded in the file the way it is in an ordinary screenshot.
+
+Original framing, kept as the record:
 
 The README leads with a text before/after, which is the right first thing. What it does
 not have is a picture of the control panel, and a portfolio reader looks for one.
@@ -91,7 +111,12 @@ minutes*. `.gitattributes` already marks `*.png` binary.
 
 **Exit criterion:** at least shots 1 and 2 committed and rendered in the README.
 
-## 3. GitHub repository front matter
+## 3. ~~GitHub repository front matter~~ — **DONE**
+
+Set on 2026-08-22 with `gh repo edit` and verified against the live page: the
+description below, and **eleven** topics — `databricks`, `pii`, `privacy`, `presidio`,
+`nlp`, `named-entity-recognition`, `pseudonymization`, `data-governance`, `python`,
+`spacy`, `unity-catalog`. Original framing:
 
 Not settable from inside the repository; these are GitHub-side settings.
 
@@ -250,7 +275,34 @@ Covered in §3 — description and topics are both still empty (`gh repo view` c
 `description: ""`, `repositoryTopics: null`). The About box is what shows in search
 results and in the pinned card, so it is doing double duty once §5.1 is done.
 
-## 6. One check worth running before publishing anything
+## 6. ~~One check worth running before publishing anything~~ — **DONE**
+
+Run on 2026-08-22 in a fresh `uv venv` with `.[dev]` only. `lingua`, `presidio_analyzer`,
+`spacy` and `pyspark` were each verified absent by `importlib.util.find_spec` before the
+tier ran, so this is the real push tier and not a developer machine wearing its badge:
+
+```text
+1380 passed, 5 skipped, 25 deselected in 20.29s
+```
+
+**Five skips, not two.** Three are the extras-gated tests that *should* skip when the
+extras are absent (`test_benchmark_presidio`, `test_language_detection`,
+`test_providers_presidio`); the other two are the Windows symlink tests `docs/22` already
+records. Nothing failed, and no published number moved.
+
+**The check that actually earned its place was the privacy pass, not this one.** It
+found two committed literals — `+49 30 901820` and `030 901820` in
+`tests/test_providers_deterministic.py` — inside the Berlin `+49 30 9018xx` block that
+**ADR-0014 itself names as allocated and routable**. Seventeen such numbers were purged
+from the corpus before the first commit; the purge regenerated the fixtures and missed
+two provider unit tests that predate the ADR. Private, they were inert. Public, they are
+precisely the harm ADR-0014 was written after. Both were replaced with values from the
+sanctioned Bundesnetzagentur drama block (`+49 30 23125 0xx`) and the file's 73 tests
+re-run. **A repository can hold a rule, a decision record and a purge, and still ship the
+thing all three forbid, because the rule was applied to the place the mistake was found
+rather than to every place it could be.**
+
+Original framing:
 
 ```bash
 uv venv /tmp/venv-core --python 3.11

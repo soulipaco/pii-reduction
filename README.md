@@ -76,6 +76,13 @@ generated YAML, save it, run it, watch it finish:
 pii-reduction-service --configs configs   # http://127.0.0.1:8000/
 ```
 
+![The control panel's "Build a configuration" tab. The shipped synthetic_corpus template
+declares what a caller may choose; the column card exposes the entities, the parser, the
+provider chain and the reduction strategy, each parser option carrying the caption that
+says what turning it on costs; the generated YAML is previewed underneath before
+anything is
+saved.](docs/images/control-panel-build-a-configuration.png)
+
 That control panel is one static file inside the wheel — no build step, no CDN, nothing
 to deploy separately (ADR-0035) — so an App deploying this wheel serves exactly this
 page. **To be precise about what has been executed: the service has been hosted as a
@@ -83,6 +90,28 @@ Databricks App and driven over HTTPS, but that deployment predates the panel and
 is currently stopped**, so the panel itself is proven locally and not yet on the App
 (`docs/22_EVIDENCE.md` §6). It shows configuration and run metadata and **never text**,
 because no endpoint returns any (ADR-0026).
+
+![A finished run in the same panel: a succeeded pill, then a metadata table — engine run
+id, config hash, rows read and written, fields processed and failed, entities detected
+and reduced, and the paths written. There is no source text and no reduced text anywhere
+on the screen, because no endpoint
+returns any.](docs/images/control-panel-run-succeeded.png)
+
+*102 rows in, 102 rows out, 295 entities detected and 188 reduced — detection exceeds
+reduction because the reconciler rejects candidates, and every rejection is counted by
+reason (`docs/22_EVIDENCE.md` §5).*
+
+The panel is also where the project's largest gap is stated rather than buried. The
+Reference tab lists every label a configuration may name **and whether any shipped chain
+can actually detect it**:
+
+![The Reference tab's entity table: ADDRESS maps to <ADDRESS> and is marked "no" under
+"detected by a shipped chain", while EMAIL, PERSON and PHONE are marked
+"yes".](docs/images/control-panel-entities-reference.png)
+
+`ADDRESS` is in the taxonomy and in the benchmarks, and **nothing detects it** — the
+regex route is refused by `AGENTS.md` rule 6 and by ADR-0002 on probe evidence, so the
+label stays visible and unfulfilled until a capable provider exists.
 
 ## How it fits together
 
