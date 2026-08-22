@@ -37,10 +37,18 @@
 #    `2026-04-03 09:12:04 - Peter Novak:` as *structure*, so the author's name is never
 #    offered to any provider. That is correct when a speaker label is a role
 #    (`Customer`, `Πελάτης`) — the shape the benchmark corpus uses — and wrong when the
-#    author is a person, which is what a work-note author is. **Those names cannot be
-#    redacted by any provider or repair rule**, and they are the bulk of this corpus's
-#    leakage. No tier-4 PERSON floor is written: a `min: 0.000` gate measures nothing
-#    and must never be green (ADR-0009).
+#    author is a person, which is what a work-note author is. **Under the shipped
+#    default those names cannot be redacted by any provider or repair rule**, and they
+#    are the bulk of this corpus's leakage. No tier-4 PERSON floor is written: a
+#    `min: 0.000` gate measures nothing and must never be green (ADR-0009).
+#
+#    **ADR-0032 (session 13) rules on this and the 0.000 rows stay.** The default is
+#    *preserve*; `preserve_prefix: false` is the measured per-column opt-in, and on
+#    this corpus it takes strict F1 0.761 -> 0.844, leakage 0.289 -> 0.114 and tier-4
+#    PERSON recall off 0.000 in all three languages. **The gates below score the
+#    shipped default**, so nothing here changes: they are the price of a ruled
+#    decision, not an unclosed defect. A gate written against the opt-in would be
+#    scoring a configuration this repository does not ship.
 #
 # Regenerate and check (no download needed — this corpus is generated, not fetched):
 #

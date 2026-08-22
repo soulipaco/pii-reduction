@@ -170,7 +170,9 @@ additive rows on every benchmark run: `unreachable_entity_rate` and
 **On the hybrid chain the engine finds 224 of the 225 entities it was ever offered.**
 PERSON recall 0.326 over 135 is 44 of the 45 PERSON entities that reach a provider at
 all. The gap between 0.711 and 0.996 is the speaker-prefix question, which now has a
-number attached instead of a footnote.
+number attached instead of a footnote — and **that number is what made the question
+answerable in session 13** (ADR-0032): flipping `preserve_prefix` takes the 90
+unreachable to 0, which is this metric confirming its own attribution.
 
 **The alternative's own first option was rejected**: it suggests *scoping* the recall
 metric to eligible regions. That would silently change what every published number
@@ -307,7 +309,7 @@ each says what would have to be true.
 | R2 | **The labelled-address recognizer** (claim the whole value after `Address -`, `Anschrift:`, `διεύθυνση:`) | ADR-0002 refused a regex-composed ADDRESS on probe evidence, and `AGENTS.md` rule 6 forbids treating regex as a complete solution for addresses. Shipping this would put an ADDRESS detector in the taxonomy's undetected slot, poisoning a benchmark column that is deliberately empty. Reopens at roadmap Phase 7 with a capable provider, not before. |
 | R3 | **A `PII` type for untyped spans** | It exists so a provider that emits typeless spans (`ai_mask`) is not filtered away. No provider here emits one, and the taxonomy is closed by design — `AGENTS.md` rule 7 forbids widening it. Reopens only with an LLM provider, and then as its own ADR. |
 | R4 | **The `surname.5` employee-id recognizer, off by default** | Their owner's ruling on their corpus. This project's taxonomy has no employee-id concept and its scope is configuration-driven. |
-| R5 | **Their two ruled policy decisions as policy** (bare usernames stay unredacted; speaker labels and note authors stay preserved) | Not this project's rulings to inherit — a different owner, a different brief, a different corpus. **But the second is real evidence for an open question here**: this repository's speaker-prefix ADR is undecided, and a production deployment choosing "preserve", with the consequence measured (17,669 preserved-header occurrences against 24 body misses), is input that ADR should weigh. Recorded as input, explicitly not as a decision. |
+| R5 | **Their two ruled policy decisions as policy** (bare usernames stay unredacted; speaker labels and note authors stay preserved) | Not this project's rulings to inherit — a different owner, a different brief, a different corpus. **But the second was real evidence for an open question here**: this repository's speaker-prefix ADR was undecided, and a production deployment choosing "preserve", with the consequence measured (17,669 preserved-header occurrences against 24 body misses), is input that ADR should weigh. Recorded as input, explicitly not as a decision. **ADR-0032 (session 13) weighed it and reached the same default from its own measurement**, for a reason that is this repository's rather than theirs: the error the opt-in introduces — destroyed structure — is the one our instrumentation cannot see. |
 | R6 | **`ai_mask` as a provider** | Not a rejection of their finding — an endorsement of it. They measured it against real data: no types, no offsets, **not reproducible** (the same 7-digit id masked in one row and kept in another), masked out-of-scope ids unprompted, missed a guest's first name in six consecutive German turns, and produced `[MASKED].5@…` — a redaction that leaks the address it was meant to remove. This repository never considered it; the measurement is recorded here so nobody proposes it without reading this row. Note their honest caveat: **asking a model for JSON spans with offsets was never tried**, and is a materially different design. |
 | R7 | **cp38 wheel pins and `--only-binary=:all:`** | Environment-specific to a Python 3.8.8 Anaconda box with no C++ toolchain. This project requires 3.11+ and CI provisions its own environment. |
 | R8 | **The module layout, the ABC + registry pattern, the YAML schema, the parsers, `mode: combined`/`split`, sheet-name normalisation** | The pack's own Part 3 says not to copy these, and it is right. |
@@ -371,7 +373,7 @@ build from before the markup fix) applies to any non-bundle deployment route.
 | R2 | Labelled-address recognizer | **REJECTED** — ADR-0002, `AGENTS.md` rule 6 |
 | R3 | `PII` untyped-span type | **REJECTED** — closed taxonomy, rule 7 |
 | R4 | `surname.5` recognizer | **REJECTED** — no such concept here |
-| R5 | Their two ruled policy decisions | **NOT INHERITED** — recorded as input to the speaker-prefix ADR |
+| R5 | Their two ruled policy decisions | **NOT INHERITED** — recorded as input to the speaker-prefix ADR, which ADR-0032 then decided the same way from its own evidence |
 | R6 | `ai_mask` as a provider | **REJECTED**, on their measurement |
 | R7 | cp38 pins, wheels-only pip | **ENVIRONMENT-SPECIFIC** |
 | R8 | Module layout, registries, YAML schema, parsers, output modes | **NOT TRANSFERABLE** — the pack says so itself |
@@ -393,8 +395,8 @@ build from before the markup fix) applies to any non-bundle deployment route.
   increment and after the last one: 10/10, 15/15, 6/6, 10/10.
 - **It did not touch Databricks.** A2's option plumbing is unit-tested and unverified on
   a workspace, and this document says so wherever the claim appears.
-- **It did not settle the speaker-prefix question**, which A3 now measures rather than
-  answers.
+- **It did not settle the speaker-prefix question**, which A3 measured rather than
+  answered. *(Settled in session 13 by ADR-0032, on that measurement.)*
 
 ## 9. What to do next, ranked by the evidence this comparison produced
 

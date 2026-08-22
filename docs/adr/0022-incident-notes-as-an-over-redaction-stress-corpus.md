@@ -129,6 +129,16 @@ preserves speaker metadata exactly"*. Reconciling those two is a design decision
 deserves its own ADR, and making it in the same change that introduces the corpus
 motivating it is how a benchmark-fitted fix gets built.
 
+> **Decided in session 13: [ADR-0032](0032-the-speaker-prefix-stays-preserved-by-default.md).**
+> The default stays *preserve*, and `preserve_prefix: false` — which has shipped since
+> Increment A2 and which nobody had measured — is the ruled opt-in for transcripts
+> whose speakers are people. On this corpus it takes strict F1 0.761 → 0.844, leakage
+> 0.289 → 0.114 and the tier-4 PERSON rows below off 0.000 in all three languages; on
+> the benchmark corpus, whose speakers are roles, it costs PERSON precision
+> 0.771 → 0.744 for no recall gain. **The 0.000 rows below are therefore the measured
+> price of a ruled default, not an open defect.** Nothing in this corpus, its gate file
+> or its numbers changes.
+
 ### A metric caveat this corpus exposed
 
 `fragment_leakage_rate` runs above `leakage_rate` on **both** chains here (0.463 vs

@@ -100,6 +100,14 @@ against an overall recall of 0.711 — and PERSON recall 0.326 over 135 becomes 
   design item — redacting inside a speaker prefix collides with the reconstruction
   guarantee — now has a number attached: 28.6% of one corpus's ground truth, and the
   entire gap between 0.711 and 0.996 on the hybrid chain.
+
+  > **Answered in session 13 by [ADR-0032](0032-the-speaker-prefix-stays-preserved-by-default.md),
+  > and this number is what made it answerable.** The ruling keeps *preserve* as the
+  > default and names `preserve_prefix: false` as the measured per-column opt-in.
+  > Flipping that boolean takes this corpus's unreachable count from **90 to 0** — the
+  > metric confirming its own attribution, since it claimed the 90 were exactly the
+  > tier-4 PERSON entities in the prefixes. Pinned in
+  > `tests/test_speaker_prefix_decision.py`, model-free, on every push.
 - **It is not a gate.** No gate file reads either row, and none should until the
   question of what a good unreachable rate *is* has an answer. A gate that measures
   something nobody has decided about is how a floor gets set by accident.

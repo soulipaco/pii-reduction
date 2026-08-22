@@ -108,9 +108,16 @@ Measured when the metric landed (session 12):
 
 The 90 are exactly the tier-4 work-note authors, which the transcript parser treats as
 speaker prefixes (ADR-0022). On the hybrid chain the engine finds 224 of the 225
-entities it was ever offered — the gap between 0.711 and 0.996 is a *scope* decision
-with an open design question behind it (the speaker-prefix ADR), not a detection
-result.
+entities it was ever offered — the gap between 0.711 and 0.996 is a *scope* decision,
+not a detection result.
+
+**That decision is ADR-0032** (session 13): the prefix stays preserved by default, and
+`preserve_prefix: false` is the measured per-column opt-in for transcripts whose
+speakers are people. Setting it on this corpus takes the unreachable count from 90 to
+**0** and strict F1 from 0.761 to 0.844; on the benchmark corpus, whose speakers are
+roles, it costs PERSON precision 0.771 → 0.744 for no recall gain. **Neither corpus's
+published numbers move** — the shipped default is unchanged, and the comparison runs
+against a copied config.
 
 The markup corpus (ADR-0029) reports **zero** unreachable, which is the answer that
 makes its PERSON recall of 0.322 readable: nothing there is out of scope, so the whole

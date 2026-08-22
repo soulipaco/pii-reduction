@@ -56,9 +56,13 @@ Given a multi-turn transcript, preserve timestamps and speaker metadata while tr
 
 Given a field containing multiple ServiceNow-style note blocks, preserve each note header and transform only the note body.
 
-*Status (session 9): unmet — no `note_history` parser exists (plan §5 defers it;
-README's shipped-parser list omits it). Deliberately sequenced after the
-speaker-prefix ADR decision, because both concern prefix semantics (docs/17 D13).*
+*Status (session 13): unmet — no `note_history` parser exists (plan §5 defers it;
+README's shipped-parser list omits it). It was sequenced after the speaker-prefix
+decision because both concern prefix semantics (docs/17 D13); **that decision landed
+as ADR-0032**, so the block is gone and the deferral now rests on its own merits
+alone. What ADR-0032 does deliver for this case is the author's name: a column of
+ServiceNow-style notes parsed as `transcript` with `preserve_prefix: false` puts the
+work-note author in scope, at a published cost.*
 
 ### UC-04: Multilingual processing
 

@@ -275,14 +275,39 @@ parser_options:
 
 > **`preserve_prefix: true` puts the speaker label out of scope for detection, and a
 > speaker label is not always a role.** The prefix `2026-04-03 09:12:04 - Peter Novak:`
-> is treated as structure, so that name is never offered to any provider and **cannot
-> be redacted by anything** — no provider, no repair rule, no reduction strategy. This
-> is correct for `Customer`/`Agent`/`Πελάτης` and wrong for a work-note author, a
+> is treated as structure, so under this setting that name is never offered to any
+> provider and cannot be redacted by any provider, repair rule or reduction strategy.
+> This is correct for `Customer`/`Agent`/`Πελάτης` and wrong for a work-note author, a
 > signed email quote, or any transcript whose speakers are named people. Measured:
 > PERSON recall is 0.000 at tier 4 in all three languages on the incident-notes corpus
-> (ADR-0022), against 0.933–1.000 in the same documents' structured headers. If your
-> transcripts name their speakers, this option is a silent leak; there is no
-> configuration that currently fixes it.
+> (ADR-0022), against 0.933–1.000 in the same documents' structured headers, and
+> ADR-0028 attributes exactly 90 of that corpus's 315 ground-truth entities to it.
+>
+> **If your transcripts name their speakers, set `preserve_prefix: false` on that
+> column.** The whole line becomes one processable body, so the author's name reaches a
+> provider through the ordinary path. **ADR-0032 rules on this** and publishes what it
+> costs in both directions, measured on the hybrid chain:
+>
+> | | speakers are people (incidents) | speakers are roles (benchmark corpus) |
+> |---|---|---|
+> | strict F1 | 0.761 → **0.844** | 0.910 → **0.902** |
+> | leakage rate | 0.289 → **0.114** | 0.067 → **0.061** |
+> | tier-4 PERSON recall (en/de/el) | 0.000 → **0.333 / 0.900 / 0.400** | n/a — no speaker is ground truth |
+> | PERSON strict precision | — | 0.771 → **0.744** |
+>
+> Three things to know before setting it:
+>
+> - **It buys nothing without a model.** On `deterministic_only` every detection number
+>   is identical either way; only `unreachable_entity_rate` changes.
+> - **It re-cuts the model's input**, which is the failure class ADR-0016 exists to
+>   avoid. On the benchmark corpus the two documents that change are Greek and the
+>   changes are in the *body*, not the prefix — joining the prefix to the body changed
+>   what the model saw.
+> - **The timestamp survives because no shipped entity policy detects it**, not because
+>   the parser still protects it. Adding a date-like entity to a column configured this
+>   way would put `AGENTS.md` rule 5 ("timestamps must not be damaged") back in play.
+>
+> It is a **per-column** option for those reasons. Do not set it globally.
 
 A production parser may support multiple transcript patterns. Configuration should describe intent rather than embed large regexes in YAML wherever possible.
 
