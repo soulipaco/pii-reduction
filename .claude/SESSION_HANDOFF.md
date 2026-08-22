@@ -1346,12 +1346,27 @@ each verified absent first — where it reads **1380 passed, 5 skipped**: the th
 skips are the extras-gated tests doing their job. **No published number moved**, and
 the two phone literals that changed are in a unit test, not in a corpus or a gate.
 
-The portfolio manager at `..\github_master` was re-synced afterwards. It scores this
-repository **83/100, `featured_candidate`, attention low** — not flagship, and the
-reasons are worth knowing rather than arguing with: there is **no GitHub Release
-object** (the `v0.1.0` tag is not one), no lockfile and no homepage. Two further
-"missing" flags are the detector's vocabulary rather than this repository's substance
-— it scans the README for the literal phrases *"installation"* / *"quick start"* and
-*"live databricks evidence"*, and this README says *"See it work in two minutes"* and
-describes the hosted App instead. **The README was deliberately not reworded to match
-the matcher.**
+The portfolio manager at `..\github_master` was re-synced afterwards. Its first pass
+scored this repository **83/100** and named the reason: the `v0.1.0` tag had **no
+GitHub Release object** behind it. The owner approved publishing one, so the release
+was cut from the existing tag — notes describing 0.1.0 *as tagged*, with the three
+known failures beside the headline numbers, and an explicit note that `main` has moved
+on since and that the ADR-0034/35/36 work sits under `[Unreleased]`.
+
+**It moved the score to 87, not past 90.** Worth recording, because the prediction was
+that it would clear the flagship threshold and it did not. What the release *did* do is
+close the flagship gate's **evidence** checklist — `tests`, `ci`, `validation_record`,
+`release`, `visuals`, `sample` are now all true, and `verification` is 25/25. Only the
+numeric threshold is left, and the remaining 13 points are:
+
+| missing | points | judgement |
+|---|---:|---|
+| `lockfile` | 3 | a real absence; adding one is engineering on a finished repo, and a library is not an application |
+| `setup_guidance` | 4 | **detector vocabulary, not substance** — it greps the README for *"installation"* / *"quick start"*; this README says *"See it work in two minutes"* over a runnable block |
+| `homepage` | 2 | genuinely empty, and there is no live site to point at |
+| topic alignment | 4 | only `databricks` and `unity-catalog` intersect the tool's `focus_topics`; two more accurate ones would score it |
+
+**None of these was done, because each would be done for the score.** The README was
+deliberately not reworded to match the matcher. `live_runtime_proof` is false for the
+same reason — the detector looks for the literal phrase *"live databricks evidence"*
+and this README describes the hosted App instead.
