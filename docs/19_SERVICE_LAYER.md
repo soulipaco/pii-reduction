@@ -80,6 +80,14 @@ pip install -e ".[service]"
 pii-reduction-service --configs configs
 ```
 
+Add `--run-journal` for anything longer-lived than a terminal session, so run history
+survives a restart instead of 404-ing (ADR-0030). Put the file **outside the
+repository**:
+
+```bash
+pii-reduction-service --configs configs --run-journal ~/.pii-reduction/runs.jsonl
+```
+
 Then, against the shipped Class A template:
 
 ```bash
@@ -188,11 +196,53 @@ because `docs/09`'s conditions for a Class B display surface require reading und
 the end user's identity, and because the whole server-side-template design exists
 precisely because the service runs with credentials that are not the caller's.
 
-**Run state is in memory.** A process-local store is honest for v1 and wrong for a
-multi-replica App; a restart forgets. The durable record of a run is the
-`<dataset>_run_metrics` artifact the engine already writes, which is where a status
-view should eventually read from. Persisting service-side state is a named later
-increment.
+**Run state survives a restart only if you ask for it, and never survives a second
+replica.** By default the store is process-local, which is honest for a run from a
+terminal. `--run-journal PATH` appends every state transition to a JSON-lines file and
+loads it at startup, so the first thing a hosted user does — `POST /runs`, then poll
+`GET /runs/{id}` — keeps answering after a restart instead of 404-ing a run that
+really happened.
+
+Three properties of it are deliberate:
+
+- **Metadata only, by construction.** The journal serializes `RunRecord`, the same
+  model the API returns, so the reflection guard that proves no response carries text
+  proves it of the file. A test also asserts the written bytes hold exactly that
+  model's fields and nothing more.
+- **The path is the operator's, never a caller's.** Same doctrine as the templates: a
+  request that could name a path would make the service write wherever *its*
+  credentials reach. No request model has a path field, and a test enforces it.
+- **An interrupted run is reported as interrupted, not as running.** A record loaded
+  as `pending` or `running` belongs to a process that no longer exists, so nothing
+  will ever advance it — and `running` is the one state a caller waits on. Recovery
+  rewrites it to `failed` with category `interrupted`. It does **not** guess whether
+  the reduction wrote anything first: that is what the engine's
+  `<dataset>_run_metrics` artifact is for, and the two remain different claims.
+
+**Single writer.** Two replicas appending to one file would interleave partial writes.
+The journal refuses any history with **a gap in the middle** rather than serving part of
+one; a truncated *final* record — what a crash mid-append leaves — is dropped with a
+warning and the file is repaired, so the fragment cannot be welded onto the next write.
+A hosted deployment stays **single-replica** until something better exists: a
+constraint, stated here rather than discovered.
+
+**Three costs, stated because they are real** (ADR-0030 carries the reasoning):
+
+- **A lost terminal write misreports a success.** If the fsync of the final transition
+  fails, the file ends at `running` and the next process says `failed`/`interrupted` for
+  a run that succeeded. The reconciliation is `<dataset>_run_metrics`, which is the
+  argument for keeping the two records rather than against it.
+- **fsync happens under the store's lock**, so `GET /runs` blocks for the flush. Three
+  transitions per run makes that invisible on local disk. On a Volumes/FUSE path — which
+  is what hosting intends — fsync latency is tens to hundreds of milliseconds and every
+  status poll stalls behind it. Measure before hosting at volume.
+- **Nothing bounds growth.** Every run ever submitted is retained in memory and on disk,
+  startup reads the whole file, and `GET /runs` is unpaginated. **Rotate the file**; a
+  missing journal is an empty history, so rotation is safe and needs no downtime.
+
+Write the journal **outside the repository**. On the Databricks path
+`RunSummary.outputs` holds real `catalog.schema.table` names, which must never be
+committed; `.gitignore` carries `*.jsonl` as a backstop rather than a licence.
 
 ## Verified, by running it
 
@@ -212,6 +262,19 @@ off-menu column (400), a request carrying `source` or `projection` (422, "Extra
 inputs are not permitted"), and a malformed dataset name (422 whose body does not
 contain the name). The default test tier repeats all of it over a real ASGI
 transport.
+
+**A restart, over real HTTP** (2026-08-22, session 12). The console script was
+started with `--run-journal`, `POST /runs` answered `202 pending`, polling reached
+`succeeded` with 102 rows read — and then **the process was killed and a second one
+started over the same journal**. `GET /runs/{id}` answered **200 `succeeded`** with the
+same row count and the same `config_hash`, where without the journal it is a 404;
+`GET /runs` returned the history. The journal held exactly three lines,
+`pending → running → succeeded`, in order.
+
+The interrupted path was driven the same way, which is the half that matters more: a
+run was submitted and the process **killed mid-run**, leaving the journal ending at
+`running`. The next process answered **200 `failed` / `interrupted`** — not `running`,
+which would have been a lie about work nobody was doing.
 
 **The Databricks path, on the workspace** (2026-08-21). A 25-row synthetic table was
 staged in Unity Catalog from the head of the committed corpus — a different slice and

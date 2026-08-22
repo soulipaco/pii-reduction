@@ -6,11 +6,16 @@ runtime converts at its own boundary (ADR-0026 rule 3), so "the status view is
 metadata-only" is a property of what the process retains rather than a rule the
 serializer has to enforce.
 
-**In memory, and deliberately.** A process-local store is honest for v1 and wrong for
-a multi-replica deployment; the durable record of a run is the
-``<dataset>_run_metrics`` artifact the engine already writes, which is where a status
-view should eventually read from. Persisting service-side state is a named later
-increment, not an oversight.
+**Durable only if an operator asks for it.** By default the store is process-local,
+which is honest for a run from a terminal. Given a
+:class:`~pii_reduction.service.journal.RunJournal` it also survives a restart, which is
+what hosting needs: the first thing a hosted user does is `POST /runs` and then poll
+`GET /runs/{id}`, and without a journal that poll answers 404 for a run that happened.
+
+The journal records what the **service** was asked and observed. The durable record of
+what a run *did* remains the engine's ``<dataset>_run_metrics`` artifact, and the two
+are deliberately different claims — which is why a run recovered as `interrupted` says
+exactly that rather than guessing whether anything was written.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
@@ -25,6 +31,7 @@ from pii_reduction.config.resolved import ResolvedDataset
 from pii_reduction.contracts.errors import PiiReductionError
 from pii_reduction.observability.logging import get_logger, safe_fields
 from pii_reduction.service.errors import RunNotFoundError, RuntimeUnavailableError
+from pii_reduction.service.journal import NullRunJournal, RunJournal
 from pii_reduction.service.models import RunRecord, RunState, RunSummary
 from pii_reduction.service.runtimes import Runtime
 
@@ -47,9 +54,24 @@ class RunStore:
     `pending` rather than competing for the same memory.
     """
 
-    def __init__(self, runtimes: dict[str, Runtime]) -> None:
+    #: States from which a record will not change again. One definition: the
+    #: recovery policy below and `_finish_failed` must agree about what "finished"
+    #: means, and two literals are how they stop agreeing.
+    TERMINAL = (RunState.SUCCEEDED, RunState.FAILED)
+
+    def __init__(self, runtimes: dict[str, Runtime], *, journal: RunJournal | None = None) -> None:
         self._runtimes = dict(runtimes)
-        self._records: dict[str, RunRecord] = {}
+        self._journal: RunJournal = journal or NullRunJournal()
+        # Recovered **before** the executor can run anything, and rewritten on the way
+        # in: a record loaded as `pending` or `running` belongs to a process that no
+        # longer exists, so nothing will ever advance it. Serving it unchanged would
+        # show a caller work in progress that is not in progress.
+        self._records: dict[str, RunRecord] = {
+            record.run_id: record for record in self._interrupted(self._journal.load())
+        }
+        recovered = len(self._records)
+        if recovered:
+            logger.info("service run history recovered %s", safe_fields(runs_recovered=recovered))
         self._lock = threading.Lock()
         # Checked under the same lock as the insert, so a run cannot be recorded as
         # `pending` and then rejected by the executor — which would leave a record
@@ -94,6 +116,14 @@ class RunStore:
                 raise RuntimeUnavailableError(
                     "this service is shutting down and is not accepting runs"
                 )
+            # **Journal first, then remember, then submit**, and the order is the
+            # point. A failed journal write must leave no trace anywhere: recording
+            # in memory first would strand a `pending` record the executor never
+            # received, which is the run-that-never-terminates this class works hard
+            # to make unreachable. Writing before the executor is handed the work also
+            # keeps the file's state order honest — the worker could otherwise append
+            # `running` before `pending`, and the last line wins on load.
+            self._journal.record(record)
             self._records[record.run_id] = record
             # Submitted **inside** the lock, with the insert. Outside it, a
             # `shutdown()` landing in the gap would leave a record recorded as
@@ -141,6 +171,21 @@ class RunStore:
         with self._lock:
             updated = self._records[run_id].model_copy(update=fields)
             self._records[run_id] = updated
+            # Every transition, not only terminal ones: a `running` line is what tells
+            # the next process this run was interrupted rather than never started.
+            #
+            # **Memory first here**, the opposite of `submit`, and for the same reason
+            # — a failed write must not misreport what happened. On a transition the
+            # run really did reach this state, so the in-memory record is the truth and
+            # the file is behind. Both failure paths were measured: on a *terminal*
+            # write the raised error reaches `_execute`, which finds the record already
+            # terminal and logs rather than overwriting a success with a failure; on the
+            # `running` write the record is *not* terminal, so `_finish_failed` runs and
+            # marks it failed — truthful, because the runner never executed. The outcome
+            # is right in both cases, but for two different reasons, and the terminal
+            # guard covers only one of them. In `submit` nothing has happened yet, so
+            # the truthful outcome of a failed write is that no run exists.
+            self._journal.record(updated)
         return updated
 
     def _execute(self, run_id: str, config: ResolvedDataset, runner: Runtime) -> None:
@@ -195,6 +240,9 @@ class RunStore:
         )
 
     def _finish_failed(self, run_id: str, config: ResolvedDataset, category: str) -> None:
+        # **Must not be called while holding `self._lock`.** It calls `get`, which
+        # re-acquires it, and the lock is a plain `Lock` rather than an `RLock` on
+        # purpose — an `RLock` would hide the ordering this class makes visible.
         # A record that already reached a terminal state is not rewritten. If the
         # *bookkeeping* after a success raises, the run still succeeded, and marking
         # it failed would be a worse answer than losing a log line.
@@ -215,6 +263,37 @@ class RunStore:
             ),
         )
 
+    @classmethod
+    def _interrupted(cls, records: Iterable[RunRecord]) -> tuple[RunRecord, ...]:
+        """Rewrite non-terminal records as failed, because their process is gone.
+
+        Lives here rather than in ``journal.py`` for one reason that matters: it has to
+        agree with :data:`TERMINAL` about what "finished" means, and a second literal
+        list of terminal states is a second thing to forget when one is added. The
+        journal is durability with no opinion about run semantics; this is the opinion.
+
+        A record loaded as `pending` or `running` is a **lie** — the thread that would
+        have advanced it died with the previous process, so nothing will ever move it.
+        Leaving it is the worst thing a status view can do, because `running` is the one
+        state a caller waits on.
+
+        `interrupted` rather than a guess about what went wrong. Whether the underlying
+        reduction wrote anything before the process ended is a question for the engine's
+        ``<dataset>_run_metrics`` artifact, which is why that remains the record of what
+        a run *did*. The rewrite is **in memory only**: the file still ends at
+        `running`, so an operator reading it directly sees the raw history while the API
+        reports the recovery. Persisting it would be a write on a read path, and the
+        recovery is idempotent anyway.
+        """
+        return tuple(
+            record
+            if record.state in cls.TERMINAL
+            else record.model_copy(
+                update={"state": RunState.FAILED, "error_category": "interrupted"}
+            )
+            for record in records
+        )
+
     # -- reading -----------------------------------------------------------------
 
     def get(self, run_id: str) -> RunRecord:
@@ -229,9 +308,6 @@ class RunStore:
         with self._lock:
             records = tuple(self._records.values())
         return tuple(sorted(records, key=lambda record: record.submitted_at, reverse=True))
-
-    #: States from which a record will not change again.
-    TERMINAL = (RunState.SUCCEEDED, RunState.FAILED)
 
     def wait(self, run_id: str, timeout: float = 60.0) -> RunRecord:
         """Block until a run reaches a terminal state. For tests and scripted callers.

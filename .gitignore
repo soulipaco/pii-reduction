@@ -65,6 +65,11 @@ runs/
 benchmark_results/
 mlruns/
 *.log
+# Run journals (`pii-reduction-service --run-journal`). Metadata only, but on the
+# Databricks path `RunSummary.outputs` holds real catalog.schema.table names, which
+# AGENTS.md rule 1 keeps out of the repository. Write them outside the repo; this is
+# the backstop for when someone does not.
+*.jsonl
 
 # --- Editors / OS ---
 .vscode/

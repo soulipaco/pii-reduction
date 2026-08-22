@@ -32,6 +32,7 @@ from typing import Any
 from pii_reduction.contracts.errors import PiiReductionError
 from pii_reduction.observability.logging import get_logger, safe_fields
 from pii_reduction.service.errors import RuntimeUnavailableError
+from pii_reduction.service.journal import FileRunJournal
 from pii_reduction.service.runs import RunStore
 from pii_reduction.service.runtimes import Runtime
 from pii_reduction.service.runtimes.local import local_runtime
@@ -77,6 +78,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "also offer the 'databricks' runtime, which runs the driver path. Needs "
             "the databricks extra, which lives in its own venv (ADR-0006)"
+        ),
+    )
+    parser.add_argument(
+        "--run-journal",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "append run metadata to this file so run history survives a restart. "
+            "Without it the store is process-local and GET /runs/{id} answers 404 for "
+            "a run this process did not submit. Metadata only — the same fields the "
+            "API returns, never text. Single writer: one replica per file"
         ),
     )
     parser.add_argument(
@@ -188,7 +201,11 @@ def main(
         return 2
     try:
         runtimes = build_runtimes(databricks=args.databricks, profile=args.profile)
-        store = RunStore(runtimes)
+        # The path comes from the operator's command line and nowhere else. A request
+        # that could name it would make the service write wherever its own credentials
+        # reach — the confused-deputy shape ADR-0026's server-side templates exist for.
+        journal = FileRunJournal(args.run_journal) if args.run_journal else None
+        store = RunStore(runtimes, journal=journal)
         app = create_app(args.configs, store=store)
     except PiiReductionError as error:
         print(f"error: {error}", file=sys.stderr)

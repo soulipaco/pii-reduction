@@ -434,6 +434,7 @@ the session-9 rows in the Complete table and the queue below.
 | S1 | **ADR-0026: rung 4 is a thin HTTP API**, and a Databricks App is how it gets hosted rather than a second surface to build. `AGENTS.md` rule 8 and a new `docs/09` section extend the observability rule from logs to every channel crossing the process boundary — rendered output, response bodies, error payloads, redirects, downloads — and to the **inbound** half (uploads, query strings, access-logged bodies, a framework's own 422 echoing the input it rejected). Span offsets and per-entity confidence moved off *Safe to log*, where the prose had been wrong since it was written and the shipped `ALLOWED_FIELDS` never agreed with it. A Class A carve-out keeps the Phase 9 demo surface legal without creating a service endpoint; a future side-by-side view now carries seven conditions (added: read under the end user's identity, record each disclosure) instead of five | 1029 default, unchanged — docs only; landed **before** any endpoint existed, which is the order the privacy auditor asked for when ADR-0025 shipped |
 | S2 | **The service layer** (`src/pii_reduction/service/`): a config **builder** over server-side templates, a run **trigger** over both entry points, a metadata-only **status view**, and `pii-reduction-service` as a third console script. Four static guards make the rung rule code rather than prose — nothing outside `service/` imports it; `service/` may not name providers, reducers, parsers, language, entities, evaluation, sources, outputs, synthetic, or anything under `processing/` except `pipeline`; exactly one file may import the Databricks surface and still may not name `pyspark`; and `config/`, now the sanctioned relay, is bounded to `contracts/` and `entities/`. No endpoint accepts text and none returns, streams or links to any — enforced by a reflection test over every model rather than by a filter | 1090 default (+61); driven over real HTTP three times during the increment, and on the workspace once (docs/19 *Verified, by running it*) |
 | T1 | **The alternative reconciliation** — `docs/20_ALTERNATIVE_RECONCILIATION.md`, every item classified with its evidence including the rejections; ADR-0027 (markup is machine syntax: clip spans out of it at the provider boundary, and check the written output with an independently written assertion — `validation.require_markup_preserved`, on by default); ADR-0028 (recall decomposed into what the parser offered and what it never did); Delta column mapping when a column name needs it; parquet preflight at construction. Three of the four are for failure classes with **zero support in any corpus here**, which is exactly why they were invisible | 1187 default (+97), 92 integration, **56 gates across three corpora** and both chains — **no published number moved**. Both auditors found the markup guard *leaking* in three variants of one mistake (a guard against over-redaction causing under-redaction), and then found ADR-0029's claims outrunning its automation; all fixed, and both ADRs carry them |
+| T2 | **A durable run store** (ADR-0030) — `--run-journal PATH` appends every run-state transition to JSON lines and reloads it at startup, so `GET /runs/{id}` survives a restart instead of 404-ing a run that happened. A record recovered non-terminal is rewritten to `failed`/`interrupted`, because `running` for a dead process is the one state a caller waits on. The service journals **what it was asked**; `<dataset>_run_metrics` still records **what a run did** — two records, joinable by `engine_run_id`/`config_hash`, deliberately not merged. Both reviewers found real defects: the operator's journal path was relayed into an HTTP 500 body (a Volume path would disclose catalog and schema to an unauthenticated caller), a chained pydantic error carried the malformed line, and a tolerated truncated tail was never *repaired* — so the next append welded onto it and the service stopped starting, blaming a second writer that never existed | 1207 default (+20 from `tests/test_service_run_journal.py`), 56 gates unchanged; driven over real HTTP across a killed process **and** a kill mid-run |
 
 ### Measured baseline (regenerate with `pii-reduction benchmark`)
 
@@ -1244,17 +1245,28 @@ and after on the 10k pack, published beside the existing numbers.
 1. **Host the service.** Everything below rung 4 is executed; rung 4 itself has been
    *run* and never *hosted*. A Databricks App is the decided hosting (ADR-0026) and
    needs `create_app` behind a small wrapper plus a `RunStore` carrying the Databricks
-   runtime. Blocked on the same Databricks CLI issue as `bundle deploy` unless the App
-   is created through the workspace UI, which is untried. **This is the increment that
-   turns a decision into a deployment**, and it has two exit conditions of its own:
-   it is scoped to a **single replica** (see 2), and it must **verify** what the
-   platform actually does about identity (see 3) rather than assume it.
-2. **A durable run store.** Not a follow-up to hosting — part of hosting being
-   correct. The store is process-local, so the first thing a hosted user does
-   (`POST /runs`, then poll `GET /runs/{id}`) returns 404 from a second replica or
-   after a restart. Either the hosting increment states single-replica-and-restarts-
-   forget as a constraint, or this lands with it. The
-   `<dataset>_run_metrics` table is the record that already survives a restart.
+   runtime **and a `--run-journal` on a volume path** (item 2 is now built, so the
+   wrapper has something to pass). Blocked on the same Databricks CLI issue as
+   `bundle deploy` unless the App is created through the workspace UI, which is
+   untried — and the REST Workspace Import route the reference implementation used
+   (`docs/20` §6) is a third option nobody here has tried either. **This is the
+   increment that turns a decision into a deployment**, and it has two exit conditions
+   of its own: it is scoped to a **single replica** (see 2, which now says why in
+   `docs/19`), and it must **verify** what the platform actually does about identity
+   (see 3) rather than assume it.
+2. ~~**A durable run store.**~~ **Done (session 12).** `--run-journal PATH` appends
+   every state transition to a JSON-lines file and loads it at startup, so
+   `GET /runs/{id}` keeps answering across a restart instead of 404-ing a run that
+   happened. Verified over real HTTP by killing the process and starting another over
+   the same journal (200 `succeeded`, same row count and `config_hash`), and — the
+   half that matters more — by killing it **mid-run**, which the next process reports
+   as `failed` / `interrupted` rather than as `running`, the one state a caller waits
+   on. Metadata only by construction (it serializes the same `RunRecord` the API
+   returns); the path is the operator's and no request model can carry one.
+   **Single-replica remains a constraint**, now stated in `docs/19` rather than
+   discovered: two writers would interleave, and the journal refuses to serve a
+   history it cannot fully parse. The `<dataset>_run_metrics` table remains the record
+   of what a run *did* — a different claim from what the service was asked.
 3. **Settle the identity question, in writing and against the platform.** The service
    implements no authentication. Databricks Apps authenticate the end user — but data
    access defaults to the **App's service principal**, and on-behalf-of-user

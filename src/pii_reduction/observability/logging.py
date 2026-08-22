@@ -37,6 +37,10 @@ ALLOWED_FIELDS = frozenset(
         "entities_detected",
         "entities_reduced",
         "rows",
+        #: Run records recovered from a durable journal at service startup. Its own
+        #: key rather than `rows_read`, which means rows of *source data* everywhere
+        #: else — an operator aggregating throughput must not silently mix the two.
+        "runs_recovered",
         "rows_read",
         "rows_written",
         "fields_processed",

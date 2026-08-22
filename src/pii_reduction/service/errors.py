@@ -17,6 +17,7 @@ from pii_reduction.contracts.errors import PiiReductionError
 
 __all__ = [
     "InvalidRequestError",
+    "RunJournalError",
     "RunNotFoundError",
     "RuntimeUnavailableError",
     "ServiceError",
@@ -71,3 +72,16 @@ class RuntimeUnavailableError(ServiceError):
 
     category = "runtime_unavailable"
     status_code = 409
+
+
+class RunJournalError(ServiceError):
+    """The durable run journal cannot be read or written.
+
+    A 500 rather than a 4xx: nothing the caller did caused it, and it is not something
+    a caller can correct. It is deliberately **not** swallowed — a service that
+    silently stops persisting run state answers 404 for real runs after the next
+    restart, which is the failure this journal exists to remove.
+    """
+
+    category = "run_journal_unavailable"
+    status_code = 500

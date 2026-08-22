@@ -747,3 +747,72 @@ so), and no pack benchmark (they need a download).
    one document per (cell, language) is a 4.7× win *and* makes Spark partitioning,
    ordering and intermediate-landing part of the answer. All three produced
    successful, clean-looking runs with wrong output for them, in ~50% of cells.
+
+### Session 12 addendum — pushed, then pickup item 2 built (ADR-0030)
+
+**Pushed.** Seven commits, `7349151..87dae69`, and **CI green on both platforms**
+(run 32568286681) — including the new markup gates and the three-corpus byte-for-byte
+rebuild check.
+
+**Then the durable run store**, pickup item 2, chosen because it is the only part of
+hosting that is pure local code and item 1 is CLI-blocked. `--run-journal PATH` appends
+every run-state transition to JSON lines and reloads it at startup.
+
+**Verified over real HTTP, twice, because the store-level test cannot cross a process
+boundary:**
+
+```
+POST /runs -> 202 pending ; polled -> succeeded rows_read = 102
+--- process killed ---
+after restart GET /runs/{id} -> 200 succeeded rows_read = 102   (was: 404)
+journal states: ['pending', 'running', 'succeeded']
+```
+
+and the half that matters more — killed **mid-run**:
+
+```
+killed mid-run; journal held: ['pending', 'running']
+after restart -> 200 failed / interrupted
+```
+
+**ADR-0030 was written because the reviewer was right that this diverged from a
+recorded direction without one.** The plan said `<dataset>_run_metrics` is the record
+that already survives a restart. True, and insufficient: it cannot see a run submitted
+and never started, refused at shutdown, killed mid-flight, or crashed at second three —
+and it has never heard of a service `run_id`, which is a `uuid4` this layer minted. So:
+the service journals **what it was asked**, the engine records **what a run did**, they
+join on `engine_run_id`/`config_hash`, and `_interrupted` refuses to guess which.
+
+**Both reviewers found real defects again — three of them mine, one of them serious:**
+
+1. **The operator's journal path was relayed into an HTTP 500 body.** Under the plan's
+   own hosting design that path is `/Volumes/<catalog>/<schema>/...`, so a full disk
+   would have handed catalog and schema to an unauthenticated caller. The path now goes
+   to the operator log under `destination`; the body carries the category alone.
+2. **A chained pydantic error carried the malformed line.** That branch fires precisely
+   when the line's provenance is *unknown*. `from None`, and the test now checks the
+   cause and the rendered traceback rather than only the message.
+3. **A tolerated truncated tail was never repaired** — the worst of the three. `record()`
+   appends, so the fragment welds onto the next line, turning a tolerated *trailing*
+   fragment into a malformed line in the *middle*; the next load refuses the whole
+   history, `RunStore.__init__` raises, and the console script exits 2. **The service
+   stops starting**, days after an ordinary crash, blaming a second writer that never
+   existed. The tail is now truncated back to the last complete record, with a test for
+   the crash-then-carry-on sequence.
+4. `interrupted()` duplicated `RunStore.TERMINAL` as a second literal. Moved into the
+   store as `_interrupted`, reading the one definition.
+
+Also from the reviews: `*.jsonl` in `.gitignore` (on the Databricks path
+`RunSummary.outputs` holds real `catalog.schema.table`), `runs_recovered` added to
+`ALLOWED_FIELDS` rather than overloading `rows_read`, `runtime_checkable` dropped
+(it compares method *names*; mypy already checks conformance), and three costs written
+into `docs/19` rather than left to be found — a lost terminal write misreporting a
+success, fsync under the store lock stalling `GET /runs` on a FUSE path, and unbounded
+growth with rotation as the operator's job.
+
+**State:** 1207 default-tier tests (+20), 56 gates unchanged, ruff and `mypy src tests` clean.
+
+**Next:** hosting (item 1) now has something to pass a wrapper — `--run-journal` on a
+volume path. Still blocked on the Databricks CLI unless the App is created through the
+workspace UI, which is untried, or over the REST Workspace Import route the reference
+implementation used (`docs/20` §6), which is also untried.
