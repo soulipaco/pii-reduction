@@ -60,7 +60,47 @@ three switches that move a privacy boundary rather than expressing a preference:
 | `destination.projection` | ADR-0024's grant boundary — `full` keeps the raw columns beside the reduced ones |
 
 A template also declares the menu the caller *does* pick from: which columns, which
-row-id columns, which entity labels, parsers, chains and reducers.
+row-id columns, which entity labels, parsers, chains, reducers — and, since ADR-0034,
+which **parser options**.
+
+### Parser options: the accuracy knobs, offered from the menu (ADR-0034)
+
+The two settings most likely to change a result on somebody's real column are
+`split_lines` (ADR-0016) and `preserve_prefix` (ADR-0032), and until ADR-0034 neither
+was reachable through the API. They are now, under one rule:
+
+> A caller may choose anything whose worst outcome is a **measurable quality result**.
+> A caller may never choose anything whose worst outcome is data in a place, or raw
+> text in a column, that the operator did not sanction.
+
+The five switches in the table above are the second kind and stay server-side. Parser
+options are the first kind, and are offered with three constraints:
+
+1. **A selection, never a free-form value.** `parser_options` is typed
+   `dict[str, bool]`, so a delimiter, a path or a policy name is a 422 before the
+   builder is entered. Only the booleans in `service/knobs.py` are offerable;
+   every other parser option stays template-side.
+2. **The template opts in, per option**, and the default is an empty menu — the
+   operator is the one who knows whether their text wraps mid-sentence.
+3. **A bad combination is refused at build time.** `parser_options` requires `parser`
+   in the same request, and the option must be one that parser accepts, so
+   `split_lines` on a `transcript` column is a `400` here rather than a `201` followed
+   by a failed run.
+
+`GET /templates` reports which parser accepts each offered option, so a client can
+attach a control to the right parser instead of guessing, and `GET /datasets/{name}`
+reports what a saved dataset resolved to.
+
+**Neither option is an improvement, and a client must not present it as one.** Both
+change what the model *sees*: ADR-0032 measured `preserve_prefix` recovering the
+work-note author on one corpus while inventing a false positive on another, and §8's
+Q2 measured the same of `split_lines` twice. The honest framing is "this matches the
+shape of my text".
+
+**Thresholds are deliberately not offered**, even though they are quality knobs: they
+were calibrated on a held-out split and locked, and a slider on a calibrated constant
+invites someone to move a published number by hand. ADR-0034 records the shape that
+would work — named server-side profiles, each with its own measurement.
 
 Templates live in `<configs>/service_templates.yaml`. The shipped one,
 `synthetic_corpus`, is Class A throughout — it points at the committed synthetic
@@ -98,6 +138,13 @@ curl -s localhost:8000/templates
 
 ```bash
 curl -s -X POST localhost:8000/configs -H 'content-type: application/json' -d '{"template":"synthetic_corpus","dataset_name":"my_dataset","row_id":"document_id","columns":[{"column":"text","entities":["EMAIL","PHONE"]}],"save":true}'
+```
+
+With a parser option (ADR-0034) — note that naming the option means naming the parser
+it belongs to:
+
+```bash
+curl -s -X POST localhost:8000/configs -H 'content-type: application/json' -d '{"template":"synthetic_corpus","dataset_name":"my_dataset","row_id":"document_id","columns":[{"column":"text","entities":["EMAIL","PHONE"],"parser":"plain_text","parser_options":{"split_lines":true}}],"save":true}'
 ```
 
 ```bash
@@ -141,9 +188,9 @@ decides, which is what keeps rule 4 true at the last place it could be broken.
 |---|---|---|
 | `GET` | `/health` | version and the runtimes this process offers |
 | `GET` | `/entities` | the entity labels a configuration may name, each with its taxonomy-default replacement and `detected_at_baseline` — `ADDRESS` is in the taxonomy and nothing detects it (ADR-0002). A project's `entities.yaml` may override a replacement; the run uses the override, this endpoint reports the default |
-| `GET` | `/templates` | the menus, and whether each needs Databricks |
+| `GET` | `/templates` | the menus — columns, row ids, entities, parsers, chains, reducers, and which parser accepts each offered parser option (ADR-0034) — plus whether the template needs Databricks |
 | `GET` | `/datasets` | configured dataset names |
-| `GET` | `/datasets/{name}` | row id, types, columns, entities, chain, reducer, projection, per-column failure mode and preservation flag, config hash |
+| `GET` | `/datasets/{name}` | row id, types, columns, entities, chain, reducer, projection, per-column failure mode, preservation flag and resolved parser options, config hash |
 | `POST` | `/configs` | a validated dataset configuration as YAML, optionally saved |
 | `POST` | `/runs` | `202` and a `pending` record |
 | `GET` | `/runs` · `/runs/{id}` | run metadata, newest first |
@@ -174,10 +221,20 @@ the value that was sent: pydantic puts the rejected value in its error dicts and
 framework would serialize it, so the service installs its own handler. Names a caller
 supplies — a template, a dataset, a runtime, an entity label — are pattern-bounded so
 that an unknown one is refused by that handler rather than quoted back in a 404
-message; the field path of an unexpected key is still echoed, which is a key name and
-not a value. Debug mode is off, always
-— a debug traceback in a response body is a display surface carrying whatever the
-exception held.
+message. Debug mode is off, always — a debug traceback in a response body is a display
+surface carrying whatever the exception held.
+
+> **The field path is caller-supplied too, and until session 14 it was echoed raw.**
+> This paragraph used to say the path of an unexpected key "is a key name and not a
+> value". That was wrong: an unknown key is an **unbounded string a caller chose**, and
+> pydantic puts a rejected mapping key into the error location *before* the constraint
+> that rejected it applies. ADR-0034's `parser_options` made that a place callers are
+> meant to send keys — turning "somebody sent junk" into "a client mapped a column's
+> content into an options map" — and the privacy audit demonstrated a 65-character
+> string of synthetic PII coming back verbatim in a 422 body. The handler now renders
+> only path segments that are integers or declared field names, substituting `<key>`
+> for anything else, which also closes the pre-existing `extra="forbid"` route. Both
+> directions are pinned by test.
 
 ### Why the column menu is hand-written
 

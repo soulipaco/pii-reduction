@@ -20,7 +20,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from pii_reduction.config import known_labels
 from pii_reduction.config.errors import ConfigurationError
@@ -33,6 +40,10 @@ from pii_reduction.config.models import (
 )
 from pii_reduction.config.registries import KNOWN_PARSERS, KNOWN_REDUCERS
 from pii_reduction.service.catalog import requires_databricks
+from pii_reduction.service.knobs import (
+    OFFERABLE_OPTION_NAMES,
+    OFFERABLE_PARSER_OPTIONS,
+)
 
 __all__ = [
     "TEMPLATES_FILE",
@@ -85,6 +96,14 @@ class DatasetTemplate(BaseModel):
     #: Empty means every chain the project defines.
     provider_chains: tuple[str, ...] = ()
     reducers: tuple[str, ...] = tuple(sorted(KNOWN_REDUCERS))
+    #: Parser option **names** a caller may set, per ADR-0034. Empty — the default —
+    #: means none: a template must opt in, one option at a time, because the operator
+    #: is the one who knows whether their text wraps mid-sentence.
+    #:
+    #: Only booleans cross HTTP (`service/knobs.py`). A parser option that takes
+    #: a delimiter, a length or a policy name stays template-side, so no free-form
+    #: string ever reaches a parser through a request.
+    parser_options: tuple[str, ...] = ()
     #: Server-side privacy switches. A caller cannot reach these.
     processing: ProcessingOverrides | None = None
     language: LanguageOverrides | None = None
@@ -104,6 +123,32 @@ class DatasetTemplate(BaseModel):
     def _known_entities(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return _all_known(value, known_labels(), what="entity label")
 
+    @field_validator("parser_options")
+    @classmethod
+    def _offerable_parser_options(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return _all_known(value, OFFERABLE_OPTION_NAMES, what="offerable parser option")
+
+    @model_validator(mode="after")
+    def _options_match_the_offered_parsers(self) -> DatasetTemplate:
+        """Every offered option must be accepted by at least one offered parser.
+
+        `check_template_chains` already applies this principle across files; this is
+        the same failure within one. Without it a template offering `preserve_prefix`
+        beside a `plain_text`-only parser list loads, advertises the option through
+        `GET /templates`, and hands a 400 to every caller who picks it — an operator's
+        error deferred to a caller, which `_all_known`'s docstring is written against.
+        """
+        accepted: set[str] = set()
+        for parser in self.parsers:
+            accepted |= OFFERABLE_PARSER_OPTIONS.get(parser, frozenset())
+        orphaned = sorted(set(self.parser_options) - accepted)
+        if orphaned:
+            raise ValueError(
+                f"parser_option(s) {', '.join(orphaned)} are accepted by no parser this "
+                f"template offers (parsers: {', '.join(sorted(self.parsers)) or 'none'})"
+            )
+        return self
+
     @property
     def requires_databricks(self) -> bool:
         """True when running this template needs a Spark session."""
@@ -117,6 +162,9 @@ class DatasetTemplate(BaseModel):
 
     def offered_reducers(self) -> tuple[str, ...]:
         return tuple(sorted(self.reducers))
+
+    def offered_parser_options(self) -> tuple[str, ...]:
+        return tuple(sorted(self.parser_options))
 
 
 def check_template_chains(

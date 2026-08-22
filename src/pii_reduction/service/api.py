@@ -21,6 +21,7 @@ Three things this file does that are load-bearing rather than incidental:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Annotated
 
@@ -42,6 +43,7 @@ from pii_reduction.service.catalog import (
     load_dataset,
 )
 from pii_reduction.service.errors import ServiceError
+from pii_reduction.service.knobs import OFFERABLE_PARSER_OPTIONS
 from pii_reduction.service.models import (
     DATASET_NAME_PATTERN,
     RUN_ID_PATTERN,
@@ -64,6 +66,32 @@ from pii_reduction.service.templates import (
 )
 
 __all__ = ["create_app"]
+
+
+#: A location part safe to put in an error body: a field name this service declared.
+#: Deliberately narrower than `_NAME_PATTERN` — a *path* segment never legitimately
+#: contains a dot, which would make the joined path ambiguous as well as leaky.
+_SAFE_LOC_PART = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+#: What a caller-supplied key is replaced with. Says *where* the error is without
+#: saying what was sent, which is the whole contract of the 422 handler.
+REDACTED_LOC_PART = "<key>"
+
+
+def _safe_loc_part(part: object) -> str:
+    """One segment of a pydantic error location, safe to show.
+
+    An index is a number the caller did not choose. A declared field name is one this
+    service published. **Anything else is a caller-supplied mapping key** — pydantic
+    puts it in `loc` before the constraint that rejected it applies — and is replaced
+    rather than echoed, however harmless it looks: a request body is Class B from the
+    moment it exists (`docs/09`, *the inbound half*), and the service cannot know what
+    a client put in a key by mistake.
+    """
+    if isinstance(part, int):
+        return str(part)
+    text = str(part)
+    return text if _SAFE_LOC_PART.match(text) else REDACTED_LOC_PART
 
 
 def _error(status_code: int, category: str, message: str) -> JSONResponse:
@@ -106,6 +134,19 @@ def _template_summary(
         parsers=template.offered_parsers(),
         provider_chains=template.provider_chains or project_chains,
         reducers=template.offered_reducers(),
+        # Which parser accepts each offered option, so a UI can attach a toggle to
+        # the right parser instead of guessing — and so a template offering
+        # `split_lines` alongside a transcript-only parser list is visibly wrong.
+        parser_options={
+            option: tuple(
+                sorted(
+                    parser
+                    for parser in template.offered_parsers()
+                    if option in OFFERABLE_PARSER_OPTIONS.get(parser, frozenset())
+                )
+            )
+            for option in template.offered_parser_options()
+        },
         requires_databricks=template.requires_databricks,
     )
 
@@ -165,9 +206,18 @@ def create_app(configs_dir: Path, *, store: RunStore) -> FastAPI:
         the reason, which is everything they need to fix the request, and none of
         what they sent — because the service cannot know that a field a caller
         misused did not contain text.
+
+        **The path itself is caller-supplied wherever a request field is a mapping.**
+        Pydantic puts a rejected *dict key* into ``loc``, before the key's own pattern
+        constraint is what rejected it — so joining ``loc`` raw reflects an unbounded
+        string. That was already true of an `extra="forbid"` typo; ADR-0034's
+        `parser_options` made it a place a caller is *meant* to send keys, which turns
+        "somebody sent junk" into "a client mapped a column's content into an options
+        map". `_safe_loc_part` is why the docstring above is true of the path as well
+        as the value.
         """
         fields = "; ".join(
-            f"{'.'.join(str(part) for part in error['loc']) or '<root>'}: {error['msg']}"
+            f"{'.'.join(_safe_loc_part(part) for part in error['loc']) or '<root>'}: {error['msg']}"
             for error in exc.errors()
         )
         # The literal, not `status.HTTP_422_*`: Starlette renamed the constant and

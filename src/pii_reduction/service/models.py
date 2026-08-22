@@ -83,6 +83,10 @@ class TemplateSummary(ServiceModel):
     parsers: tuple[str, ...] = ()
     provider_chains: tuple[str, ...] = ()
     reducers: tuple[str, ...] = ()
+    #: Parser options this template lets a caller set, and which parser accepts each
+    #: (ADR-0034). A UI renders these as toggles; an empty mapping means the template
+    #: offers none, which is the default. The value is the *menu*, never a setting.
+    parser_options: dict[str, tuple[str, ...]] = Field(default_factory=dict)
     #: True when this template's source or destination needs a Spark session, so a
     #: caller learns *before* triggering that it needs the Databricks runtime.
     requires_databricks: bool = False
@@ -109,6 +113,16 @@ class ColumnRequest(ServiceModel):
     parser: str | None = Field(default=None, pattern=_NAME_PATTERN)
     provider_chain: str | None = Field(default=None, pattern=_NAME_PATTERN)
     reducer: str | None = Field(default=None, pattern=_NAME_PATTERN)
+    #: Parser options, from the template's own menu (ADR-0034).
+    #:
+    #: **`bool` values, not `Any`.** The annotation is the guard: pydantic refuses a
+    #: string, a list or a number here before the builder is reached, so a request
+    #: cannot deliver a delimiter, a path or a policy name into a parser. Which
+    #: *names* are permitted is the template's decision, checked by the builder —
+    #: this type only fixes the shape of a value.
+    parser_options: dict[Annotated[str, Field(pattern=_NAME_PATTERN)], bool] = Field(
+        default_factory=dict
+    )
 
 
 class BuildConfigRequest(ServiceModel):
@@ -148,6 +162,16 @@ class ColumnSummary(ServiceModel):
     #: replacement workflow of `AGENTS.md` rule 4.
     failure_mode: str
     preserve_original: bool
+    #: Resolved parser options, so a caller can see what a saved dataset actually
+    #: does rather than what it was asked for.
+    #:
+    #: **`bool`, and only the options the API governs.** A dataset YAML is
+    #: hand-writable and the engine types its options `Any`, so a template-side option
+    #: could hold a delimiter list or an operator's free text; this field reports the
+    #: governed subset, which keeps the model metadata-only by *shape* rather than by
+    #: trusting a file. It also means `GET /datasets/{name}` and `POST /configs` speak
+    #: the same dialect — what comes back can be sent again.
+    parser_options: dict[str, bool] = Field(default_factory=dict)
 
 
 class DatasetSummary(ServiceModel):

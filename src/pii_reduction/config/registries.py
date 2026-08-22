@@ -18,6 +18,7 @@ __all__ = [
     "KNOWN_LANGUAGE_DETECTORS",
     "KNOWN_OVERLAP_POLICIES",
     "KNOWN_PARSERS",
+    "KNOWN_PARSER_OPTIONS",
     "KNOWN_PROVIDER_TYPES",
     "KNOWN_REDUCERS",
     "KNOWN_SOURCE_TYPES",
@@ -26,6 +27,35 @@ __all__ = [
 #: Increment A2; ``key_value`` added in session 5 (ADR-0016). ``note_history``
 #: remains deferred (plan §5, §6).
 KNOWN_PARSERS = frozenset({"plain_text", "transcript", "key_value"})
+
+#: Every option name each parser accepts, so a typo in a dataset YAML's
+#: ``parser_options`` is a configuration error rather than a ``ParserError`` raised
+#: when the pipeline is built — which is after the source has been resolved and,
+#: on the Databricks path, after a session exists (ADR-0034).
+#:
+#: Restated rather than imported, exactly like ``KNOWN_PARSERS`` above and for the
+#: same reason: ``config`` stays free of ``parsers``. The duplication is pinned by
+#: ``tests/test_parsers.py``, which asserts this table equals each parser's real
+#: ``DEFAULT_OPTIONS`` keys — an equality in both directions, so a new option fails
+#: the test rather than passing unnoticed.
+#:
+#: **This is validity, not policy.** Which of these a *service caller* may set is a
+#: separate and much smaller question, answered by
+#: ``service/templates.py``'s ``OFFERABLE_PARSER_OPTIONS``.
+KNOWN_PARSER_OPTIONS: dict[str, frozenset[str]] = {
+    "plain_text": frozenset({"split_lines"}),
+    "transcript": frozenset(
+        {
+            "fallback",
+            "line_mode",
+            "max_speaker_length",
+            "max_speaker_words",
+            "preserve_prefix",
+            "speaker_delimiters",
+        }
+    ),
+    "key_value": frozenset({"key_delimiters", "max_key_length", "max_key_words", "preserve_key"}),
+}
 
 #: Increment A4. ``mask`` and ``pseudonymize`` were pulled forward from roadmap
 #: Phase 8 by explicit decision (ADR-0013).

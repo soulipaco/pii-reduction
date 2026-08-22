@@ -16,8 +16,10 @@ from __future__ import annotations
 import inspect
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, get_args, get_origin
 
 import pytest
 from fastapi.routing import APIRoute
@@ -212,3 +214,120 @@ class TestTheRoutingSurface:
             "/runs",
             "/runs/{run_id}",
         } <= paths
+
+
+class TestRequestFieldTypesAreBounded:
+    """The guard the name-based test above cannot be: what a field's *type* admits.
+
+    `test_no_model_has_a_field_that_could_hold_content` matches field **names**
+    against a forbidden vocabulary. That catches `text`, `body`, `content` — and is
+    blind to a field called `parser_options` whose values are `str`, or `Any`, or
+    `object`. ADR-0034 added the first `dict` to a request model, and the claim it
+    rests on ("the annotation is the guard") was true of the runtime and pinned by
+    nothing general.
+
+    So: every leaf type reachable from a **request** model must be one a caller cannot
+    put prose in. A bare `str` is allowed only with a `pattern` constraint, which is
+    what bounds every name this API accepts. `Any` and `object` are never allowed.
+
+    Responses are deliberately out of scope. They carry operator-authored
+    configuration — paths, table types, error categories — which is bounded by
+    `docs/09`'s *Safe to log* rule rather than by a pattern, and applying this rule to
+    them would forbid `ErrorBody.message`.
+    """
+
+    #: Leaf types a request field may use. `bool`/`int`/`datetime`/`StrEnum` cannot
+    #: hold prose; `str` is admitted only when a pattern constrains it (checked below).
+    ALLOWED_LEAVES = (bool, int, float, str, datetime, type(None))
+
+    @staticmethod
+    def _request_models() -> list[type[BaseModel]]:
+        found = [
+            model
+            for model in _service_models()
+            if model.__name__.endswith("Request") and model.__name__ != "ServiceModel"
+        ]
+        assert len(found) >= 3, f"expected the request models, found {len(found)}"
+        return found
+
+    def _leaves(self, annotation: object) -> list[object]:
+        """Every concrete type inside an annotation, unwrapping generics and unions.
+
+        `Annotated[str, Field(...)]` is unwrapped to its **first** argument only: the
+        rest are constraint objects, and treating them as types would report every
+        pattern-constrained field as unbounded — the opposite of the truth.
+        """
+        origin = get_origin(annotation)
+        if origin is None:
+            return [annotation]
+        args = get_args(annotation)
+        if origin is Annotated:
+            return self._leaves(args[0])
+        return [leaf for arg in args for leaf in self._leaves(arg)]
+
+    def test_no_request_field_admits_an_unbounded_value(self) -> None:
+        offenders: list[str] = []
+        for model in self._request_models():
+            for field_name, field in model.model_fields.items():
+                for leaf in self._leaves(field.annotation):
+                    if isinstance(leaf, type) and issubclass(leaf, (StrEnum, BaseModel)):
+                        continue
+                    if leaf is Ellipsis or leaf is None:
+                        continue
+                    if leaf not in self.ALLOWED_LEAVES:
+                        offenders.append(f"{model.__name__}.{field_name}: {leaf!r}")
+        assert offenders == [], (
+            "a request model gained a field whose type admits an unbounded value "
+            "(ADR-0034 rule 1: a caller's choice is a selection, never a free-form "
+            f"value). Bound it, or extend ALLOWED_LEAVES with the reason: {offenders}"
+        )
+
+    def test_every_string_a_request_accepts_is_pattern_bounded(self) -> None:
+        """A bare `str` in a request is the shape ADR-0034 rule 1 exists to prevent.
+
+        Every string this API accepts is a *name* — of a template, a dataset, a
+        column, an entity label, a run id — and each is pattern-checked. A `str` with
+        no pattern would be the first one that is not.
+        """
+        unbounded: list[str] = []
+        for model in self._request_models():
+            for field_name, field in model.model_fields.items():
+                if str not in self._leaves(field.annotation):
+                    continue
+                constrained = self._has_pattern(field.metadata) or self._nested_pattern(
+                    field.annotation
+                )
+                if not constrained:
+                    unbounded.append(f"{model.__name__}.{field_name}")
+        assert unbounded == [], f"request string field(s) with no pattern constraint: {unbounded}"
+
+    @staticmethod
+    def _has_pattern(metadata: object) -> bool:
+        """True when a metadata entry carries a regex constraint.
+
+        Pydantic v2 wraps `Field(pattern=...)` in `_PydanticGeneralMetadata`, whose
+        `pattern` attribute holds the expression — reached through `FieldInfo.metadata`
+        rather than sitting on the annotation. Read by attribute rather than by type so
+        an internal rename degrades to "unconstrained" (a failing test) instead of to
+        "constrained" (a silent pass).
+        """
+        for entry in metadata if isinstance(metadata, (list, tuple)) else ():
+            if getattr(entry, "pattern", None) is not None:
+                return True
+        return False
+
+    @classmethod
+    def _nested_pattern(cls, annotation: object) -> bool:
+        """True when a pattern sits on an `Annotated[str, Field(pattern=...)]` inside.
+
+        A tuple item and a dict key carry their constraint on the inner annotation
+        rather than on the outer field, which is where `entities` and `parser_options`
+        put theirs.
+        """
+        for arg in get_args(annotation):
+            for meta in get_args(arg)[1:]:
+                if cls._has_pattern(getattr(meta, "metadata", None)):
+                    return True
+            if cls._nested_pattern(arg):
+                return True
+        return False

@@ -16,6 +16,7 @@ import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
+import httpx
 import pytest
 import yaml
 from fastapi.testclient import TestClient
@@ -490,3 +491,175 @@ class TestTheRunTriggerEndToEnd:
                 assert run_store.wait(submitted["run_id"]).state is RunState.FAILED
         finally:
             run_store.shutdown()
+
+
+class TestParserOptionsCrossTheBoundary:
+    """ADR-0034 over real HTTP: the menu, the happy path, and every refusal.
+
+    The unit-level rules are in `tests/test_service_parser_options.py`. What is
+    asserted here is that they survive the framework — that a refusal is a 4xx a
+    caller can act on rather than a 500, and that an accepted option reaches the
+    generated configuration.
+    """
+
+    def build(self, client: TestClient, **column: object) -> httpx.Response:
+        response: httpx.Response = client.post(
+            "/configs",
+            json={
+                "template": TEMPLATE,
+                "dataset_name": "opts_dataset",
+                "row_id": "document_id",
+                "columns": [{"column": "text", "entities": ["PERSON"], **column}],
+            },
+        )
+        return response
+
+    def test_the_template_advertises_which_parser_takes_which_option(
+        self, client: TestClient
+    ) -> None:
+        summary = next(t for t in client.get("/templates").json() if t["name"] == TEMPLATE)
+        assert summary["parser_options"] == {
+            "preserve_prefix": ["transcript"],
+            "split_lines": ["plain_text"],
+        }
+
+    def test_an_offered_option_reaches_the_built_configuration(self, client: TestClient) -> None:
+        response = self.build(client, parser="plain_text", parser_options={"split_lines": True})
+        assert response.status_code == 201, response.text
+        assert "split_lines: true" in response.json()["config_yaml"]
+
+    def test_the_other_option_reaches_it_too_on_its_own_parser(self, client: TestClient) -> None:
+        response = self.build(
+            client, parser="transcript", parser_options={"preserve_prefix": False}
+        )
+        assert response.status_code == 201, response.text
+        assert "preserve_prefix: false" in response.json()["config_yaml"]
+
+    def test_an_option_on_the_wrong_parser_is_refused_here_not_at_run_time(
+        self, client: TestClient
+    ) -> None:
+        """The defect this check exists to prevent: a 201 followed by a failed run."""
+        response = self.build(client, parser="transcript", parser_options={"split_lines": True})
+        assert response.status_code == 400, response.text
+        assert "does not offer" in response.json()["error"]["message"]
+
+    def test_options_without_a_parser_are_refused(self, client: TestClient) -> None:
+        response = self.build(client, parser_options={"split_lines": True})
+        assert response.status_code == 400, response.text
+        assert "requires 'parser'" in response.json()["error"]["message"]
+
+    def test_an_unknown_option_is_refused(self, client: TestClient) -> None:
+        response = self.build(
+            client, parser="plain_text", parser_options={"max_speaker_words": True}
+        )
+        assert response.status_code == 400, response.text
+
+    def test_a_non_boolean_value_is_a_422_that_does_not_echo_it(self, client: TestClient) -> None:
+        """A delimiter string must not reach a parser, and must not come back either.
+
+        The 422 handler is deliberately silent about what was sent (ADR-0026): a
+        request body is Class B from the moment it exists, and a framework's default
+        validation error quotes the offending input straight back.
+        """
+        response = self.build(client, parser="plain_text", parser_options={"split_lines": "; DROP"})
+        assert response.status_code == 422, response.text
+        assert "DROP" not in response.text
+
+    def test_a_caller_supplied_key_is_not_echoed_either(self, client: TestClient) -> None:
+        """The half the value test does not cover, and the one that was leaking.
+
+        Pydantic puts a rejected value in `input` — which the handler discards — but a
+        rejected **dict key** in `loc`, which the handler joins into the message.
+        `parser_options` is the first request field where a caller supplies keys, so a
+        client that mapped a column's content into an options map would have had that
+        content reflected verbatim, unbounded, in a 422 body. Found by the privacy
+        audit; the value-only test above passed throughout.
+        """
+        marker = "CANARY please call Ada Okonkwo on 0000 000 0000 about her account"
+        response = self.build(client, parser="plain_text", parser_options={marker: True})
+        assert response.status_code == 422, response.text
+        assert "CANARY" not in response.text
+        assert "Okonkwo" not in response.text
+        # It still says *where* the error is, which is what a caller needs.
+        assert "parser_options" in response.json()["error"]["message"]
+
+    def test_an_unexpected_top_level_key_is_not_echoed_either(self, client: TestClient) -> None:
+        """The pre-existing route the same fix closes.
+
+        `extra="forbid"` reflects an unknown key the same way. `docs/19` had accepted
+        that as "a key name and not a value"; an unbounded key *is* a value.
+        """
+        marker = "CANARY-Ada-Okonkwo-0000-000-0000"
+        response = client.post(
+            "/configs",
+            json={
+                "template": TEMPLATE,
+                "dataset_name": "echo_check",
+                "row_id": "document_id",
+                "columns": [{"column": "text", "entities": ["PERSON"]}],
+                marker: 1,
+            },
+        )
+        assert response.status_code == 422, response.text
+        assert "CANARY" not in response.text
+
+    def test_a_saved_dataset_reports_the_options_it_resolved(self, client: TestClient) -> None:
+        built = client.post(
+            "/configs",
+            json={
+                "template": TEMPLATE,
+                "dataset_name": "opts_saved",
+                "row_id": "document_id",
+                "columns": [
+                    {
+                        "column": "text",
+                        "entities": ["PERSON"],
+                        "parser": "plain_text",
+                        "parser_options": {"split_lines": True},
+                    }
+                ],
+                "save": True,
+            },
+        )
+        assert built.status_code == 201, built.text
+        summary = client.get("/datasets/opts_saved")
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["columns"][0]["parser_options"] == {"split_lines": True}
+
+    def test_a_configuration_carrying_an_option_actually_runs(
+        self, client: TestClient, store: RunStore
+    ) -> None:
+        """The claim the pre-flight check is worth anything: 201 means it will run.
+
+        Everything else in this class asserts a refusal. This asserts the accepting
+        direction end to end — build with `split_lines`, save, trigger, succeed — so
+        a passing build cannot quietly mean a run that dies when the pipeline
+        constructs the parser.
+        """
+        built = client.post(
+            "/configs",
+            json={
+                "template": TEMPLATE,
+                "dataset_name": "opts_runnable",
+                "row_id": "document_id",
+                "columns": [
+                    {
+                        "column": "text",
+                        "entities": ["EMAIL", "PHONE"],
+                        "parser": "plain_text",
+                        "provider_chain": "deterministic_only",
+                        "parser_options": {"split_lines": True},
+                    }
+                ],
+                "save": True,
+            },
+        )
+        assert built.status_code == 201, built.text
+
+        accepted = client.post("/runs", json={"dataset": "opts_runnable", "runtime": "local"})
+        assert accepted.status_code == 202, accepted.text
+        finished = store.wait(accepted.json()["run_id"])
+        assert finished.state is RunState.SUCCEEDED
+        assert finished.summary is not None
+        assert finished.summary.rows_read == 102
+        assert finished.summary.fields_failed == 0

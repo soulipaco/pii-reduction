@@ -19,6 +19,7 @@ from pii_reduction.config.registries import (
 )
 from pii_reduction.config.resolved import ResolvedDataset
 from pii_reduction.service.errors import UnknownDatasetError
+from pii_reduction.service.knobs import OFFERABLE_OPTION_NAMES
 from pii_reduction.service.models import ColumnSummary, DatasetSummary
 
 __all__ = [
@@ -174,6 +175,21 @@ def describe_dataset(config: ResolvedDataset) -> DatasetSummary:
                 language_mode=str(policy.language.mode.value),
                 failure_mode=str(policy.failure_mode.value),
                 preserve_original=policy.preserve_original,
+                # **Only the options the API governs, and only boolean values.**
+                #
+                # A dataset YAML is hand-writable and `DatasetConfig.parser_options`
+                # is `dict[str, Any]`, so a template-side option can hold a delimiter
+                # list, a length, or a key that is not a parser option at all. This
+                # endpoint is metadata-only by *shape*, not by filtering (ADR-0026),
+                # and an unconstrained operator string echoed from a file is the one
+                # way that could stop being true. Reporting the governed subset keeps
+                # the claim exact: these are the knobs a caller can set, so these are
+                # the knobs a caller is shown.
+                parser_options={
+                    option: value
+                    for option, value in sorted(policy.parser_options.items())
+                    if option in OFFERABLE_OPTION_NAMES and isinstance(value, bool)
+                },
             )
             for policy in config.columns
         ),

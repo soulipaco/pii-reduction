@@ -45,6 +45,19 @@ templates:
     # the presidio extra plus its models — listing an entity does not make a chain
     # capable of it.
     provider_chains: [deterministic_only, deterministic_presidio]
+    # Parser options a caller may set (ADR-0034). Opt-in per option, and both of these
+    # change what the *model sees* rather than only what is in scope — so neither is
+    # an improvement, and a surface must not present them as one:
+    #
+    #   split_lines      (plain_text, ADR-0016)  right for line-structured records,
+    #                    wrong for prose that wraps mid-sentence
+    #   preserve_prefix  (transcript, ADR-0032)  `false` puts a named speaker in
+    #                    scope; measured to cost PERSON precision where speakers are
+    #                    roles
+    #
+    # Offered here because this corpus contains both shapes and is the one a caller
+    # can experiment on safely: it is Class A synthetic throughout.
+    parser_options: [split_lines, preserve_prefix]
     processing:
       preserve_original: true
       # Fail-closed (ADR-0023). Stated rather than inherited, because this is the
@@ -76,6 +89,11 @@ templates:
 #    row_id_columns: [number]
 #    entities: [PERSON, EMAIL, PHONE]
 #    provider_chains: [deterministic_presidio]
+#    # Offer nothing here until you have measured it on YOUR text. `split_lines` is
+#    # right for a work-notes column of line-structured entries and wrong for a
+#    # description column of wrapped prose, and only your data says which you have
+#    # (ADR-0034). Omitting the key means callers cannot set either.
+#    parser_options: []
 #    processing:
 #      preserve_original: true
 #      failure_mode: quarantine_row

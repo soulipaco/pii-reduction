@@ -29,6 +29,7 @@ from pii_reduction.config.registries import (
     KNOWN_DESTINATION_TYPES,
     KNOWN_LANGUAGE_DETECTORS,
     KNOWN_OVERLAP_POLICIES,
+    KNOWN_PARSER_OPTIONS,
     KNOWN_PARSERS,
     KNOWN_PROVIDER_TYPES,
     KNOWN_REDUCERS,
@@ -340,6 +341,20 @@ def _resolve_column(
         raise ConfigurationError(
             f"{context}provider chain {chain_name!r} is not defined "
             f"(defined: {_known(frozenset(project.chains))})"
+        )
+
+    # A parser option the parser does not know is refused **here**, not when the
+    # pipeline constructs the parser (ADR-0034). Before this check a typo in a
+    # dataset YAML survived every validation the config layer performs and surfaced
+    # as a `ParserError` after the source had been resolved — on the Databricks path,
+    # after a Spark session existed. `describe`, `run`, the driver and the service all
+    # reach this function, so all four gain the check at once.
+    unknown_options = sorted(set(column.parser_options) - KNOWN_PARSER_OPTIONS.get(parser, set()))
+    if unknown_options:
+        raise ConfigurationError(
+            f"{context}parser {parser!r} has no parser_option(s) "
+            f"{', '.join(unknown_options)} "
+            f"(known: {_known(KNOWN_PARSER_OPTIONS.get(parser, frozenset()))})"
         )
 
     language = project.language.merged(dataset.language).merged(column.language)

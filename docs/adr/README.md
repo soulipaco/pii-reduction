@@ -40,3 +40,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0031](0031-a-source-can-be-asked-what-it-has.md) | `SourceAdapter.schema()` — column names **without reading the rows**, so a picker or a config check costs a metastore lookup rather than a table scan |
 | [0032](0032-the-speaker-prefix-stays-preserved-by-default.md) | The speaker prefix stays **preserved by default**; `preserve_prefix: false` is the ruled, measured opt-in for transcripts whose speakers are people |
 | [0033](0033-batched-detection-within-a-row.md) | Detection batches **within a row** (1.6–1.8× on multi-segment columns, output-identical); across rows is refused because it would break ADR-0023's per-row quarantine |
+| [0034](0034-what-a-caller-may-choose.md) | A caller may move a **quality** knob (now including parser options, from a template's menu) and never a **privacy boundary**; a choice is always a selection, never a free-form value |

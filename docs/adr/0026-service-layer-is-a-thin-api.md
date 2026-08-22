@@ -1,6 +1,6 @@
 # ADR-0026: the service layer is a thin HTTP API, and a Databricks App is how it gets hosted
 
-**Status:** accepted · **Date:** 2026-08-21 · **Session:** 11
+**Status:** accepted · **Extended by [ADR-0034](0034-what-a-caller-may-choose.md)** (which knobs a caller may move, and which stay server-side) · **Date:** 2026-08-21 · **Session:** 11
 
 ## Context
 

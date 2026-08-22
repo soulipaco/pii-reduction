@@ -28,6 +28,7 @@ from pii_reduction.config.models import DatasetConfig, ProjectConfig
 from pii_reduction.config.resolved import ResolvedDataset
 from pii_reduction.service.catalog import taken_dataset_names
 from pii_reduction.service.errors import InvalidRequestError, UnknownTemplateError
+from pii_reduction.service.knobs import OFFERABLE_PARSER_OPTIONS
 from pii_reduction.service.models import (
     DATASET_NAME_RE,
     BuildConfigRequest,
@@ -96,6 +97,34 @@ def _column_payload(
         payload["provider_chain"] = _require_on_menu(
             request.provider_chain, offered, what="provider chain", template=template.name
         )
+    if request.parser_options:
+        # **The parser must be named in the same request.** Without it the builder
+        # cannot tell whether the option is even valid — `split_lines` on a
+        # `transcript` column is a ParserError raised when the *pipeline* is built,
+        # which would mean a 201 here and a failed run later. A pre-flight check that
+        # accepts a configuration which cannot run is worse than no check (ADR-0031).
+        if request.parser is None:
+            raise InvalidRequestError(
+                f"column {request.column!r}: parser_options requires 'parser' to be set "
+                f"in the same request, because an option is only valid for the parser "
+                f"that defines it"
+            )
+        offered_options = template.offered_parser_options()
+        accepted = OFFERABLE_PARSER_OPTIONS.get(request.parser, frozenset())
+        for option in sorted(request.parser_options):
+            _require_on_menu(option, offered_options, what="parser option", template=template.name)
+            if option not in accepted:
+                raise InvalidRequestError(
+                    f"template {template.name!r} does not offer {option!r} for parser "
+                    f"{request.parser!r}; it offers: "
+                    f"{', '.join(sorted(accepted)) or '(none)'}"
+                )
+        # Sorted so the generated YAML is stable across requests that differ only in
+        # key order — `config_hash` is computed from the resolved configuration and a
+        # reordered mapping must not look like a different run.
+        payload["parser_options"] = {
+            option: request.parser_options[option] for option in sorted(request.parser_options)
+        }
     return payload
 
 

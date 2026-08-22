@@ -26,6 +26,18 @@ Written at the end of session 12 (2026-08-22), for session 13, whose brief is to
 >   `NOTICE` is still not owed because nothing is published.
 >
 > **No published number moved**, and no shipped default changed.
+>
+> ### What came after the finish line, and why that is not the line moving
+>
+> Session 14 began a **new** piece of work — reaching the engine's configuration from
+> the service, and then from a UI — starting with ADR-0034. It is not a Part 4 of this
+> document and it does not reopen anything parked here.
+>
+> The distinction that keeps the finish line still: `v0.1.0` was defined as *the engine
+> complete, measured, and released*, and it is. What follows is **usability of what
+> already ships** — no new detection capability, no new published number, no corpus
+> change. If a later session finds itself changing a benchmark result to make a surface
+> better, that is this document's rule being broken, not extended.
 
 Everything below is either a small piece of work with an exit criterion, or a decision
 to park something explicitly. Nothing here is exploration. If session 13 does only
