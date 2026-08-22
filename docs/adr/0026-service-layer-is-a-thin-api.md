@@ -1,6 +1,6 @@
 # ADR-0026: the service layer is a thin HTTP API, and a Databricks App is how it gets hosted
 
-**Status:** accepted · **Extended by [ADR-0034](0034-what-a-caller-may-choose.md)** (which knobs a caller may move, and which stay server-side) · **Date:** 2026-08-21 · **Session:** 11
+**Status:** accepted · **Extended by [ADR-0034](0034-what-a-caller-may-choose.md)** (which knobs a caller may move) and **[ADR-0035](0035-the-control-panel-ships-with-the-service.md)** (a client now ships with it) · **Date:** 2026-08-21 · **Session:** 11
 
 ## Context
 
@@ -46,9 +46,14 @@ nothing else in v1:
 
 **A Databricks App is the hosting decision, not a second surface.** Databricks Apps
 run an ASGI application directly, so the App's entry point is this API's
-`create_app()` with a Databricks-backed runtime; a UI, if one is ever built, is a
-client of these endpoints. Recorded now so that a later "let's ship the App" is a
-deployment task rather than a rewrite.
+`create_app()` with a Databricks-backed runtime; a UI is a client of these endpoints.
+Recorded now so that a later "let's ship the App" is a deployment task rather than a
+rewrite.
+
+> **One now ships with the package** — ADR-0035, session 14. The rule above is
+> unchanged and is what the panel obeys: it `POST`s to `/configs` rather than
+> assembling YAML, and to `/runs` rather than calling `build_pipeline`. What ADR-0035
+> settles is the question this sentence left open — *which* client, shipped by whom.
 
 Five reasons, in the order they actually decided it:
 

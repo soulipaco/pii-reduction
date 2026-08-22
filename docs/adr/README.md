@@ -41,3 +41,4 @@ decision to be revisited. Produced starting session 2 (2026-08-17); see
 | [0032](0032-the-speaker-prefix-stays-preserved-by-default.md) | The speaker prefix stays **preserved by default**; `preserve_prefix: false` is the ruled, measured opt-in for transcripts whose speakers are people |
 | [0033](0033-batched-detection-within-a-row.md) | Detection batches **within a row** (1.6–1.8× on multi-segment columns, output-identical); across rows is refused because it would break ADR-0023's per-row quarantine |
 | [0034](0034-what-a-caller-may-choose.md) | A caller may move a **quality** knob (now including parser options, from a template's menu) and never a **privacy boundary**; a choice is always a selection, never a free-form value |
+| [0035](0035-the-control-panel-ships-with-the-service.md) | The control panel ships **inside the service** as one static file — no build step, no external request, byte-identical for every caller, and disableable with `--no-ui` |

@@ -518,10 +518,16 @@ class TestParserOptionsCrossTheBoundary:
         self, client: TestClient
     ) -> None:
         summary = next(t for t in client.get("/templates").json() if t["name"] == TEMPLATE)
-        assert summary["parser_options"] == {
-            "preserve_prefix": ["transcript"],
-            "split_lines": ["plain_text"],
-        }
+        offered = summary["parser_options"]
+        assert set(offered) == {"preserve_prefix", "split_lines"}
+        assert offered["preserve_prefix"]["parsers"] == ["transcript"]
+        assert offered["split_lines"]["parsers"] == ["plain_text"]
+        # The engine's defaults, reported so a client renders the truth instead of
+        # remembering it (ADR-0035). These are the parsers' own values.
+        assert offered["preserve_prefix"]["default"] is True
+        assert offered["split_lines"]["default"] is False
+        # And a caption for each, server-side, so a knob cannot ship unexplained.
+        assert all(option["caption"] for option in offered.values())
 
     def test_an_offered_option_reaches_the_built_configuration(self, client: TestClient) -> None:
         response = self.build(client, parser="plain_text", parser_options={"split_lines": True})

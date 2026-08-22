@@ -29,7 +29,10 @@ from pii_reduction.parsers.transcript import DEFAULT_OPTIONS as TRANSCRIPT_OPTIO
 from pii_reduction.service import models as service_models
 from pii_reduction.service.knobs import (
     CONSIDERED_AND_NOT_OFFERED,
+    OFFERABLE_OPTION_NAMES,
     OFFERABLE_PARSER_OPTIONS,
+    OFFERED_OPTION_CAPTIONS,
+    OFFERED_OPTION_DEFAULTS,
 )
 from pii_reduction.service.models import ServiceModel
 from pii_reduction.service.templates import DatasetTemplate
@@ -103,9 +106,42 @@ class TestPolicyIsExplicitForEveryBoolean:
             assert options <= KNOWN_PARSER_OPTIONS[parser_name]
 
     def test_an_option_belongs_to_exactly_one_parser(self) -> None:
-        """What lets the API report one parser per offered option without ambiguity."""
+        """What lets the API report one parser per offered option without ambiguity.
+
+        Also what makes the flat `OFFERED_OPTION_DEFAULTS` and `..._CAPTIONS` tables
+        unambiguous: keying them by option name alone is only correct while this holds.
+        """
         seen = [option for options in OFFERABLE_PARSER_OPTIONS.values() for option in options]
         assert len(seen) == len(set(seen))
+
+    def test_the_reported_default_is_the_engines_own(self) -> None:
+        """By **value**, against each parser's real `DEFAULT_OPTIONS` (ADR-0035).
+
+        The control panel used to keep its own copy of `preserve_prefix: true`. It now
+        renders what `GET /templates` reports, so a wrong value here would be a wrong
+        checkbox — and, because the page sends every offered option explicitly, a
+        saved configuration recording a default the engine no longer has.
+        """
+        assert set(OFFERED_OPTION_DEFAULTS) == OFFERABLE_OPTION_NAMES
+        for parser_name, options in OFFERABLE_PARSER_OPTIONS.items():
+            for option in options:
+                assert OFFERED_OPTION_DEFAULTS[option] is REAL_OPTIONS[parser_name][option]
+
+    def test_every_offered_option_has_a_caption(self) -> None:
+        """So a third knob cannot ship as a bare toggle nobody can interpret.
+
+        Server-side because `docs/19` requires these to describe the *shape of text an
+        option suits* rather than to recommend one, and a caption a client writes is a
+        caption nobody reviewed.
+        """
+        assert set(OFFERED_OPTION_CAPTIONS) == OFFERABLE_OPTION_NAMES
+        for option, caption in OFFERED_OPTION_CAPTIONS.items():
+            assert len(caption) > 40, option
+            # The framing rule, as a blunt check: an option is a match for a shape of
+            # text, never an improvement.
+            lowered = caption.lower()
+            for word in ("better", "improve", "recommended", "should enable"):
+                assert word not in lowered, f"{option} caption recommends: {word}"
 
 
 class TestTheTemplateMenu:

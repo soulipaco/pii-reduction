@@ -123,11 +123,11 @@ EXEMPT_FIELDS = {
 
 
 @contextmanager
-def _app() -> Iterator[Any]:
+def _app(ui: bool = True) -> Iterator[Any]:
     """The shipped configuration, with a store nothing submits to."""
     store = RunStore({"local": local_runtime})
     try:
-        yield create_app(REPO_ROOT / "configs", store=store)
+        yield create_app(REPO_ROOT / "configs", store=store, ui=ui)
     finally:
         store.shutdown()
 
@@ -176,6 +176,14 @@ class TestModelsCannotCarryText:
 
 
 class TestTheRoutingSurface:
+    #: Routes that legitimately have no response model, by exact path and with the
+    #: reason. The control panel (ADR-0035) serves one static asset compiled into the
+    #: wheel — identical for every caller, interpolating nothing, and describing no
+    #: contract a client codes against, which is why it is also out of the OpenAPI
+    #: schema. Anything else appearing here is a metadata endpoint that lost its
+    #: declared shape, which is the hole this test exists to keep shut.
+    UI_ROUTES = frozenset({"/", "/ui"})
+
     def test_every_route_declares_a_response_model(self) -> None:
         """A route with no `response_model` is a route with no enforced shape.
 
@@ -187,9 +195,38 @@ class TestTheRoutingSurface:
             undeclared = [
                 route.path
                 for route in app.routes
-                if isinstance(route, APIRoute) and route.response_model is None
+                if isinstance(route, APIRoute)
+                and route.response_model is None
+                and route.path not in self.UI_ROUTES
             ]
         assert undeclared == [], f"routes with no response model: {undeclared}"
+
+    def test_the_exempt_routes_are_only_the_control_panel(self) -> None:
+        """The exemption must not quietly cover a route somebody adds next to it.
+
+        Asserted as an equality against what the app actually exposes, so removing
+        the UI or adding a third HTML route both fail here.
+        """
+        with _app() as app:
+            exempt = {
+                route.path
+                for route in app.routes
+                if isinstance(route, APIRoute) and route.response_model is None
+            }
+        assert exempt == self.UI_ROUTES
+
+    def test_the_control_panel_is_absent_from_the_api_schema(self) -> None:
+        """The schema describes the API. A page is not part of it."""
+        with _app() as app:
+            assert set(app.openapi()["paths"]) & self.UI_ROUTES == set()
+
+    def test_the_service_can_be_started_without_it(self) -> None:
+        """`--no-ui`: an HTML surface is a decision an operator may decline."""
+        with _app(ui=False) as app:
+            paths = {route.path for route in app.routes if isinstance(route, APIRoute)}
+        assert paths & self.UI_ROUTES == set()
+        # And the API is unchanged by its absence.
+        assert "/health" in paths and "/configs" in paths
 
     def test_no_route_offers_content(self) -> None:
         with _app() as app:

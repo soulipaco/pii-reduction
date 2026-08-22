@@ -25,6 +25,8 @@ __all__ = [
     "CONSIDERED_AND_NOT_OFFERED",
     "OFFERABLE_OPTION_NAMES",
     "OFFERABLE_PARSER_OPTIONS",
+    "OFFERED_OPTION_CAPTIONS",
+    "OFFERED_OPTION_DEFAULTS",
 ]
 
 #: Boolean parser options a template may put on a caller's menu, by parser.
@@ -65,3 +67,43 @@ CONSIDERED_AND_NOT_OFFERED: dict[str, frozenset[str]] = {
 
 #: Every option name any parser will accept from a caller, flattened.
 OFFERABLE_OPTION_NAMES: frozenset[str] = frozenset().union(*OFFERABLE_PARSER_OPTIONS.values())
+
+#: The engine's own default for each offered option, so a **client does not have to
+#: remember it** (ADR-0035).
+#:
+#: Without this the control panel kept its own copy — `preserve_prefix` pre-ticked
+#: because that is what ADR-0032 ruled — and a saved configuration would then record
+#: the *page's* belief rather than the engine's. If a default ever changes, a page that
+#: remembers is a page that silently overrides. Reported through `GET /templates`, so
+#: the client renders what is true rather than what it was told once.
+#:
+#: Flat because an option name belongs to exactly one parser, which is asserted.
+#: Pinned against each parser's real `DEFAULT_OPTIONS` **by value**, so a changed
+#: default fails a test here before it can disagree with a rendered checkbox.
+OFFERED_OPTION_DEFAULTS: dict[str, bool] = {
+    "split_lines": False,
+    "preserve_prefix": True,
+}
+
+#: What each offered option *means*, in the words a surface should use.
+#:
+#: Server-side for the same reason as the defaults, and for one more: `docs/19` says a
+#: client "must not present them as improvements", and a caption a client writes is a
+#: caption nobody reviewed. Each describes the **shape of text the option suits** and
+#: names the error it trades for — never "better".
+#:
+#: A test asserts every offered option has one, so a third knob cannot ship
+#: uncaptioned and be rendered as a bare toggle.
+OFFERED_OPTION_CAPTIONS: dict[str, str] = {
+    "split_lines": (
+        "Treat each line as its own record. Right for line-structured notes and "
+        "exported form fields; wrong for prose that wraps mid-sentence, where a name "
+        "split across the wrap becomes undetectable (ADR-0016)."
+    ),
+    "preserve_prefix": (
+        "Keep the timestamp and speaker label out of scope for detection. Correct when "
+        "the speaker is a role — Customer, Agent — and a leak when it is a person's "
+        "name, such as a work-note author. Turning it off puts that name in scope and "
+        "was measured to cost PERSON precision where speakers are roles (ADR-0032)."
+    ),
+}

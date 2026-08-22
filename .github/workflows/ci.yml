@@ -114,6 +114,16 @@ jobs:
           pii-reduction benchmark --corpus tests/fixtures/markup
           --gates configs/markup_gates.yaml
 
+      - name: Packaged assets are actually in the wheel
+        # The control panel is a non-Python file inside the package (ADR-0035) and the
+        # service reads it at startup, so a wheel without it is a hosted App that fails
+        # to start — discovered at deploy time, on the workspace. Hatchling's file
+        # selection honours .gitignore, so an ordinary ignore line could drop it with
+        # every other test still green. Excluded from the default tier because it
+        # shells out to the build backend; run here because this is the tier that
+        # protects a deploy.
+        run: pytest -q -m packaging
+
       - name: Corpora are reproducible from their seeds
         # The committed corpora are the ground truth every metric above is scored
         # against. If regenerating one from the same seed does not reproduce it byte

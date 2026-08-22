@@ -154,6 +154,22 @@ the shape to copy — the placeholders in it are not a real workspace.
 outputs land, which of them still contain the original text, and the rules for
 running real data through it.
 
+Or drive it from a browser. `pii-reduction-service` serves a **control panel** — pick a
+template, configure the columns, preview the generated YAML, save it, run it, watch the
+run finish:
+
+```bash
+pii-reduction-service --configs configs
+```
+
+Then open `http://127.0.0.1:8000/`. The same page is what a Databricks App serves, and
+it is one static file inside the wheel: no build step, no CDN, nothing to deploy
+separately (ADR-0035). `--no-ui` turns it off and leaves the API unchanged. The
+generated API reference is at `/docs`.
+
+**The panel shows configuration and run metadata, never text** — because no endpoint
+returns any (ADR-0026).
+
 | metric | `deterministic_only` | `deterministic_presidio` |
 |---|---|---|
 | strict F1 | 0.723 | 0.910 |

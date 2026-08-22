@@ -28,7 +28,7 @@ from typing import Annotated
 from fastapi import FastAPI, Request, Response
 from fastapi import Path as PathParam
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from pii_reduction import __version__
@@ -43,7 +43,11 @@ from pii_reduction.service.catalog import (
     load_dataset,
 )
 from pii_reduction.service.errors import ServiceError
-from pii_reduction.service.knobs import OFFERABLE_PARSER_OPTIONS
+from pii_reduction.service.knobs import (
+    OFFERABLE_PARSER_OPTIONS,
+    OFFERED_OPTION_CAPTIONS,
+    OFFERED_OPTION_DEFAULTS,
+)
 from pii_reduction.service.models import (
     DATASET_NAME_PATTERN,
     RUN_ID_PATTERN,
@@ -54,6 +58,7 @@ from pii_reduction.service.models import (
     ErrorBody,
     ErrorResponse,
     HealthResponse,
+    ParserOptionSummary,
     RunRecord,
     RunRequest,
     TemplateSummary,
@@ -92,6 +97,35 @@ def _safe_loc_part(part: object) -> str:
         return str(part)
     text = str(part)
     return text if _SAFE_LOC_PART.match(text) else REDACTED_LOC_PART
+
+
+#: Sent with the control panel, and load-bearing rather than hygiene (ADR-0035).
+#:
+#: **The panel has two state-changing controls** — "Build and save" writes a
+#: configuration file, and "Run" executes under the service's *own* credentials. A
+#: cross-site form cannot reach either (both need a JSON body, which triggers a CORS
+#: preflight), but **clickjacking can**: a hostile page frames `/ui`, overlays it, and
+#: one tricked click from an authenticated operator triggers a run. On a hosted App,
+#: where the platform authenticates with a cookie the browser sends automatically, that
+#: is the confused-deputy shape ADR-0026's server-side templates exist to prevent,
+#: arriving through the browser instead of the request body. `frame-ancestors` and
+#: `X-Frame-Options` close it.
+#:
+#: `connect-src 'self'` also makes ADR-0035's "no external request" property something
+#: the **browser enforces at runtime**, rather than only something a grep test asserts
+#: about the file. `'unsafe-inline'` is required because the page is one file with its
+#: script and style inline — which is the same property that makes it byte-identical
+#: for every caller, so a nonce would have to be generated per request.
+UI_SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self'; "
+        "frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    ),
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
 
 
 def _error(status_code: int, category: str, message: str) -> JSONResponse:
@@ -138,12 +172,16 @@ def _template_summary(
         # the right parser instead of guessing — and so a template offering
         # `split_lines` alongside a transcript-only parser list is visibly wrong.
         parser_options={
-            option: tuple(
-                sorted(
-                    parser
-                    for parser in template.offered_parsers()
-                    if option in OFFERABLE_PARSER_OPTIONS.get(parser, frozenset())
-                )
+            option: ParserOptionSummary(
+                parsers=tuple(
+                    sorted(
+                        parser
+                        for parser in template.offered_parsers()
+                        if option in OFFERABLE_PARSER_OPTIONS.get(parser, frozenset())
+                    )
+                ),
+                default=OFFERED_OPTION_DEFAULTS[option],
+                caption=OFFERED_OPTION_CAPTIONS[option],
             )
             for option in template.offered_parser_options()
         },
@@ -151,7 +189,7 @@ def _template_summary(
     )
 
 
-def create_app(configs_dir: Path, *, store: RunStore) -> FastAPI:
+def create_app(configs_dir: Path, *, store: RunStore, ui: bool = True) -> FastAPI:
     """Build the ASGI application.
 
     Configuration is read **once, at startup**: the project layer and the templates.
@@ -163,6 +201,11 @@ def create_app(configs_dir: Path, *, store: RunStore) -> FastAPI:
     injected rather than discovered. That is what keeps this module free of any
     Databricks import: the wiring lives in `service/cli.py`, and the Databricks
     runtime itself in the one file permitted to name that surface.
+
+    ``ui`` mounts the control panel at ``/`` and ``/ui`` (ADR-0035). It is on by
+    default because a deployment without it is an API with no front door, and
+    switchable off because an HTML surface is a decision an operator may decline.
+    The page is one static file that renders only what this API returns.
     """
     # The directory, not the file: `load_project_config` merges the optional
     # sibling files (entities/providers/languages) only when given the directory,
@@ -269,6 +312,32 @@ def create_app(configs_dir: Path, *, store: RunStore) -> FastAPI:
     # — globbing the dataset directory, reading YAML, writing a config — and a
     # coroutine would do that on the event loop, blocking every other request behind
     # a disk read. Starlette runs a sync endpoint in its threadpool instead.
+
+    if ui:
+        # Read **once, at startup**, like the configuration above: a per-request read
+        # would turn a deleted or unreadable file into a 500 on somebody's first
+        # visit rather than a service that refuses to start. `FileResponse` is
+        # deliberately not used — it would put a filesystem path in the hands of the
+        # framework's error handling, and this is a single file that comfortably fits
+        # in memory.
+        page = (Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+
+        @app.get("/", include_in_schema=False, response_class=HTMLResponse)
+        @app.get("/ui", include_in_schema=False, response_class=HTMLResponse)
+        def control_panel() -> HTMLResponse:
+            """The control panel (ADR-0035).
+
+            `include_in_schema=False` keeps it out of the OpenAPI document: the
+            schema describes the API, and a page is not part of the contract a
+            client codes against.
+
+            **This returns markup, not text**, in the sense `docs/09` governs. The
+            distinction is not a loophole — the file is a static asset compiled into
+            the wheel, identical for every caller, and it interpolates nothing. Every
+            value it displays is fetched by the browser from the same endpoints a
+            `curl` user calls, so this route widens no disclosure.
+            """
+            return HTMLResponse(page, headers=UI_SECURITY_HEADERS)
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

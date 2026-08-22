@@ -30,6 +30,7 @@ __all__ = [
     "ErrorBody",
     "ErrorResponse",
     "HealthResponse",
+    "ParserOptionSummary",
     "RunRecord",
     "RunRequest",
     "RunState",
@@ -83,13 +84,33 @@ class TemplateSummary(ServiceModel):
     parsers: tuple[str, ...] = ()
     provider_chains: tuple[str, ...] = ()
     reducers: tuple[str, ...] = ()
-    #: Parser options this template lets a caller set, and which parser accepts each
-    #: (ADR-0034). A UI renders these as toggles; an empty mapping means the template
-    #: offers none, which is the default. The value is the *menu*, never a setting.
-    parser_options: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+    #: Parser options this template lets a caller set (ADR-0034), each with the
+    #: parsers that accept it and the engine's default. A UI renders these as toggles;
+    #: an empty mapping means the template offers none, which is the default. The value
+    #: is the *menu*, never this dataset's setting.
+    parser_options: dict[str, ParserOptionSummary] = Field(default_factory=dict)
     #: True when this template's source or destination needs a Spark session, so a
     #: caller learns *before* triggering that it needs the Databricks runtime.
     requires_databricks: bool = False
+
+
+class ParserOptionSummary(ServiceModel):
+    """One parser option a template offers, and what it does if left alone.
+
+    `default` is the **engine's** value, reported so a client renders the truth rather
+    than remembering it (ADR-0035). A page that keeps its own copy of a default is a
+    page that silently overrides one when it changes.
+    """
+
+    #: Which of the template's parsers accept this option. A tuple rather than one
+    #: name because nothing in the design forbids two parsers sharing an option name —
+    #: a test notices if that ever becomes true.
+    parsers: tuple[str, ...]
+    default: bool
+    #: What the option means, in words a surface should show. Server-side because a
+    #: caption a client writes is a caption nobody reviewed, and `docs/19` requires
+    #: these to describe the *shape of text an option suits* rather than to recommend.
+    caption: str = ""
 
 
 class EntitySummary(ServiceModel):

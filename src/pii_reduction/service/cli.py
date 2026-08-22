@@ -73,6 +73,15 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
+        "--no-ui",
+        dest="ui",
+        action="store_false",
+        help=(
+            "do not serve the control panel at / and /ui. The API is unchanged either "
+            "way; the page renders only what the API returns (ADR-0035)"
+        ),
+    )
+    parser.add_argument(
         "--databricks",
         action="store_true",
         help=(
@@ -206,7 +215,7 @@ def main(
         # reach — the confused-deputy shape ADR-0026's server-side templates exist for.
         journal = FileRunJournal(args.run_journal) if args.run_journal else None
         store = RunStore(runtimes, journal=journal)
-        app = create_app(args.configs, store=store)
+        app = create_app(args.configs, store=store, ui=args.ui)
     except PiiReductionError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

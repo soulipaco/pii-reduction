@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PII reduction — control panel</title>
+<!--
+  ADR-0035. One file, no build step, no external request.
+
+  Everything this page shows comes from this service's own API, and the API returns
+  no source text, no reduced text and no detected value (ADR-0026). So this page
+  cannot display data even by mistake: there is nothing to display.
+
+  Three rules held deliberately, and each has a reason beyond taste:
+
+  1. No CDN, no framework, no bundler. A Databricks App runs a Python process; it has
+     no npm and may have no egress. A page that needs either is a page that does not
+     load where it matters most.
+  2. Values from the API reach the DOM through `textContent`, never `innerHTML`. A
+     configuration value is not markup, and treating it as markup is how a service
+     that never returns text still manages to execute somebody's string.
+  3. No state is stored anywhere — no localStorage, no cookies, no history entries
+     carrying a name. Reload and the page knows nothing.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #5c5c5c; --line: #d8d8d8;
+    --panel: #f6f6f6; --accent: #1f5fa9; --ok: #1a7f4b; --warn: #9a5b00; --err: #a32020;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --fg: #e6e6e6; --muted: #9aa0a6; --line: #2f333a;
+      --panel: #1e2127; --accent: #6fa8e6; --ok: #4cc38a; --warn: #d8a13a; --err: #e06c6c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: baseline;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .grow { flex: 1; }
+  .meta { color: var(--muted); font-size: 13px; font-family: var(--mono); }
+  nav { display: flex; gap: 4px; padding: 10px 20px 0; flex-wrap: wrap; }
+  nav button {
+    background: none; border: 1px solid transparent; border-bottom: none;
+    padding: 7px 14px; cursor: pointer; color: var(--muted);
+    font: inherit; border-radius: 6px 6px 0 0;
+  }
+  nav button[aria-selected="true"] {
+    color: var(--fg); background: var(--panel);
+    border-color: var(--line); font-weight: 600;
+  }
+  main { padding: 18px 20px 60px; }
+  section[hidden] { display: none; }
+  h2 { font-size: 15px; margin: 22px 0 8px; }
+  h2:first-child { margin-top: 0; }
+  p.hint { color: var(--muted); font-size: 13px; margin: 4px 0 12px; max-width: 70ch; }
+  .card {
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px; margin-bottom: 12px; background: var(--panel);
+  }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
+  select, input[type=text] {
+    font: inherit; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+    min-width: 220px; max-width: 100%;
+  }
+  button.action {
+    font: inherit; font-weight: 600; padding: 8px 15px; border-radius: 6px;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button.action.secondary { background: none; color: var(--accent); }
+  button.action:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .checks { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+  .checks label { display: inline-flex; align-items: center; gap: 5px; font-weight: 400; margin: 0; }
+  pre {
+    font-family: var(--mono); font-size: 12.5px; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 11px;
+    overflow-x: auto; margin: 8px 0 0; white-space: pre;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  code { font-family: var(--mono); font-size: 12.5px; }
+  .pill {
+    display: inline-block; padding: 1px 8px; border-radius: 999px;
+    font-size: 12px; font-family: var(--mono); border: 1px solid var(--line);
+  }
+  .pill.ok { color: var(--ok); border-color: currentColor; }
+  .pill.run { color: var(--accent); border-color: currentColor; }
+  .pill.err { color: var(--err); border-color: currentColor; }
+  .note { border-left: 3px solid var(--warn); padding: 8px 12px; margin: 10px 0; font-size: 13px; }
+  .error { border-left: 3px solid var(--err); padding: 8px 12px; margin: 10px 0; font-size: 13px; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PII reduction — control panel</h1>
+  <span class="grow"></span>
+  <span class="meta" id="health">connecting…</span>
+</header>
+
+<nav id="tabs">
+  <button data-tab="build" aria-selected="true">Build a configuration</button>
+  <button data-tab="datasets" aria-selected="false">Datasets</button>
+  <button data-tab="runs" aria-selected="false">Runs</button>
+  <button data-tab="reference" aria-selected="false">Reference</button>
+</nav>
+
+<main>
+  <div id="banner"></div>
+
+  <!-- ── Build ────────────────────────────────────────────────────────────── -->
+  <section id="tab-build">
+    <h2>1. Pick a template</h2>
+    <p class="hint">
+      A template fixes what a caller may not choose — the source, the destination, and
+      the switches that decide whether raw text survives. You choose from the menu it
+      declares. This is what stops the service reading a table on your behalf that you
+      could not read yourself.
+    </p>
+    <select id="template"></select>
+    <div id="template-info"></div>
+
+    <h2>2. Name the dataset and its row id</h2>
+    <div class="row">
+      <div>
+        <label for="dataset-name">Dataset name</label>
+        <input type="text" id="dataset-name" value="my_dataset" spellcheck="false">
+      </div>
+      <div>
+        <label for="row-id">Row id column</label>
+        <select id="row-id"></select>
+      </div>
+    </div>
+
+    <h2>3. Configure the columns to reduce</h2>
+    <p class="hint">
+      Tick a column, then choose what to detect in it and how. Every option here is a
+      quality choice: the worst it can do is produce a worse number, which the benchmark
+      measures. Nothing here can change where data goes.
+    </p>
+    <div id="columns"></div>
+
+    <h2>4. Build</h2>
+    <div class="row">
+      <button class="action" id="build">Build configuration</button>
+      <button class="action secondary" id="build-save">Build and save</button>
+    </div>
+    <div id="build-result"></div>
+  </section>
+
+  <!-- ── Datasets ─────────────────────────────────────────────────────────── -->
+  <section id="tab-datasets" hidden>
+    <h2>Configured datasets</h2>
+    <p class="hint">
+      What each saved configuration actually resolved to, after the project defaults and
+      the template were layered in. Configuration values only — no data is read.
+    </p>
+    <div class="row">
+      <select id="dataset-pick"></select>
+      <button class="action secondary" id="dataset-refresh">Refresh</button>
+    </div>
+    <div id="dataset-detail"></div>
+  </section>
+
+  <!-- ── Runs ─────────────────────────────────────────────────────────────── -->
+  <section id="tab-runs" hidden>
+    <h2>Trigger a run</h2>
+    <p class="hint">
+      A run is accepted immediately and executed on a single worker thread. The status
+      below is metadata: row and field counts, timings, a config hash — never text.
+    </p>
+    <div class="row">
+      <div>
+        <label for="run-dataset">Dataset</label>
+        <select id="run-dataset"></select>
+      </div>
+      <div>
+        <label for="run-runtime">Runtime</label>
+        <select id="run-runtime"></select>
+      </div>
+      <button class="action" id="run-go">Run</button>
+    </div>
+    <div id="run-result"></div>
+
+    <h2>Run history</h2>
+    <div id="run-history" class="scroll"></div>
+  </section>
+
+  <!-- ── Reference ────────────────────────────────────────────────────────── -->
+  <section id="tab-reference" hidden>
+    <h2>Entity labels</h2>
+    <p class="hint">
+      What a configuration may name. <strong>Listing a label does not make a chain
+      capable of detecting it</strong> — that is why the third column exists.
+    </p>
+    <div id="entities" class="scroll"></div>
+
+    <h2>This API</h2>
+    <p class="hint">
+      Every control on this page is a call to the service's own HTTP API. The full
+      interactive reference is at <code>/docs</code>, generated from the same models
+      that validate the requests.
+    </p>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+/* ── Talking to the API ───────────────────────────────────────────────────────
+   `fetch` is the browser's built-in HTTP client. It returns a Promise, so `await`
+   pauses until the response arrives. Paths are relative, so this page works
+   wherever the service is mounted — localhost or a Databricks App — with no
+   configured base URL to get wrong. */
+async function api(path, options) {
+  const response = await fetch(path, Object.assign({
+    headers: { "content-type": "application/json" }
+  }, options || {}));
+  const text = await response.text();
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch (_) { body = null; }
+  if (!response.ok) {
+    // The service answers every error in one envelope: {error: {category, message}}.
+    const detail = body && body.error ? body.error.message : ("HTTP " + response.status);
+    throw new Error(detail);
+  }
+  return body;
+}
+
+/* ── Building DOM safely ──────────────────────────────────────────────────────
+   `textContent` assigns a string as *text*. `innerHTML` would parse it as markup,
+   so a value that happened to contain a tag would become one. Configuration values
+   are not markup, and this is the habit that keeps that true. */
+/* Attributes `el()` refuses outright. Every key it is called with today is a source
+   literal, so none of these can occur — which is exactly when to forbid them, before
+   an edit sets `href` or an `on*` handler from a value the API returned. */
+const UNSAFE_ATTRIBUTES = /^(?:on|href$|src$|srcdoc$|style$|formaction$|xlink)/i;
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (UNSAFE_ATTRIBUTES.test(key)) throw new Error("refusing to set attribute: " + key);
+    if (key === "class") node.className = value;
+    else if (key === "text") node.textContent = value;
+    else if (value !== null && value !== undefined) node.setAttribute(key, value);
+  }
+  for (const child of children) {
+    if (child === null || child === undefined) continue;
+    node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+  }
+  return node;
+}
+
+function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+function $(id) { return document.getElementById(id); }
+
+function showError(message) {
+  const banner = $("banner");
+  clear(banner);
+  banner.appendChild(el("div", { class: "error", text: message }));
+  banner.scrollIntoView({ block: "nearest" });
+}
+function clearError() { clear($("banner")); }
+
+/* ── State ───────────────────────────────────────────────────────────────── */
+const state = { templates: [], entities: [], runtimes: [], datasets: [] };
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+$("tabs").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-tab]");
+  if (!button) return;
+  for (const other of $("tabs").querySelectorAll("button")) {
+    const selected = other === button;
+    other.setAttribute("aria-selected", String(selected));
+    $("tab-" + other.dataset.tab).hidden = !selected;
+  }
+  if (button.dataset.tab === "datasets" || button.dataset.tab === "runs") refreshDatasets();
+  if (button.dataset.tab === "runs") refreshHistory();
+});
+
+/* ── Health ──────────────────────────────────────────────────────────────── */
+async function loadHealth() {
+  try {
+    const health = await api("/health");
+    state.runtimes = health.runtimes || [];
+    $("health").textContent = "v" + health.version + " · runtimes: " + (state.runtimes.join(", ") || "none");
+    const picker = $("run-runtime");
+    clear(picker);
+    for (const runtime of state.runtimes) picker.appendChild(el("option", { value: runtime, text: runtime }));
+    if (!state.runtimes.includes("databricks")) {
+      $("run-result").appendChild(el("div", { class: "note" },
+        "This process offers only the local runtime. Start the service with --databricks " +
+        "(from the environment that has the databricks extra) to run against a workspace."));
+    }
+  } catch (error) {
+    $("health").textContent = "unreachable";
+    showError("Could not reach the service: " + error.message);
+  }
+}
+
+/* ── Templates and the column editor ─────────────────────────────────────── */
+async function loadTemplates() {
+  state.templates = await api("/templates");
+  const picker = $("template");
+  clear(picker);
+  if (!state.templates.length) {
+    picker.appendChild(el("option", { text: "(no templates configured)" }));
+    return;
+  }
+  for (const template of state.templates) {
+    picker.appendChild(el("option", { value: template.name, text: template.name }));
+  }
+  renderTemplate();
+}
+
+function currentTemplate() {
+  return state.templates.find((t) => t.name === $("template").value) || null;
+}
+
+function renderTemplate() {
+  const template = currentTemplate();
+  const info = $("template-info");
+  clear(info);
+  if (!template) return;
+
+  const card = el("div", { class: "card" });
+  if (template.description) card.appendChild(el("p", { class: "hint", text: template.description }));
+  const table = el("table");
+  const rows = [
+    ["source", template.source_type],
+    ["destination", template.destination_type],
+    ["entities offered", template.entities.join(", ")],
+    ["parsers offered", template.parsers.join(", ")],
+    ["chains offered", template.provider_chains.join(", ")],
+    ["reducers offered", template.reducers.join(", ")],
+    ["parser options offered", Object.entries(template.parser_options)
+      .map(([name, spec]) => name + " (default " + spec.default + ")").join(", ") || "(none)"]
+  ];
+  for (const [name, value] of rows) {
+    table.appendChild(el("tr", {}, el("th", { text: name }), el("td", {}, el("code", { text: value || "—" }))));
+  }
+  card.appendChild(table);
+  if (template.requires_databricks) {
+    card.appendChild(el("div", { class: "note" },
+      "This template reads or writes through Spark, so it needs the databricks runtime."));
+  }
+  info.appendChild(card);
+
+  const rowId = $("row-id");
+  clear(rowId);
+  for (const column of template.row_id_columns) rowId.appendChild(el("option", { value: column, text: column }));
+
+  renderColumns();
+}
+
+function renderColumns() {
+  const template = currentTemplate();
+  const host = $("columns");
+  clear(host);
+  if (!template) return;
+
+  for (const column of template.columns) {
+    if (column === $("row-id").value) continue;  // the row id is an identifier, not content
+    host.appendChild(columnCard(template, column));
+  }
+}
+
+function columnCard(template, column) {
+  const card = el("div", { class: "card" });
+  card.dataset.column = column;
+
+  const enable = el("input", { type: "checkbox", id: "use-" + column });
+  enable.checked = true;
+  card.appendChild(el("label", {}, enable, " reduce column ", el("code", { text: column })));
+
+  // Entities — a multi-select of checkboxes, because "which of these" is the question.
+  card.appendChild(el("label", { text: "Detect" }));
+  const entities = el("div", { class: "checks" });
+  for (const label of template.entities) {
+    const box = el("input", { type: "checkbox", value: label });
+    box.dataset.role = "entity";
+    // Ticked when a shipped chain can actually find it. Read from the API's own
+    // `detected_at_baseline` rather than from a hardcoded label name: ADDRESS is the
+    // one that is undetected today (ADR-0002), and the day that changes this page
+    // should follow without being edited.
+    const known = state.entities.find((e) => e.label === label);
+    box.checked = !known || known.detected_at_baseline;
+    const suffix = known && !known.detected_at_baseline ? " (not detected)" : "";
+    entities.appendChild(el("label", {}, box, " ", label + suffix));
+  }
+  card.appendChild(entities);
+
+  const choices = el("div", { class: "row" });
+  choices.appendChild(pick("parser", "Parser", template.parsers));
+  choices.appendChild(pick("provider_chain", "Provider chain", template.provider_chains));
+  choices.appendChild(pick("reducer", "Reduction", template.reducers));
+  card.appendChild(choices);
+
+  // Parser options (ADR-0034). Shown only for the parser that accepts each one, and
+  // labelled as a match for the shape of the text — never as an improvement.
+  const options = el("div");
+  options.dataset.role = "options";
+  card.appendChild(options);
+  const parserSelect = choices.querySelector("[data-field=parser]");
+  const drawOptions = () => {
+    clear(options);
+    const chosen = parserSelect.value;
+    const available = Object.entries(template.parser_options)
+      .filter(([, spec]) => spec.parsers.includes(chosen));
+    if (!available.length) return;
+    options.appendChild(el("label", { text: "Parser options for " + chosen }));
+    for (const [option, spec] of available) {
+      const box = el("input", { type: "checkbox", value: option });
+      box.dataset.role = "option";
+      // The **engine's** default, reported by the API. A page that remembers a
+      // default is a page that silently overrides one when it changes.
+      box.checked = spec.default;
+      options.appendChild(el("label", {}, box, " ", option));
+      // The caption comes from the server (ADR-0035). A caption a client writes is a
+      // caption nobody reviewed, and these have to describe the shape of text an
+      // option suits rather than recommend it.
+      if (spec.caption) options.appendChild(el("p", { class: "hint", text: spec.caption }));
+    }
+  };
+  parserSelect.addEventListener("change", drawOptions);
+  drawOptions();
+
+  return card;
+}
+
+function pick(field, label, values) {
+  const wrapper = el("div");
+  wrapper.appendChild(el("label", { text: label }));
+  const select = el("select");
+  select.dataset.field = field;
+  for (const value of values) select.appendChild(el("option", { value: value, text: value }));
+  wrapper.appendChild(select);
+  return wrapper;
+}
+
+/* ── Assembling the request ──────────────────────────────────────────────── */
+function buildBody(save) {
+  const template = currentTemplate();
+  const columns = [];
+  for (const card of $("columns").children) {
+    const name = card.dataset.column;
+    if (!card.querySelector("#use-" + CSS.escape(name)).checked) continue;
+    const entities = Array.from(card.querySelectorAll("[data-role=entity]"))
+      .filter((box) => box.checked).map((box) => box.value);
+    if (!entities.length) throw new Error("Column '" + name + "' has no entities selected.");
+
+    const column = {
+      column: name,
+      entities: entities,
+      parser: card.querySelector("[data-field=parser]").value,
+      provider_chain: card.querySelector("[data-field=provider_chain]").value,
+      reducer: card.querySelector("[data-field=reducer]").value
+    };
+    // Send every offered option explicitly, ticked or not: a boolean's *absence*
+    // means "inherit the default", which is a different request from "set it false".
+    const options = {};
+    for (const box of card.querySelectorAll("[data-role=option]")) options[box.value] = box.checked;
+    if (Object.keys(options).length) column.parser_options = options;
+    columns.push(column);
+  }
+  if (!columns.length) throw new Error("Select at least one column to reduce.");
+  return {
+    template: template.name,
+    dataset_name: $("dataset-name").value.trim(),
+    row_id: $("row-id").value,
+    columns: columns,
+    save: Boolean(save)
+  };
+}
+
+async function build(save) {
+  clearError();
+  const result = $("build-result");
+  clear(result);
+  let body;
+  try { body = buildBody(save); } catch (error) { showError(error.message); return; }
+  try {
+    const built = await api("/configs", { method: "POST", body: JSON.stringify(body) });
+    result.appendChild(el("div", { class: "card" },
+      el("p", { class: "hint", text: built.saved_path
+        ? "Saved. It is now a dataset you can run."
+        : "Not saved — this is the document that would be written." }),
+      el("pre", { text: built.config_yaml })));
+    if (built.saved_path) refreshDatasets();
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+$("template").addEventListener("change", renderTemplate);
+$("row-id").addEventListener("change", renderColumns);
+$("build").addEventListener("click", () => build(false));
+$("build-save").addEventListener("click", () => build(true));
+
+/* ── Datasets ────────────────────────────────────────────────────────────── */
+async function refreshDatasets() {
+  try {
+    state.datasets = await api("/datasets");
+  } catch (error) { showError(error.message); return; }
+  for (const id of ["dataset-pick", "run-dataset"]) {
+    const picker = $(id);
+    const previous = picker.value;
+    clear(picker);
+    for (const name of state.datasets) picker.appendChild(el("option", { value: name, text: name }));
+    if (state.datasets.includes(previous)) picker.value = previous;
+  }
+  showDataset();
+}
+
+async function showDataset() {
+  const host = $("dataset-detail");
+  clear(host);
+  const name = $("dataset-pick").value;
+  if (!name) return;
+  let summary;
+  try { summary = await api("/datasets/" + encodeURIComponent(name)); }
+  catch (error) { showError(error.message); return; }
+
+  const card = el("div", { class: "card" });
+  const head = el("table");
+  for (const [key, value] of [
+    ["row id", summary.row_id], ["source", summary.source_type],
+    ["destination", summary.destination_type], ["projection", summary.projection],
+    ["config hash", summary.config_hash]
+  ]) {
+    head.appendChild(el("tr", {}, el("th", { text: key }), el("td", {}, el("code", { text: String(value) }))));
+  }
+  card.appendChild(head);
+
+  const table = el("table");
+  table.appendChild(el("tr", {},
+    ...["column", "→ output", "parser", "options", "chain", "reduction", "entities", "failure mode", "keeps original"]
+      .map((h) => el("th", { text: h }))));
+  for (const column of summary.columns) {
+    const options = Object.entries(column.parser_options).map(([k, v]) => k + "=" + v).join(" ") || "—";
+    table.appendChild(el("tr", {},
+      el("td", {}, el("code", { text: column.column })),
+      el("td", {}, el("code", { text: column.output_column })),
+      el("td", { text: column.parser }),
+      el("td", {}, el("code", { text: options })),
+      el("td", { text: column.provider_chain }),
+      el("td", { text: column.reducer }),
+      el("td", { text: column.entities.join(", ") }),
+      el("td", {}, el("code", { text: column.failure_mode })),
+      el("td", { text: column.preserve_original ? "yes" : "no" })));
+  }
+  card.appendChild(el("div", { class: "scroll" }, table));
+  host.appendChild(card);
+}
+
+$("dataset-pick").addEventListener("change", showDataset);
+$("dataset-refresh").addEventListener("click", refreshDatasets);
+
+/* ── Runs ────────────────────────────────────────────────────────────────── */
+/* The states `RunState` actually reaches. An interrupted run is recorded as `failed`
+   with `error_category: "interrupted"` — it is not a state of its own, and listing one
+   that cannot occur would make this page's model of the API quietly wrong. */
+const TERMINAL = ["succeeded", "failed"];
+
+async function triggerRun() {
+  clearError();
+  const host = $("run-result");
+  clear(host);
+  const body = { dataset: $("run-dataset").value };
+  if ($("run-runtime").value) body.runtime = $("run-runtime").value;
+  let record;
+  try { record = await api("/runs", { method: "POST", body: JSON.stringify(body) }); }
+  catch (error) { showError(error.message); return; }
+  host.appendChild(el("div", { class: "card", id: "live-run" }, runLine(record)));
+  poll(record.run_id);
+}
+
+/* Polling, not websockets: a run is minutes long and a single replica serves it, so
+   asking every two seconds is honest and adds no machinery to keep alive. */
+async function poll(runId) {
+  let record;
+  try { record = await api("/runs/" + encodeURIComponent(runId)); }
+  catch (error) { showError(error.message); return; }
+  const host = $("live-run");
+  if (host) { clear(host); host.appendChild(runLine(record)); }
+  if (!TERMINAL.includes(record.state)) { setTimeout(() => poll(runId), 2000); return; }
+  refreshHistory();
+}
+
+/* A summary value may be a nested object — `outputs` maps each written artifact to
+   its destination. `String(anObject)` is "[object Object]", so nesting is rendered
+   rather than stringified. These are the same destination paths `GET /runs/{id}`
+   already returns; the page is not widening what the API discloses. */
+function describe(value) {
+  if (value === null || typeof value !== "object") return el("code", { text: String(value) });
+  const list = el("table");
+  for (const [key, inner] of Object.entries(value)) {
+    list.appendChild(el("tr", {}, el("th", { text: key }), el("td", {}, describe(inner))));
+  }
+  return list;
+}
+
+function statePill(value) {
+  const kind = value === "succeeded" ? "ok" : (TERMINAL.includes(value) ? "err" : "run");
+  return el("span", { class: "pill " + kind, text: value });
+}
+
+function runLine(record) {
+  const wrapper = el("div");
+  wrapper.appendChild(el("p", {}, statePill(record.state), " ", el("code", { text: record.run_id })));
+  if (record.error_category) {
+    wrapper.appendChild(el("div", { class: "error", text: "error category: " + record.error_category }));
+  }
+  for (const [label, value] of [["submitted", record.submitted_at],
+                               ["started", record.started_at],
+                               ["completed", record.completed_at]]) {
+    if (value) wrapper.appendChild(el("p", { class: "meta", text: label + " " + value }));
+  }
+  const summary = record.summary;
+  if (summary) {
+    const table = el("table");
+    for (const [key, value] of Object.entries(summary)) {
+      if (value === null || value === undefined) continue;
+      table.appendChild(el("tr", {}, el("th", { text: key }), el("td", {}, describe(value))));
+    }
+    wrapper.appendChild(el("div", { class: "scroll" }, table));
+  }
+  return wrapper;
+}
+
+async function refreshHistory() {
+  const host = $("run-history");
+  clear(host);
+  let records;
+  try { records = await api("/runs"); } catch (error) { showError(error.message); return; }
+  if (!records.length) { host.appendChild(el("p", { class: "hint", text: "No runs yet." })); return; }
+  const table = el("table");
+  table.appendChild(el("tr", {}, ...["state", "run id", "dataset", "runtime", "submitted", "rows read"]
+    .map((h) => el("th", { text: h }))));
+  for (const record of records) {
+    table.appendChild(el("tr", {},
+      el("td", {}, statePill(record.state)),
+      el("td", {}, el("code", { text: record.run_id })),
+      el("td", { text: record.dataset }),
+      el("td", { text: record.runtime || "—" }),
+      el("td", {}, el("code", { text: record.submitted_at || "—" })),
+      el("td", { text: record.summary && record.summary.rows_read != null ? String(record.summary.rows_read) : "—" })));
+  }
+  host.appendChild(table);
+}
+
+$("run-go").addEventListener("click", triggerRun);
+
+/* ── Reference ───────────────────────────────────────────────────────────── */
+async function loadEntities() {
+  state.entities = await api("/entities");
+  const table = el("table");
+  table.appendChild(el("tr", {}, ...["label", "replacement", "detected by a shipped chain"]
+    .map((h) => el("th", { text: h }))));
+  for (const entity of state.entities) {
+    table.appendChild(el("tr", {},
+      el("td", {}, el("code", { text: entity.label })),
+      el("td", {}, el("code", { text: entity.replacement })),
+      el("td", {}, entity.detected_at_baseline
+        ? el("span", { class: "pill ok", text: "yes" })
+        : el("span", { class: "pill err", text: "no" }))));
+  }
+  const host = $("entities");
+  clear(host);
+  host.appendChild(table);
+}
+
+/* ── Start ───────────────────────────────────────────────────────────────── */
+(async function start() {
+  await loadHealth();
+  try {
+    await loadEntities();
+    await loadTemplates();
+    await refreshDatasets();
+  } catch (error) {
+    showError(error.message);
+  }
+})();
+</script>
+</body>
+</html>

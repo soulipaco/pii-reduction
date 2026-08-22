@@ -182,6 +182,76 @@ bare error category with the instruction discarded.
 No table, prefix or write mode is passed to `run_driver`: the dataset configuration
 decides, which is what keeps rule 4 true at the last place it could be broken.
 
+## The control panel (ADR-0035)
+
+`pii-reduction-service` serves a **control panel** at `/` and `/ui`: pick a template,
+choose columns, entities, parser, options, chain and reduction, preview the generated
+YAML, save it, trigger a run and watch it finish. It is the same page locally and on a
+Databricks App, because it is one static file compiled into the wheel — no build step,
+no asset server, no environment difference.
+
+**It is a client, in the sense ADR-0026 meant.** It holds no logic the API does not, it
+computes nothing, and every value it shows it fetched from an endpoint a `curl` user can
+call. Since no endpoint returns text, **the page cannot display data even by mistake**.
+
+Five properties, each pinned by a test in `tests/test_service_ui.py`:
+
+| property | why |
+|---|---|
+| one file, no build step | a Databricks App runs a Python process — no npm, no bundler |
+| no external request | no CDN, no font host. It renders fully with zero egress, and no third-party script runs on an origin that can call this API |
+| byte-identical for every caller | read once at startup, served verbatim — a page that is *assembled* could assemble a caller's input into itself |
+| `textContent`, never `innerHTML` | a configuration value is not markup |
+| no client-side storage | a shared browser cannot leak one operator's dataset names to the next person at it |
+
+### What a hosted panel shows every principal the platform admits
+
+Worth stating before you host it, because the *audience* changes even though the
+disclosure does not.
+
+Opening the page fetches the run history unprompted, and a selected run renders its
+`summary.outputs` — **the destination path of every artifact it wrote**. On a workspace
+that means a Volume path or table name, which names the catalog and schema. That is
+permitted: `docs/09` lists `destination` as the one key under which a
+configuration-derived file or table name may appear on a display surface, and a `curl`
+user could already read the same thing.
+
+What changes is that they had to know to ask, and a panel makes it the first screen.
+Two consequences for an operator:
+
+- **Scope App access to people who may know those names.** The App authorizes as its
+  own service principal (measured — see below), so Unity Catalog grants on those
+  objects do **not** filter this list.
+- **The history is process-wide, not per-user**, and with `--run-journal` it spans
+  restarts. Everyone admitted sees every run anyone triggered.
+
+**Turn it off with `--no-ui`.** The API is unchanged in that mode; an HTML surface is a
+decision an operator may decline, and this is one of the reasons they might.
+
+```bash
+pii-reduction-service --configs configs            # panel at http://127.0.0.1:8000/
+pii-reduction-service --configs configs --no-ui    # API only
+```
+
+### Two other surfaces, and how they differ
+
+`GET /docs` is FastAPI's generated API explorer, built from the same models that
+validate the requests, and `GET /openapi.json` is the machine-readable contract behind
+it. Both are useful and neither replaces the panel:
+
+- `/docs` is **complete** — every endpoint, every field — and is the right place to
+  learn the API or try a call by hand. It **loads Swagger UI from a CDN**, so it is
+  blank on a deployment with no egress, and it runs third-party JavaScript on an origin
+  that can call this API.
+- `/ui` is **partial** by design — the things an operator actually does — and needs
+  nothing but this process.
+
+### Editing the page
+
+It is read **once at startup**, like the configuration, so a change needs a restart. A
+per-request read would turn a deleted or unreadable file into a 500 on somebody's first
+visit rather than a service that refuses to start.
+
 ## Endpoints
 
 | method | path | answers |
@@ -392,8 +462,10 @@ ADR-0026 decides that a Databricks App is how this gets hosted, not a second sur
 to build. Databricks Apps run an ASGI application directly, so the App's entry point
 is a small wrapper that calls `pii_reduction.service.api.create_app` with a
 `RunStore` holding the Databricks runtime — `create_app` takes a configuration
-directory and a store, so it is not itself a zero-argument ASGI factory. A UI, if one
-is ever built, is a client of these endpoints rather than a reimplementation of them.
+directory and a store, so it is not itself a zero-argument ASGI factory. A UI is a
+client of these endpoints rather than a reimplementation of them — and since ADR-0035
+one ships with the package, served by the same process (see *The control panel*
+above).
 
 ### It is hosted (2026-08-22, session 12)
 

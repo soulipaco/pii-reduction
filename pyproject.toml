@@ -92,17 +92,28 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pii_reduction"]
+# The control panel is a non-Python asset inside the package (ADR-0035), and the
+# service reads it at startup — so a wheel without it is a hosted App that fails to
+# start, discovered at deploy time on the workspace. Hatchling's default selection
+# would include it *and* honours .gitignore, so an ordinary ignore line like `static/`
+# or `*.html` would drop it silently. Declared explicitly, and pinned by a
+# `packaging`-marked test that builds a wheel and looks inside.
+artifacts = ["src/pii_reduction/service/static/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # The default run is the fast, model-free tier (ADR-0009). Opt in explicitly:
 #   pytest -m integration
-addopts = "-ra -m 'not integration and not slow and not databricks'"
+addopts = "-ra -m 'not integration and not slow and not databricks and not packaging'"
 markers = [
   "unit: fast, model-free tests (the default tier)",
   "integration: requires real providers or NLP models",
   "slow: long-running tests",
   "databricks: requires a Databricks workspace; never runs in CI (ADR-0009)",
+  # Excluded from the default tier because it shells out to the build backend;
+  # run by CI on every push, because the failure it catches — a packaged asset
+  # missing from the wheel — otherwise surfaces at deploy time.
+  "packaging: builds a wheel and inspects its contents",
 ]
 
 [tool.ruff]
