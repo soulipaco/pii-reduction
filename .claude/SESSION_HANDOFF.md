@@ -7,7 +7,8 @@ Keep it factual: what was verified, how, and what is still unknown.
 Sessions 1–8 are archived verbatim in
 [`docs/archive/SESSION_HANDOFF_S1-S8.md`](../docs/archive/SESSION_HANDOFF_S1-S8.md);
 the index below says what each established. The newest session's block is the live
-"start here" — currently **session 12**, at the end of this file.
+"start here" — currently **session 12**, at the end of this file. **Session 13's
+course is `docs/21_FINALIZATION.md`: finish the project.**
 
 ---
 
@@ -938,3 +939,83 @@ in the workspace, and the staged source lives under the owner's own `/Workspace/
 path — no catalog, schema, table or volume was touched.
 
 **Pickup list: 1, 2, 3 and 5 are done. Only 4 (batching) remains.**
+
+---
+
+## Session 13 — START HERE
+
+**The brief is: finish this project.** Read
+[`docs/21_FINALIZATION.md`](../docs/21_FINALIZATION.md) first — it is the whole course,
+and it is deliberately short. Then plan §8 only if you need detail on something it
+names.
+
+### The state you are inheriting
+
+The tree is **clean and pushed** at `d76d21d`, CI green on Linux and Windows.
+
+- **1226 default-tier tests**, 92 integration, 97 deselected.
+- **56 regression gates** across three corpora (benchmark, incidents, markup), both
+  chains. `ruff format --check`, `ruff check`, `mypy src tests` all clean.
+- **31 ADRs.** Every non-obvious choice has one.
+- **No published benchmark number has ever moved without being re-measured**, and none
+  moved in session 12.
+
+**Everything below rung 4 is executed, and rung 4 is now hosted.** A Databricks App
+serves the API over HTTPS. The pickup list that has driven the last three sessions is
+down to one item (batching), and `docs/21` says whether to do it or park it.
+
+### What session 12 did, in one paragraph each
+
+1. **Compared this repository against the reference implementation** at
+   `..\pii_alternative` (`docs/20_ALTERNATIVE_RECONCILIATION.md`): 4 adopted, 19 already
+   covered, 9 deferred with conditions, 8 rejected, 1 disputed, 1 place where they were
+   right about us. The adoptions were the markup guard (ADR-0027), the reachability
+   decomposition of recall (ADR-0028), Delta column mapping, and a parquet preflight.
+2. **Built the markup corpus** (ADR-0029) because ADR-0027 shipped a detection change
+   with no corpus at all. Its first run found something **neither implementation had
+   recorded**: markup does not merely cause false positives, **it destroys PERSON
+   recall** — 0.322 against 0.821 — because the model returns *no span* on markup-dense
+   clauses, upstream of every remedy either project built.
+3. **Built the durable run store** (ADR-0030) and verified it across a real killed
+   process, including a kill *mid-run*, which the next process reports as
+   `failed`/`interrupted` rather than as `running`.
+4. **Added schema introspection** (ADR-0031): `SourceAdapter.schema()` and
+   `pii-reduction describe`, column names without reading a row.
+5. **Hosted rung 4 and answered the identity question** — see below.
+
+### The two findings worth carrying into any future work
+
+**Markup destroys detection, not just structure** (ADR-0029). The reference
+implementation's twenty-failure catalogue documents only the false-positive direction.
+The leak direction is worse and nobody had it. `tests/fixtures/markup` now exists to
+measure any remedy.
+
+**A Databricks App authenticates the end user and authorizes as itself.** Measured off
+the deployment: the App carries its own service principal, and its default
+on-behalf-of-user scopes are `iam.access-control:read` and `iam.current-user:read` —
+identity only, no data scope. So `docs/09`'s "read under the end user's identity"
+condition for a Class B display surface is **not met by hosting**, and the
+server-side-template design is load-bearing rather than cautious.
+
+### Two operational facts
+
+- **A Databricks App is running and holds compute.** `databricks apps stop
+  pii-reduction-service` stops it; `apps delete` removes it and its service principal.
+  `docs/21` Part 3 asks session 13 to decide its fate and record the decision.
+- **Nothing else was created in the workspace.** No catalog, schema, table or volume was
+  touched; the staged source lives under the owner's own `/Workspace/Users/` path.
+
+### The working rules that paid for themselves twelve sessions running
+
+1. **Run both auditors on every increment, including docs-only ones.** In session 12
+   they found a leak in the markup guard three separate ways, a journal path relayed
+   into an HTTP 500 body, a truncated-tail bug that would have stopped the service
+   starting days after a crash, a `describe` that did not check the thing three
+   documents said it checked, and two tests that passed while proving nothing.
+2. **A claim in a document must be pinned by a test**, or it will drift. Most of what
+   the reviewers caught was prose that had outrun the code.
+3. **The throwaway `.[dev]` venv** is what CI provisions and is stronger than the local
+   gate: `uv venv <scratch>/venv-devtier --python 3.11`, then
+   `VIRTUAL_ENV=<scratch> uv pip install -e ".[dev]"`.
+4. **Never move a published number without re-running it.** Three corpora exist so the
+   numbers stay honest, not so they can be improved.

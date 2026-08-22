@@ -13,6 +13,9 @@ and what to do next, so you do not re-derive either:
 2. `.claude/SESSION_HANDOFF.md` — what each session established, measured, and left
    open. Read the **most recent session's "Start here" block first**; the rest is
    evidence you can consult rather than repeat.
+2b. `docs/21_FINALIZATION.md` — **the current course.** What "done" means, what is
+   left, and what is deliberately not in scope. Read it before picking up anything
+   from §8's queue.
 
 Then, before implementing or refactoring significant functionality:
 

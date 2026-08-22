@@ -353,6 +353,10 @@ hold.
 
 ## 8. Status and work queue
 
+> **Session 13's course is `docs/21_FINALIZATION.md`** — what "done" means, the open
+> items to park, and the release steps. Read it before picking anything up from the
+> queue below.
+
 **This section is the live one.** Sections 1–7 are the session-2 plan as written;
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.

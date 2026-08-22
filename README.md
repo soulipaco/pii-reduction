@@ -17,10 +17,15 @@ Spark-free, and nothing on the runtime path may import `pyspark`.
 
 The intended shape is a ladder, each rung depending only on the ones below it:
 the engine (this library) → a runbook-driven workspace run → a scheduled job or
-Asset Bundle → a service layer over the engine. **All four rungs now exist in this
-repository — which is not the same as all four being deployed: rung 3's bundle has
-never been deployed and rung 4 has never been hosted as an App, both blocked on the
-same Databricks CLI issue.** Rung 4 is a thin HTTP API (ADR-0026) under
+Asset Bundle → a service layer over the engine. **All four rungs exist, and rung 4 is
+deployed: a Databricks App runs the service and answers over HTTPS** (session 12,
+`docs/19_SERVICE_LAYER.md`). Rung 3's bundle is still undeployed — `bundle deploy` is
+blocked by the Databricks CLI's expired Terraform signing key, which turned out never
+to apply to Apps, since they deploy without a bundle. **Hosting does not make the App
+authorize as the caller**: measured on the deployment, an App authenticates the end
+user and reads data as its own service principal, so `docs/09`'s condition for a
+side-by-side display surface is not met by hosting. Rung 4 is a thin HTTP API
+(ADR-0026) under
 `src/pii_reduction/service/`, served by `pii-reduction-service`; a Databricks App
 is how it gets hosted rather than a second surface to build. Reduction logic never
 moves upward into a notebook or a UI (`AGENTS.md` rule 3), and the service cannot
@@ -367,6 +372,7 @@ As built. Every path below exists; nothing here is aspirational.
 │   ├── 18_RUNBOOK_DATABRICKS.md    # run it on your own table, in ten minutes
 │   ├── 19_SERVICE_LAYER.md         # rung 4: the HTTP API, and what it refuses
 │   ├── 20_ALTERNATIVE_RECONCILIATION.md  # a second implementation, compared item by item
+│   ├── 21_FINALIZATION.md          # what "done" means, and the shortest path to it
 │   └── adr/                        # decision records, indexed in adr/README.md
 ├── databricks.yml · resources/  # Asset Bundle + job skeleton (never deployed)
 ├── configs/
@@ -471,6 +477,8 @@ The project should also avoid pretending that every identifier is PII. Entity sc
 - **The service layer (rung 4) and what it refuses to do:** `docs/19_SERVICE_LAYER.md`
 - **A second implementation of the same problem, compared item by item — what was
   adopted, what was refused, and why:** `docs/20_ALTERNATIVE_RECONCILIATION.md`
+- **What is left before this is finished, and what "finished" means:**
+  `docs/21_FINALIZATION.md`
 - **Decision records:** `docs/adr/`
 
 ## License
