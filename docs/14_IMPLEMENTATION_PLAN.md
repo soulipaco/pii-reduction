@@ -357,7 +357,19 @@ hold.
 where reality diverged, the divergence is recorded here and in the ADR it produced.
 Update this section at the end of every session.
 
-Last updated: session 12 (2026-08-21/22) — **this repository was compared against the
+Last updated: session 12 (2026-08-22) — **rung 4 is hosted.** A Databricks App runs the
+service, deployed with `apps create` / `apps deploy --source-code-path` — which needs no
+bundle, so the expired-Terraform-key bug two sessions recorded as the blocker never
+applied to Apps at all. Driven over real HTTPS through the App proxy; the
+confused-deputy guard answers 422 in the hosted process. **The identity question is
+answered by measurement**: the App carries its own service principal and its default
+on-behalf-of-user scopes are identity-only, so it authenticates the end user and
+authorizes as itself — `docs/09`'s "read under the end user's identity" condition is
+*not* met by hosting. Pickup items 1, 2, 3 and 5 are done; 4 (batching) is the only one
+left. **Read "hosted" precisely**: the App serves every endpoint over HTTPS and its
+`runtimes` is `['local']`, so no run has been triggered *from* the hosted process —
+the Databricks-runtime evidence remains session 11's terminal-driven run. Earlier in the same
+session: **this repository was compared against the
 reference implementation at `..\pii_alternative`, and four changes came out of it.**
 `docs/20_ALTERNATIVE_RECONCILIATION.md` is the record and the deliverable: 4 adopted,
 19 already covered, 9 deferred with named conditions, 8 rejected, 1 disputed, 1 place
@@ -1197,11 +1209,12 @@ underneath and no reduction logic anywhere above it. `docs/19_SERVICE_LAYER.md` 
 the operator-facing description and carries the evidence; ADR-0026 carries the
 decision and the five rules v1 obeys by construction.
 
-What it does **not** do, recorded so the gap between decided and deployed stays
-visible: it has never been hosted. No Databricks App has been created, and
-`bundle deploy` is still blocked by the CLI's expired Terraform signing key. Running
-the API from a terminal against the workspace and hosting it inside the workspace are
-different claims, and only the first has been made.
+What it did **not** do *at the end of session 11*, kept because the gap between decided
+and deployed is worth seeing closed rather than edited away: it had never been hosted,
+no Databricks App existed, and `bundle deploy` was blocked by the CLI's expired
+Terraform signing key. **Session 12 hosted it** (§8 pickup item 1): the blocker was
+real but applied only to bundles — Apps deploy without one. `bundle deploy` remains
+blocked; that half of the sentence still stands.
 
 The framing this section carried *before* the increment is kept below, because two
 of the endpoint shapes it implied are ones ADR-0026 went on to forbid by name.
@@ -1242,18 +1255,28 @@ and after on the 10k pack, published beside the existing numbers.
 > ranked follow-ons that do **not** displace it — the first of them, a markup-bearing
 > corpus slice, is what would give ADR-0027 a measurement.
 
-1. **Host the service.** Everything below rung 4 is executed; rung 4 itself has been
-   *run* and never *hosted*. A Databricks App is the decided hosting (ADR-0026) and
-   needs `create_app` behind a small wrapper plus a `RunStore` carrying the Databricks
-   runtime **and a `--run-journal` on a volume path** (item 2 is now built, so the
-   wrapper has something to pass). Blocked on the same Databricks CLI issue as
-   `bundle deploy` unless the App is created through the workspace UI, which is
-   untried — and the REST Workspace Import route the reference implementation used
-   (`docs/20` §6) is a third option nobody here has tried either. **This is the
-   increment that turns a decision into a deployment**, and it has two exit conditions
-   of its own: it is scoped to a **single replica** (see 2, which now says why in
-   `docs/19`), and it must **verify** what the platform actually does about identity
-   (see 3) rather than assume it.
+1. ~~**Host the service.**~~ **DONE (2026-08-22, session 12) — rung 4 is hosted, and
+   the blocker was never a blocker.** Two sessions recorded this as blocked by the
+   Databricks CLI's expired Terraform signing key. That bug is specific to
+   `bundle deploy`; **Apps have their own deployment path and need no bundle**:
+   `apps create` → `workspace import-dir` → `apps start` → `apps deploy
+   --source-code-path`. Deployment reported `SUCCEEDED — App started successfully`;
+   `apps get` reports `compute: ACTIVE`, `app: RUNNING`.
+
+   Driven over real HTTPS through the App proxy: `/health`, `/entities`, `/templates`,
+   `/datasets` and `/runs` all 200, and a `POST /runs` carrying a `source` field is a
+   **422** — the confused-deputy guard is live in the hosted process. The start command
+   is the console script with `--i-provide-authentication`, which the identity finding
+   below makes honest rather than a workaround.
+
+   **Both of its own exit conditions are met.** Single replica: stated in `docs/19` as a
+   constraint of the journal rather than discovered. Identity: verified, see item 3.
+
+   Two limits carried, neither a defect: the App installs the `service` extra so
+   `runtimes` is `['local']` (no driver-path run from the hosted process), and the run
+   journal is on container-local disk, so it survives a restart and not a redeploy — a
+   Volume path is the next step, and `docs/19` records the fsync cost to measure first.
+
 2. ~~**A durable run store.**~~ **Done (session 12).** `--run-journal PATH` appends
    every state transition to a JSON-lines file and loads it at startup, so
    `GET /runs/{id}` keeps answering across a restart instead of 404-ing a run that
@@ -1267,15 +1290,24 @@ and after on the 10k pack, published beside the existing numbers.
    discovered: two writers would interleave, and the journal refuses to serve a
    history it cannot fully parse. The `<dataset>_run_metrics` table remains the record
    of what a run *did* — a different claim from what the service was asked.
-3. **Settle the identity question, in writing and against the platform.** The service
-   implements no authentication. Databricks Apps authenticate the end user — but data
-   access defaults to the **App's service principal**, and on-behalf-of-user
-   authorization is a separate opt-in. That distinction is load-bearing here, because
-   S1 added "read under the end user's identity" to `docs/09`'s conditions for a
-   Class B display surface, and the whole server-side-template design exists precisely
-   because the service runs with its own credentials. Hosting does not satisfy that
-   condition by default, and nobody here has verified which mode this workspace's Apps
-   run in.
+3. ~~**Settle the identity question.**~~ **ANSWERED (2026-08-22) — measured off the
+   created App, and it confirms the concern rather than dissolving it.**
+
+   ```text
+   service_principal_id        present   (created automatically with the App)
+   user_api_scopes             None
+   effective_user_api_scopes   ['iam.access-control:read', 'iam.current-user:read']
+   ```
+
+   **The App authenticates the end user and authorizes data access as its own service
+   principal.** The default on-behalf-of-user scopes are *identity-only* and carry no
+   data scope at all — no SQL, no files, no catalog. So `docs/09`'s condition for a
+   Class B display surface, "read under the end user's identity", is **not satisfied by
+   hosting**, and would not be satisfied by hosting plus a UI: it needs the explicit
+   opt-in *and* a run path that uses the user's token. The server-side-template design
+   is therefore load-bearing rather than cautious, and whoever grants this App data
+   access is granting it to the service principal. Full statement in `docs/19`.
+
 4. **Batching (P5).** `detect_batch` still has no caller; the platform direction that
    `docs/17` D10 named as its reopening condition has now arrived twice over.
 5. ~~**Schema introspection in the engine.**~~ **Done (session 12), as the engine

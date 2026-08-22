@@ -282,6 +282,26 @@ worse:
   Rejected because it puts the one edge that matters where no import guard, no mypy
   run and no test can see it.
 
+## Addendum (2026-08-22, session 12): hosted, and the identity question answered
+
+**Hosted.** `databricks apps create` + `apps deploy --source-code-path` needs no
+bundle, so the expired-Terraform-key bug that this ADR and two sessions of notes
+recorded as the blocker never applied to Apps at all. The App runs the console script
+with `--i-provide-authentication`. Evidence in `docs/19`.
+
+**The identity assumption this ADR reasoned from is now measured, and it holds.** The
+App carries its own service principal, `user_api_scopes` is `None`, and
+`effective_user_api_scopes` is `['iam.access-control:read', 'iam.current-user:read']` —
+identity only, **no data scope**. So the platform authenticates the end user and
+authorizes as the App, exactly as rule 4's server-side-template design assumed. That
+design is not caution: in the deployed shape a caller who could name a
+`catalog.schema.table` would make the *service principal* read it.
+
+It also fixes the price of the Class B display surface `docs/09` describes: its
+"read under the end user's identity" condition needs an explicit on-behalf-of-user
+opt-in **and** a run path that uses the caller's token, neither of which hosting
+provides by default.
+
 ## What would revisit this
 
 An internal user needing a rendered surface before an integration exists — at which

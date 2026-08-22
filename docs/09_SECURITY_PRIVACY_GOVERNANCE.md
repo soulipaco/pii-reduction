@@ -253,7 +253,15 @@ For a view over Class B or Class C data, before one exists:
    service principal reading and rendering to a browser launders the grants that
    condition 2 relies on, which is the one real advantage a Databricks App has
    (on-behalf-of-user authentication) and the reason condition 2 is not
-   self-enforcing,
+   self-enforcing.
+
+   **Measured on the deployed App (2026-08-22): hosting does not satisfy this.** The
+   App carries its own service principal, and its default on-behalf-of-user scopes are
+   `iam.access-control:read` and `iam.current-user:read` — identity only, **no data
+   scope**. So an App authenticates the end user and *authorizes as itself*. Meeting
+   this condition needs the explicit on-behalf-of-user opt-in **and** a run path that
+   uses the caller's token rather than the service principal's. Neither exists today;
+   `docs/19` carries the evidence;
 4. it must be gated behind an explicit, recorded operator authorization for the
    dataset, granted per dataset rather than once per surface,
 5. it must **record each disclosure as metadata** — viewer identity, dataset, row id,

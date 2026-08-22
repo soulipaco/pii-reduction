@@ -322,10 +322,12 @@ What the workspace held afterwards, read back and checked:
 The staged table and the three tables the run wrote were dropped afterwards; the
 schema was left as it was found.
 
-**Not yet done, and recorded as such:** this service has never been *hosted* — no
-Databricks App has been created, and `bundle deploy` remains blocked by the Databricks
-CLI's expired Terraform signing key. Running the API from a terminal against the
-workspace and hosting it inside the workspace are different claims.
+**As of session 11, and superseded below:** the service had never been *hosted* — no
+Databricks App existed, and `bundle deploy` was blocked by the Databricks CLI's expired
+Terraform signing key, which was recorded as the reason. Running the API from a
+terminal against the workspace and hosting it inside the workspace are different
+claims, and only the first had been made. **Session 12 made the second** — see
+*It is hosted* below, including why the blocker never applied to Apps.
 
 ## Hosting it as a Databricks App
 
@@ -336,12 +338,104 @@ is a small wrapper that calls `pii_reduction.service.api.create_app` with a
 directory and a store, so it is not itself a zero-argument ASGI factory. A UI, if one
 is ever built, is a client of these endpoints rather than a reimplementation of them.
 
-If that increment instead points the App's start command at the console script, the
-command must pass `--i-provide-authentication`: the script refuses a non-loopback
-bind, and a container is where that refusal is least fun to debug. Passing it there
-is honest — on an App, the platform *is* the authentication.
+### It is hosted (2026-08-22, session 12)
 
-**This has not been done**: `bundle deploy` is blocked by
-the Databricks CLI's expired Terraform signing key (session 10), and no App has been
-created. That is an environment blocker with a named remedy, recorded here so the
-distance between "decided" and "deployed" stays visible.
+**Done, and the blocker was never a blocker.** Two sessions recorded hosting as
+blocked by the Databricks CLI's expired Terraform signing key. That bug is specific to
+`bundle deploy`; **Apps have their own deployment path and need no bundle at all**:
+
+```bash
+databricks apps create pii-reduction-service --no-compute
+databricks workspace import-dir <staged-dir> /Workspace/Users/<you>/pii-reduction-app
+databricks apps start  pii-reduction-service
+databricks apps deploy pii-reduction-service \
+  --source-code-path /Workspace/Users/<you>/pii-reduction-app --mode SNAPSHOT
+```
+
+The staged directory holds four things: the built wheel, a `requirements.txt` naming
+it (`./pii_reduction-<version>-py3-none-any.whl[service]`), the `configs/` tree, and an
+`app.yaml` whose `command` is the console script. The deployment reported
+`SUCCEEDED — App started successfully`, and `apps get` reports `compute: ACTIVE`,
+`app: RUNNING`.
+
+The start command points at the console script rather than a wrapper, so it passes
+`--i-provide-authentication` — the script refuses a non-loopback bind and an App must
+bind `0.0.0.0`. That is honest here rather than a workaround: on an App the platform
+*is* the authentication, which the next section establishes by measurement rather than
+by assumption.
+
+**Driven over real HTTPS through the App proxy**, authenticated with the SDK's own
+credential resolution:
+
+| request | answer |
+|---|---|
+| `GET /health` | 200, version, `runtimes: ['local']` |
+| `GET /entities` | 200, the four taxonomy labels |
+| `GET /templates` | 200, the shipped Class A template |
+| `GET /datasets` | 200, the three configured datasets |
+| `GET /runs` | 200, empty history |
+| `POST /runs` carrying a `source` field | **422 `invalid_body`** — the guard is live |
+| `POST /runs` naming an unknown dataset | 404 with the menu (bounded name — see below) |
+
+Two facts the deployment carries that are not defects but are limits:
+
+- **`runtimes` is `['local']`.** The App installs the `service` extra, not
+  `databricks`, so the hosted process cannot trigger a driver-path run. Adding it means
+  a larger image and a decision about which credentials that run uses — see the identity
+  finding below, because those are the same question.
+- **The run journal is on the container's own disk** (`/tmp`), so it survives a restart
+  of the process and **not** a redeploy. A Volume path is the next step, and the fsync
+  cost noted above is the thing to measure before taking it.
+
+### What the platform actually does about identity — measured, not assumed
+
+Pickup item 3, and the answer confirms the concern rather than dissolving it. Read
+straight off the created App:
+
+```text
+service_principal_id            present   (created automatically with the App)
+service_principal_client_id     present
+user_api_scopes                 None
+effective_user_api_scopes       ['iam.access-control:read', 'iam.current-user:read']
+```
+
+**The App authenticates the end user, and authorizes data access as its own service
+principal.** The default on-behalf-of-user scopes are *identity-only* — they let the
+app learn who is calling and read access control, and they carry **no data scope** at
+all: no SQL, no files, no catalog. On-behalf-of-user access to data is an explicit
+opt-in that adds scopes to `user_api_scopes`, and nothing here has done that.
+
+Three consequences, all of which were previously stated as expectations and are now
+facts:
+
+1. **`docs/09`'s condition for a Class B display surface — "read under the end user's
+   identity" — is not satisfied by hosting**, and would not be satisfied by hosting
+   plus a UI. It needs the opt-in, and then it needs the run path to actually use the
+   user's token rather than the service principal's.
+2. **The server-side-template design is load-bearing rather than cautious.** A caller
+   who could name a `catalog.schema.table` would make the service principal read it —
+   the confused deputy ADR-0026 rule 4 exists to prevent — and the identity model above
+   is exactly why that is true in the deployed shape, not only in principle.
+3. **Whoever grants this App data access is granting it to the service principal**, so
+   the grant is the security boundary. Grant it the reduced-only projection's
+   destination (ADR-0024) rather than a raw source wherever that split is available.
+
+### The 404 that names a dataset is deliberate
+
+`POST /runs` with an unknown but **well-formed** dataset name answers 404 quoting the
+name and listing the menu. That is the designed behaviour, not a leak: the name matched
+`DATASET_NAME_PATTERN` before it reached the catalog, so it is bounded, it is the
+caller's own string, and the menu is what `GET /datasets` returns to the same caller
+anyway. An **unbounded** path segment takes the other route — a 422 that echoes
+nothing — and `test_a_malformed_run_id_never_reaches_the_404_message` pins the
+distinction.
+
+### Cost, and how to stop it
+
+An App holds compute for as long as it is running. To stop it without deleting it:
+
+```bash
+databricks apps stop pii-reduction-service
+```
+
+`databricks apps delete pii-reduction-service` removes it and its service principal.

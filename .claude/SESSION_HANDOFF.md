@@ -874,3 +874,67 @@ it rather than rediscovering it.
 **Not verified against a real Unity Catalog table** — the Spark path is fake-session
 tested only, and the metastore-cost claim is Spark's contract rather than our
 measurement.
+
+### Session 12 addendum — rung 4 is HOSTED, and the identity question is answered
+
+**The blocker was never a blocker.** Two sessions recorded hosting as blocked by the
+Databricks CLI's expired Terraform signing key. **That bug is specific to
+`bundle deploy`. Apps have their own deployment path and need no bundle at all:**
+
+```
+databricks apps create pii-reduction-service --no-compute
+databricks workspace import-dir <staged> /Workspace/Users/<you>/pii-reduction-app
+databricks apps start  pii-reduction-service
+databricks apps deploy pii-reduction-service --source-code-path <that> --mode SNAPSHOT
+```
+
+Deployment: `SUCCEEDED — App started successfully`. `apps get`: `compute: ACTIVE`,
+`app: RUNNING`. The staged directory is four things — the built wheel, a
+`requirements.txt` naming it with the `[service]` extra, the `configs/` tree, and an
+`app.yaml` whose command is the console script with `--i-provide-authentication`.
+
+**Driven over real HTTPS through the App proxy** (SDK credential resolution):
+`/health`, `/entities`, `/templates`, `/datasets`, `/runs` all 200 — and a `POST /runs`
+carrying a `source` field is a **422**, so the confused-deputy guard is live in the
+hosted process, not just in the test suite.
+
+**Two limits, neither a defect.** `runtimes` is `['local']` (the App installs the
+`service` extra, not `databricks`), and the run journal is on container-local disk, so
+it survives a restart and not a redeploy — a Volume path is next, and `docs/19` records
+the fsync cost to measure before taking it.
+
+### Item 3: measured, and it confirms the concern
+
+Read straight off the created App:
+
+```
+service_principal_id        present   (created automatically with the App)
+user_api_scopes             None
+effective_user_api_scopes   ['iam.access-control:read', 'iam.current-user:read']
+```
+
+**An App authenticates the end user and authorizes data access as its own service
+principal.** The default on-behalf-of-user scopes are identity-only and carry **no data
+scope** — no SQL, no files, no catalog. Three consequences, now facts rather than
+expectations:
+
+1. `docs/09`'s Class B display-surface condition — "read under the end user's identity"
+   — is **not satisfied by hosting**, and would not be by hosting plus a UI. It needs
+   the explicit opt-in *and* a run path using the caller's token.
+2. The server-side-template design is **load-bearing, not cautious**: in the deployed
+   shape a caller who could name a `catalog.schema.table` would make the service
+   principal read it.
+3. Whoever grants this App data access grants it to the service principal, so **the
+   grant is the security boundary** — prefer the ADR-0024 reduced-only destination.
+
+Recorded in `docs/19` (evidence), `docs/09` (the condition, with the measurement),
+ADR-0026 (addendum), and plan §8 items 1 and 3.
+
+### The App is left running
+
+It holds compute. `databricks apps stop pii-reduction-service` stops it without
+deleting; `apps delete` removes it and its service principal. Nothing else was created
+in the workspace, and the staged source lives under the owner's own `/Workspace/Users/`
+path — no catalog, schema, table or volume was touched.
+
+**Pickup list: 1, 2, 3 and 5 are done. Only 4 (batching) remains.**
