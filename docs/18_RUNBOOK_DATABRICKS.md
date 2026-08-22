@@ -176,6 +176,12 @@ history and job JSON. Credentials are read from the environment or not at all.
 
 Copy `configs/datasets/databricks_table_example.yaml` and edit it. The whole contract:
 
+> **Column names with spaces are fine.** `Comments and Work notes` is a legal column
+> name here and is written back as `Comments and Work notes_pii_redacted`; the Delta
+> writer turns on column mapping when a name needs it (`docs/07`). Quote such a name
+> in YAML, and note that the reduced sibling inherits the space — a downstream reader
+> will need backticks.
+
 ```yaml
 dataset:
   name: my_tickets              # names every output table: my_tickets_reduced, ...
@@ -449,6 +455,8 @@ value.
 | most reduced values null, only short fields succeeding | language detection unavailable — the `language` extra is missing | install it, or switch the column to `mode: static` |
 | emails and phones redacted, **names still present**, no error | the column resolved to the `deterministic_only` chain, or the spaCy models are missing | set `provider_chain: deterministic_presidio` and install the models (§1) |
 | `ISOLATION_STARTUP_FAILURE` | the distributed path on a workspace whose serverless Python sandbox is broken | use the driver path; the incident is tracked in plan §8 F |
+| `DELTA_INVALID_CHARACTERS_IN_COLUMN_NAMES` | a source column name containing `` ,;{}()\n\t= `` — a ServiceNow export puts a space in nearly all of them | the writer enables Delta column mapping automatically when a name needs it (`docs/07`); if you still see this, the *destination* table already exists without column mapping — write to a new table |
+| a reduction that succeeded but "lost" an HTML tag | a detected span ran into markup inside the eligible text | the guard clips such spans (ADR-0027) and `validation.require_markup_preserved` stops the run if any survives; see the error's counts and `docs/06` |
 
 ## 9. What this runbook does not cover
 

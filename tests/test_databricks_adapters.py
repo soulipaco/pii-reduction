@@ -26,6 +26,7 @@ from pii_reduction.databricks import (
     distributed_frame,
     partition_processor,
 )
+from pii_reduction.databricks.output import needs_column_mapping
 from pii_reduction.databricks.source import require_table_name
 from pii_reduction.outputs.base import OutputAdapter
 from pii_reduction.processing.pipeline import RUN_ID_COLUMN, STATUS_COLUMN
@@ -249,6 +250,93 @@ class TestDeclaredSchemaCannotDrift:
             "distributed_frame's declared schema no longer mirrors what "
             "Pipeline.process appends — fix the mirror, not this test"
         )
+
+
+class _RecordingWriter:
+    """The fluent half of a Spark writer, remembering what it was told."""
+
+    def __init__(self) -> None:
+        self.format_name: str | None = None
+        self.write_mode: str | None = None
+        self.options: dict[str, str] = {}
+        self.table: str | None = None
+
+    def format(self, name: str) -> _RecordingWriter:
+        self.format_name = name
+        return self
+
+    def mode(self, mode: str) -> _RecordingWriter:
+        self.write_mode = mode
+        return self
+
+    def option(self, key: str, value: str) -> _RecordingWriter:
+        self.options[key] = value
+        return self
+
+    def saveAsTable(self, table: str) -> None:  # noqa: N802 - mirrors the pyspark name
+        self.table = table
+
+
+class _RecordingSession:
+    def __init__(self) -> None:
+        self.writer = _RecordingWriter()
+
+    def createDataFrame(self, frame: pd.DataFrame):  # type: ignore[no-untyped-def]  # noqa: N802
+        session = self
+
+        class _Frame:
+            write = session.writer
+
+        return _Frame()
+
+
+class TestColumnNamesDeltaRefuses:
+    """A ServiceNow export puts a space in almost every column name, and Delta rejects
+    a space in a column name unless column mapping is on (`docs/20` item A2).
+
+    Nothing in this repository had ever written such a name: every fixture, corpus and
+    example column is a plain identifier, so the runbook's first real-data write would
+    have failed with ``DELTA_INVALID_CHARACTERS_IN_COLUMN_NAMES`` and no test could
+    have seen it coming. **These assertions cover the option plumbing, not the
+    workspace behaviour** — no Databricks run has exercised them (see `docs/20`).
+    """
+
+    @pytest.mark.parametrize(
+        "column",
+        ["case notes and comments", "cost,centre", "a;b", "f(x)", "k=v", "tab\there"],
+    )
+    def test_a_name_delta_refuses_is_detected(self, column: str) -> None:
+        assert needs_column_mapping([column])
+
+    @pytest.mark.parametrize("column", ["row_id", "body", "body_pii_redacted", "Short_description"])
+    def test_an_ordinary_name_is_not(self, column: str) -> None:
+        assert not needs_column_mapping([column])
+
+    def test_the_options_are_set_when_a_name_needs_them(self) -> None:
+        session = _RecordingSession()
+        frame = pd.DataFrame({"row_id": ["r1"], "case notes and comments": ["x"]})
+        DeltaTableOutput(session, "cat.sch", mode="overwrite").write(frame, name="demo_reduced")
+        assert session.writer.options == {
+            "delta.columnMapping.mode": "name",
+            "delta.minReaderVersion": "2",
+            "delta.minWriterVersion": "5",
+        }
+        assert session.writer.table == "cat.sch.demo_reduced"
+
+    def test_they_are_not_set_when_no_name_needs_them(self) -> None:
+        # Column mapping raises the table's protocol version, which older readers
+        # cannot open. That is a price for making a write possible, not a default.
+        session = _RecordingSession()
+        frame = pd.DataFrame({"row_id": ["r1"], "body": ["x"]})
+        DeltaTableOutput(session, "cat.sch", mode="overwrite").write(frame, name="demo_reduced")
+        assert session.writer.options == {}
+
+    def test_the_write_mode_translation_still_applies(self) -> None:
+        session = _RecordingSession()
+        frame = pd.DataFrame({"row_id": ["r1"], "short summary": ["x"]})
+        DeltaTableOutput(session, "cat.sch").write(frame, name="demo_reduced")
+        assert session.writer.write_mode == "error"
+        assert session.writer.format_name == "delta"
 
 
 class TestSourceWithoutASession:

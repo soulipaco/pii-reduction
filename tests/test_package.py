@@ -81,6 +81,18 @@ OPTIONAL_MODULES = (
     "fastapi",
 )
 
+#: **`pyarrow` is deliberately absent, and the reason is worth keeping.** It is the
+#: `parquet` extra, and `ParquetOutput.__init__` imports it so a missing engine fails
+#: before a run rather than after it (`docs/20` item A4) — which looks like exactly
+#: the shape this list exists for. It cannot be added: **pandas imports pyarrow
+#: itself**, so wherever pyarrow is installed it is in `sys.modules` before any
+#: module of ours is read, and the guard below would fail on a core-only import for a
+#: reason that has nothing to do with this project. Verified in this repository's own
+#: venv (2026-08-22): `import pandas` alone leaves `pyarrow` loaded. Suggested by the
+#: session-12 architecture review and rejected on that measurement; what actually
+#: keeps the constructor import honest is `ParquetOutput` being constructed only on
+#: demand, plus `test_sources_outputs.py`'s missing-engine test.
+
 
 def _imported_modules(path: Path) -> list[tuple[int, str]]:
     """Every module an import in ``path`` could name, at any nesting depth.

@@ -63,16 +63,36 @@ class CsvOutput(_FileOutput):
 
 
 class ParquetOutput(_FileOutput):
-    """Requires the ``parquet`` extra (pyarrow)."""
+    """Requires the ``parquet`` extra (pyarrow).
+
+    **The dependency is checked when the adapter is constructed, not when it writes.**
+    The pipeline builds its output adapter before it reads a row, so a missing engine
+    fails in the first second rather than after the whole corpus has been detected and
+    reduced. The reference implementation compared in `docs/20` lost an eighteen-minute
+    cluster run to exactly this, which is more evidence than the check costs.
+    """
 
     destination_type = "parquet"
     suffix = ".parquet"
+
+    def __init__(self, path: str | Path, *, mode: str = "overwrite") -> None:
+        super().__init__(path, mode=mode)
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError as exc:
+            raise OutputError(
+                "writing parquet needs pyarrow. Install it with: "
+                "pip install 'pii-reduction[parquet]'"
+            ) from exc
 
     def write(self, frame: pd.DataFrame, *, name: str) -> str:
         target = self._target(name)
         try:
             frame.to_parquet(target, index=False)
         except ImportError as exc:
+            # Kept as well as the constructor check: `to_parquet` can resolve a
+            # different engine than the import above, and a write-time failure still
+            # needs to say what to install rather than surfacing pandas' own message.
             raise OutputError(
                 "writing parquet needs pyarrow. Install it with: "
                 "pip install 'pii-reduction[parquet]'"

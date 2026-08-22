@@ -140,6 +140,28 @@ class TestSources:
         loaded = ParquetSource(target, name="demo").load()
         assert loaded.row_count == 20
 
+    def test_the_parquet_engine_is_checked_before_any_row_is_read(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A missing engine must fail at construction, not after the whole run.
+
+        The pipeline builds its output adapter before it reads a row, so this is the
+        difference between failing in the first second and failing after every
+        document has been detected and reduced (`docs/20`, item A4).
+        """
+        import builtins
+
+        real_import = builtins.__import__
+
+        def refuse(name: str, *args: object, **kwargs: object) -> object:
+            if name == "pyarrow":
+                raise ImportError("no pyarrow")
+            return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(builtins, "__import__", refuse)
+        with pytest.raises(OutputError, match="pii-reduction\\[parquet\\]"):
+            ParquetOutput(tmp_path)
+
 
 class TestOutputs:
     def test_pandas_output_keeps_a_copy(self) -> None:

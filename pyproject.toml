@@ -167,5 +167,11 @@ module = [
   # `service` extra only, never `dev` — see the note above.
   "uvicorn",
   "uvicorn.*",
+  # `parquet` extra only. `ParquetOutput` imports it in its constructor to fail in
+  # the first second rather than after the run (ADR-0027's sibling finding in
+  # `docs/20`), and it ships no `py.typed` — so it is untyped where it is installed
+  # and missing where it is not. Both cases are this override.
+  "pyarrow",
+  "pyarrow.*",
 ]
 ignore_missing_imports = true

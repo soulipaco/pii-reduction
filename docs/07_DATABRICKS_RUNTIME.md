@@ -248,6 +248,58 @@ Potential governance surfaces:
 
 The open-source repo should not assume the user's workspace grants or catalog names.
 
+### Column names Delta refuses
+
+Delta rejects `` ,;{}()\n\t= `` in a column name unless **column mapping** is enabled
+on the table. A ServiceNow export puts a space in almost every one of them — `Short
+description`, `Assigned to`, `Comments and Work notes` — and the reduction derives its
+output column from that name, so the sibling carries the space too.
+
+`DeltaTableOutput` therefore sets `delta.columnMapping.mode=name` together with the
+reader/writer minimums it requires, **and only when a column in the frame actually
+needs it**. Column mapping raises the table's protocol version, which older readers
+cannot open: that is a price worth paying to make a write possible and not worth
+paying on a table whose names are already legal.
+
+Renaming was the alternative and is worse. Configuration addresses columns by their
+real names and the reduced sibling is derived from that name, so a rename would ripple
+into the dataset config and into the output contract consumers read.
+
+**Not yet exercised against a workspace.** The option plumbing is unit-tested against a
+recording session; no Databricks run has written such a column. Evidence for the
+failure comes from the reference implementation compared in
+`docs/20_ALTERNATIVE_RECONCILIATION.md`, which hit it on a real 45,366-row workbook.
+
+### Serverless worker memory, as measured elsewhere
+
+The reference implementation in `docs/20_ALTERNATIVE_RECONCILIATION.md` probed a
+serverless Python-UDF worker by allocating in 64 MB steps and logging each step to a
+volume — a cgroup OOM kill leaves no exception behind, so the ceiling surfaces only as
+a bare `UDF_PYSPARK_ERROR.OOM` with no attribution.
+
+| | |
+|---|---|
+| worker RSS before any user code runs | 216 MB |
+| usable ceiling | ~1.15 GB RSS (~896 MB for user code) |
+| interpreter + Presidio framework | 73 MB |
+| first language (spaCy pipeline) | +242 MB |
+| **each additional language** | **+294 MB** |
+| lingua, 20 languages, preloaded | +511 MB |
+
+**These are their numbers, on their runtime, and are not a platform guarantee.** They
+are recorded because the shape of the conclusion transfers and is expensive to
+rediscover: **a serverless UDF worker holds one language comfortably, two at the edge,
+never three**, and partition count does not help — their first OOM was a single
+partition over 139 rows.
+
+This project's distributed path builds one pipeline per worker for the whole
+configured chain, which on the shipped three-language configuration is exactly the
+shape that budget forbids. It has never been reached: the distributed path is blocked
+by `ISOLATION_STARTUP_FAILURE` on this workspace and the driver path loads its models
+on one node with ordinary driver memory. **Re-measure before concluding the
+distributed path is viable**, rather than assuming the sandbox incident is the only
+thing between here and a working fan-out.
+
 ## Secrets
 
 Authentication should use supported environment/secret mechanisms.
