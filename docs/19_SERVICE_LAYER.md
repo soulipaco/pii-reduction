@@ -430,12 +430,25 @@ anyway. An **unbounded** path segment takes the other route — a 422 that echoe
 nothing — and `test_a_malformed_run_id_never_reaches_the_404_message` pins the
 distinction.
 
-### Cost, and how to stop it
+### Its current state: stopped, and recoverable
 
-An App holds compute for as long as it is running. To stop it without deleting it:
+**The App exists and its compute is stopped** (2026-08-22). An App holds compute for as
+long as it runs, and the deployment had already proved what it was created to prove, so
+it was stopped rather than left burning:
 
 ```bash
-databricks apps stop pii-reduction-service
+databricks apps stop pii-reduction-service     # compute STOPPED, app UNAVAILABLE
 ```
 
-`databricks apps delete pii-reduction-service` removes it and its service principal.
+**Stopping loses nothing.** Verified after the stop: the App object survives, its
+`SUCCEEDED` SNAPSHOT deployment is retained, and the staged source is still at
+`/Workspace/Users/<you>/pii-reduction-app` (four entries — wheel, `requirements.txt`,
+`app.yaml`, `configs/`). Bringing it back is:
+
+```bash
+databricks apps start  pii-reduction-service
+databricks apps deploy pii-reduction-service   --source-code-path /Workspace/Users/<you>/pii-reduction-app --mode SNAPSHOT
+```
+
+`databricks apps delete pii-reduction-service` removes it **and its service
+principal**, which is the one action that would need the whole sequence repeating.

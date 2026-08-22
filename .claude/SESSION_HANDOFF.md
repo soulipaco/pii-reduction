@@ -999,9 +999,11 @@ server-side-template design is load-bearing rather than cautious.
 
 ### Two operational facts
 
-- **A Databricks App is running and holds compute.** `databricks apps stop
-  pii-reduction-service` stops it; `apps delete` removes it and its service principal.
-  `docs/21` Part 3 asks session 13 to decide its fate and record the decision.
+- **The Databricks App exists and is stopped** (2026-08-22). It proved what it was
+  created to prove, so its compute was stopped rather than left burning. Nothing was
+  lost: the App, its `SUCCEEDED` deployment and the staged workspace source all survive,
+  so `apps start` + `apps deploy` brings it back. Only `apps delete` would destroy the
+  service principal and force the whole sequence again. **Nothing to decide here.**
 - **Nothing else was created in the workspace.** No catalog, schema, table or volume was
   touched; the staged source lives under the owner's own `/Workspace/Users/` path.
 

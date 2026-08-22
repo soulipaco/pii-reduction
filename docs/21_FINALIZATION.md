@@ -19,7 +19,7 @@ Part 1 and Part 3, the project is finished by the definition its own charter wro
 | Charter *Definition of done* (9 items) | **all met** |
 | Databricks driver path | verified on the real workspace |
 | Runbook (`docs/18`) | executed end to end |
-| Service layer (rung 4) | built, run, and **hosted as a Databricks App** |
+| Service layer (rung 4) | built, run, and **hosted as a Databricks App** (now stopped, recoverable) |
 | Identity question | **answered by measurement** (`docs/19`) |
 | Durable run store | built and verified across a real restart |
 
@@ -87,13 +87,13 @@ release.
    share-alike, and both facts reach a pack's `meta.json`, but **nothing is published**,
    so nothing is owed. If session 13 makes the repository public, this becomes real and
    must land in the same change.
-5. **Decide the App's fate.** It is running and holds compute:
-   `databricks apps stop pii-reduction-service` stops it, `apps delete` removes it and
-   its service principal. Whatever is chosen, say so in `docs/19` so the next reader
-   knows whether the thing they are reading about still exists.
+5. ~~**Decide the App's fate.**~~ **Done (2026-08-22): stopped, not deleted.** It had
+   proved what it was created to prove and compute is not free. The App object, its
+   `SUCCEEDED` deployment and the staged workspace source all survive, so `apps start`
+   plus `apps deploy` brings it back — recorded in `docs/19`. Nothing to do here unless
+   session 13 wants it running again.
 
-**Exit criterion:** `CHANGELOG.md` exists, a `v0.1.0` tag is pushed, CI is green, and
-`docs/19` states whether the App is still running.
+**Exit criterion:** `CHANGELOG.md` exists, a `v0.1.0` tag is pushed, and CI is green.
 
 ---
 
@@ -116,7 +116,7 @@ Stated so the finish line does not move:
 ## The order to do it in
 
 1. Part 1 (park everything, write the speaker-prefix ADR).
-2. Part 3 (changelog, tag, README pass, App decision).
+2. Part 3 (changelog, tag, README pass).
 3. Part 2 only if both are done and there is room.
 
 Part 1 and Part 3 together are one comfortable session and finish the project. Part 2 is
